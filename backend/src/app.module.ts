@@ -1,0 +1,27 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { HealthModule } from './modules/health/health.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
+import { RolesModule } from './modules/roles/roles.module';
+import { DocentesModule } from './modules/docentes/docentes.module';
+import { MateriasModule } from './modules/materias/materias.module';
+import { PlanesModule } from './modules/planes/planes.module';
+import { DocumentosModule } from './modules/documentos/documentos.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    HealthModule,
+    AuthModule,
+    UsersModule,
+    RolesModule,
+    DocentesModule,
+    MateriasModule,
+    PlanesModule,
+    DocumentosModule
+  ],
+  controllers: [],
+  providers: []
+})
+export class AppModule {}
