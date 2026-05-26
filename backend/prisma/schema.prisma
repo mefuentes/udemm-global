@@ -15,11 +15,11 @@ model Universidad {
 }
 
 model Facultad {
-  id           String      @id @default(uuid())
-  nombre       String
-  universidad  Universidad @relation(fields: [universidadId], references: [id])
+  id            String      @id @default(uuid())
+  nombre        String
+  universidad   Universidad @relation(fields: [universidadId], references: [id])
   universidadId String
-  carreras     Carrera[]
+  carreras      Carrera[]
 }
 
 model Carrera {
@@ -31,18 +31,82 @@ model Carrera {
 }
 
 model PlanEstudio {
-  id         String     @id @default(uuid())
-  nombre     String
-  carrera    Carrera    @relation(fields: [carreraId], references: [id])
-  carreraId  String
-  materias   Materia[]
+  id          String     @id @default(uuid())
+  nombre      String
+  carrera     Carrera    @relation(fields: [carreraId], references: [id])
+  carreraId   String
+  materias    Materia[]
 }
 
 model Materia {
-  id           String      @id @default(uuid())
-  codigo       String      @unique
-  nombre       String
-  creditos     Int
-  planEstudio  PlanEstudio @relation(fields: [planEstudioId], references: [id])
+  id            String      @id @default(uuid())
+  codigo        String      @unique
+  nombre        String
+  creditos      Int
+  planEstudio   PlanEstudio @relation(fields: [planEstudioId], references: [id])
   planEstudioId String
+}
+
+model Rol {
+  id          String       @id @default(uuid())
+  nombre      String       @unique
+  descripcion String?
+  permisos    RolPermiso[]
+  usuarios    Usuario[]
+  fechaCreacion DateTime   @default(now())
+}
+
+model Permiso {
+  id          String       @id @default(uuid())
+  nombre      String       @unique
+  descripcion String?
+  roles       RolPermiso[]
+  fechaCreacion DateTime   @default(now())
+}
+
+model RolPermiso {
+  id          String     @id @default(uuid())
+  rol         Rol        @relation(fields: [rolId], references: [id])
+  rolId       String
+  permiso     Permiso    @relation(fields: [permisoId], references: [id])
+  permisoId   String
+  fechaCreacion DateTime @default(now())
+
+  @@unique([rolId, permisoId])
+}
+
+model Usuario {
+  id                String         @id @default(uuid())
+  nombre            String
+  apellido          String
+  correoElectronico String         @unique
+  contrasenaHash    String
+  activo            Boolean        @default(true)
+  fechaCreacion     DateTime       @default(now())
+  fechaActualizacion DateTime      @updatedAt
+  rol               Rol            @relation(fields: [rolId], references: [id])
+  rolId             String
+  sesiones          Sesion[]
+  tokensRefresh     TokenRefresh[]
+}
+
+model Sesion {
+  id              String    @id @default(uuid())
+  usuario         Usuario   @relation(fields: [usuarioId], references: [id])
+  usuarioId       String
+  ip              String?
+  userAgent       String?
+  activo          Boolean   @default(true)
+  fechaCreacion   DateTime  @default(now())
+  fechaActualizacion DateTime @updatedAt
+}
+
+model TokenRefresh {
+  id             String    @id @default(uuid())
+  token          String    @unique
+  usuario        Usuario   @relation(fields: [usuarioId], references: [id])
+  usuarioId      String
+  expiracion     DateTime
+  activo         Boolean   @default(true)
+  fechaCreacion  DateTime  @default(now())
 }

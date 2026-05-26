@@ -64,6 +64,7 @@ Este proyecto conserva PostgreSQL como base de datos principal.
    cd backend
    npm install
    npx prisma migrate dev --name init
+   npm run prisma:seed
    npm run start:dev
    ```
 2. Frontend (en otra terminal):
@@ -78,6 +79,14 @@ Este proyecto conserva PostgreSQL como base de datos principal.
 - **URL base:** `http://localhost:5000`
 - **GET /**: Devuelve información de la API
 - **GET /health**: Devuelve el estado del servicio
+- **POST /auth/login**: Autenticación con `correoElectronico` y `contrasena`
+- **POST /auth/refresh**: Renovación de token con `refreshToken`
+- **GET /usuarios**: Lista usuarios (puede protegerse con roles)
+- **GET /roles**: Lista roles disponibles
+
+### Credenciales iniciales
+- **Correo:** `admin@udemm.edu.ar`
+- **Contraseña:** `Administrador123`
 
 Ejemplo de respuesta en `/health`:
 ```json
