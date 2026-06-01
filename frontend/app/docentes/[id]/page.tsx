@@ -178,7 +178,7 @@ export default function DetallDocentePage({ params }: DocentePageProps) {
             <p className="mt-2 text-slate-600">Ficha de docente</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {(['ADMINISTRADOR_SISTEMA', 'DECANO', 'RECTORADO', 'SECRETARIA_ACADEMICA', 'DIRECTOR_CARRERA', 'ADMINISTRATIVO'].includes(usuario?.rol?.nombre)) ? (
+            {(['ADMINISTRADOR_SISTEMA', 'DECANO', 'RECTORADO', 'SECRETARIA_ACADEMICA', 'DIRECTOR_CARRERA', 'ADMINISTRATIVO'].includes(usuario?.rol?.nombre ?? '')) ? (
               <Link
                 href={`/docentes/${id}/editar`}
                 className="rounded-full bg-slate-900 px-6 py-3 text-white font-semibold hover:bg-slate-800"
@@ -186,7 +186,7 @@ export default function DetallDocentePage({ params }: DocentePageProps) {
                 Editar
               </Link>
             ) : null}
-            {docente.activo && (['ADMINISTRADOR_SISTEMA', 'DECANO', 'RECTORADO', 'SECRETARIA_ACADEMICA'].includes(usuario?.rol?.nombre)) && (
+            {docente.activo && (['ADMINISTRADOR_SISTEMA', 'DECANO', 'RECTORADO', 'SECRETARIA_ACADEMICA'].includes(usuario?.rol?.nombre ?? '')) && (
               <button
                 onClick={darDeBaja}
                 className="rounded-full border border-red-300 bg-red-50 px-6 py-3 text-red-700 font-semibold hover:bg-red-100"

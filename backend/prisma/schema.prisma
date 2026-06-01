@@ -88,6 +88,7 @@ model Usuario {
   rolId             String
   sesiones          Sesion[]
   tokensRefresh     TokenRefresh[]
+  docente           Docente?
 }
 
 model Sesion {
@@ -109,4 +110,36 @@ model TokenRefresh {
   expiracion     DateTime
   activo         Boolean   @default(true)
   fechaCreacion  DateTime  @default(now())
+}
+
+model Docente {
+  id                    String    @id @default(uuid())
+  nombre                String
+  apellido              String
+  tipoDocumento         String
+  numeroDocumento       String    @unique
+  correoElectronico     String    @unique
+  sexo                  String?
+  fechaNacimiento       DateTime?
+  cuit                  String?
+  telefono              String?
+  calle                 String?
+  numero                String?
+  pisoDepto             String?
+  residencia            String?
+  provincia             String?
+  localidad             String?
+  codigoPostal          String?
+  domicilio             String?
+  tituloGrado           String?
+  tituloPosgrado        String?
+  cargoDeclarado        String?
+  justificacionPertinencia String?
+  actividadesProfesionales String?
+  antecedentesAcademicos String?
+  activo                Boolean   @default(true)
+  fechaCreacion         DateTime  @default(now())
+  fechaActualizacion    DateTime  @updatedAt
+  usuario               Usuario?  @relation(fields: [usuarioId], references: [id])
+  usuarioId             String?   @unique
 }

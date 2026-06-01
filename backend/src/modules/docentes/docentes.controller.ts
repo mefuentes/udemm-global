@@ -42,12 +42,6 @@ export class DocentesController {
     return this.docentesService.obtenerDocentes(buscar, activo, pagina, limite);
   }
 
-  @Get(':id')
-  @Roles('ADMINISTRADOR_SISTEMA', 'DECANO', 'RECTORADO', 'DIRECTOR_CARRERA', 'SECRETARIA_ACADEMICA', 'ADMINISTRATIVO')
-  async obtenerPorId(@Param('id') id: string) {
-    return this.docentesService.obtenerDocentePorId(id);
-  }
-
   @Get('mi-ficha')
   @Roles('DOCENTE')
   async obtenerMiFicha(@Req() req: any) {
@@ -55,17 +49,23 @@ export class DocentesController {
     return this.docentesService.obtenerDocentePorUsuarioId(usuarioId);
   }
 
-  @Patch(':id')
-  @Roles('ADMINISTRADOR_SISTEMA', 'DECANO', 'RECTORADO', 'DIRECTOR_CARRERA', 'SECRETARIA_ACADEMICA', 'ADMINISTRATIVO')
-  async actualizar(@Param('id') id: string, @Body() actualizarDocenteDto: ActualizarDocenteDto) {
-    return this.docentesService.actualizarDocente(id, actualizarDocenteDto);
-  }
-
   @Patch('mi-ficha')
   @Roles('DOCENTE')
   async actualizarMiFicha(@Req() req: any, @Body() actualizarDocenteDto: ActualizarDocenteDto) {
     const usuarioId = req.user?.id;
     return this.docentesService.actualizarDocentePorUsuarioId(usuarioId, actualizarDocenteDto);
+  }
+
+  @Get(':id')
+  @Roles('ADMINISTRADOR_SISTEMA', 'DECANO', 'RECTORADO', 'DIRECTOR_CARRERA', 'SECRETARIA_ACADEMICA', 'ADMINISTRATIVO')
+  async obtenerPorId(@Param('id') id: string) {
+    return this.docentesService.obtenerDocentePorId(id);
+  }
+
+  @Patch(':id')
+  @Roles('ADMINISTRADOR_SISTEMA', 'DECANO', 'RECTORADO', 'DIRECTOR_CARRERA', 'SECRETARIA_ACADEMICA', 'ADMINISTRATIVO')
+  async actualizar(@Param('id') id: string, @Body() actualizarDocenteDto: ActualizarDocenteDto) {
+    return this.docentesService.actualizarDocente(id, actualizarDocenteDto);
   }
 
   @Delete(':id')

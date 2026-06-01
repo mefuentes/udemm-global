@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { jsPDF } from 'jspdf';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 
 interface Docente {
@@ -19,6 +20,7 @@ interface Docente {
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
 export default function DocentesPage() {
+  const router = useRouter();
   const { token, obtenerTokenActual, logout, usuario } = useAuth();
   const [docentes, setDocentes] = useState<Docente[]>([]);
   const [busqueda, setBusqueda] = useState('');
@@ -28,11 +30,13 @@ export default function DocentesPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Docentes individuales no deben ver el listado general
     if (!token) return;
-    if (usuario?.rol?.nombre === 'DOCENTE') return;
+    if (usuario?.rol?.nombre === 'DOCENTE') {
+      router.push('/docentes/mi-ficha');
+      return;
+    }
     fetchDocentes();
-  }, [token, busqueda, pagina, limite, usuario]);
+  }, [token, busqueda, pagina, limite, usuario, router]);
 
   async function fetchDocentes() {
     try {

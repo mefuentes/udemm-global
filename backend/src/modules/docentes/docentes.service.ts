@@ -7,7 +7,53 @@ import { ActualizarDocenteDto } from './dto/actualizar-docente.dto';
 export class DocentesService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private parseFechaNacimiento(fechaNacimiento?: string | null) {
+    if (!fechaNacimiento || !fechaNacimiento.trim()) {
+      return null;
+    }
+
+    const fechaRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!fechaRegex.test(fechaNacimiento)) {
+      throw new BadRequestException('La fecha de nacimiento debe tener formato YYYY-MM-DD');
+    }
+
+    const fecha = new Date(`${fechaNacimiento}T00:00:00.000Z`);
+    if (Number.isNaN(fecha.getTime())) {
+      throw new BadRequestException('La fecha de nacimiento no es válida');
+    }
+
+    const fechaNormalizada = fecha.toISOString().split('T')[0];
+    if (fechaNormalizada !== fechaNacimiento) {
+      throw new BadRequestException('La fecha de nacimiento no es válida');
+    }
+
+    return fecha;
+  }
+
+  private validarNumeroDocumento(tipoDocumento?: string, numeroDocumento?: string) {
+    if (!tipoDocumento || !numeroDocumento) {
+      return;
+    }
+
+    if (tipoDocumento === 'DNI' && !/^\d+$/.test(numeroDocumento)) {
+      throw new BadRequestException('El número de documento para DNI debe contener solo números');
+    }
+
+    if (tipoDocumento === 'PASAPORTE' && !/^[A-Za-z0-9-]+$/.test(numeroDocumento)) {
+      throw new BadRequestException('El número de PASAPORTE solo puede contener letras, números y guiones');
+    }
+  }
+
+  private formatearDocenteFecha<T extends { fechaNacimiento?: Date | string | null }>(docente: T): Omit<T, 'fechaNacimiento'> & { fechaNacimiento: string | null } {
+    return {
+      ...docente,
+      fechaNacimiento: docente.fechaNacimiento ? new Date(docente.fechaNacimiento).toISOString().split('T')[0] : null
+    };
+  }
+
   async crearDocente(data: CrearDocenteDto) {
+    this.validarNumeroDocumento(data.tipoDocumento, data.numeroDocumento);
+
     const existe = await this.prisma.docente.findFirst({
       where: {
         OR: [
@@ -28,8 +74,11 @@ export class DocentesService {
     }
 
     try {
-      return await this.prisma.docente.create({
-        data,
+      const docente = await this.prisma.docente.create({
+        data: {
+          ...data,
+          fechaNacimiento: this.parseFechaNacimiento(data.fechaNacimiento)
+        },
         include: {
           usuario: {
             select: {
@@ -45,6 +94,8 @@ export class DocentesService {
           }
         }
       });
+
+      return this.formatearDocenteFecha(docente);
     } catch (error: unknown) {
       if (error instanceof Error && 'code' in error && error.code === 'P2002') {
         const target = (error as any).meta?.target;
@@ -100,7 +151,7 @@ export class DocentesService {
     ]);
 
     return {
-      data,
+      data: data.map((docente) => this.formatearDocenteFecha(docente)),
       total,
       pagina,
       limite
@@ -128,13 +179,14 @@ export class DocentesService {
     if (!docente) {
       throw new NotFoundException('Docente no encontrado');
     }
-    return docente;
+    return this.formatearDocenteFecha(docente);
   }
 
   async obtenerDocentePorUsuarioId(usuarioId: string) {
     if (!usuarioId) {
       throw new NotFoundException('Usuario no autenticado');
     }
+
     const docente = await this.prisma.docente.findFirst({
       where: { usuarioId },
       include: {
@@ -149,10 +201,63 @@ export class DocentesService {
         }
       }
     });
-    if (!docente) {
-      throw new NotFoundException('Ficha docente no encontrada para el usuario');
+
+    if (docente) {
+      return this.formatearDocenteFecha(docente);
     }
-    return docente;
+
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: {
+        id: true,
+        nombre: true,
+        apellido: true,
+        correoElectronico: true,
+        rol: {
+          select: { id: true, nombre: true }
+        }
+      }
+    });
+
+    if (!usuario) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    return {
+      id: null,
+      nombre: usuario.nombre,
+      apellido: usuario.apellido,
+      tipoDocumento: 'DNI',
+      numeroDocumento: '',
+      correoElectronico: usuario.correoElectronico,
+      sexo: '',
+      fechaNacimiento: null,
+      cuit: '',
+      telefono: '',
+      calle: '',
+      numero: '',
+      pisoDepto: '',
+      residencia: '',
+      provincia: '',
+      localidad: '',
+      codigoPostal: '',
+      domicilio: '',
+      tituloGrado: '',
+      tituloPosgrado: '',
+      cargoDeclarado: '',
+      justificacionPertinencia: '',
+      actividadesProfesionales: '',
+      antecedentesAcademicos: '',
+      activo: true,
+      fechaCreacion: new Date(),
+      fechaActualizacion: new Date(),
+      usuario: {
+        id: usuario.id,
+        correoElectronico: usuario.correoElectronico,
+        rol: usuario.rol
+      },
+      usuarioId: usuario.id
+    } as any;
   }
 
   async actualizarDocente(id: string, data: ActualizarDocenteDto) {
@@ -188,10 +293,23 @@ export class DocentesService {
       }
     }
 
+    const dataToUpdate = {
+      ...data,
+      fechaNacimiento:
+        typeof data.fechaNacimiento === 'string'
+          ? this.parseFechaNacimiento(data.fechaNacimiento)
+          : undefined
+    };
+
+    this.validarNumeroDocumento(
+      dataToUpdate.tipoDocumento ?? docenteExistente.tipoDocumento,
+      dataToUpdate.numeroDocumento ?? docenteExistente.numeroDocumento
+    );
+
     try {
-      return await this.prisma.docente.update({
+      const docenteActualizado = await this.prisma.docente.update({
         where: { id },
-        data,
+        data: dataToUpdate,
         include: {
           usuario: {
             select: {
@@ -207,6 +325,8 @@ export class DocentesService {
           }
         }
       });
+
+      return this.formatearDocenteFecha(docenteActualizado);
     } catch (error: unknown) {
       if (error instanceof Error && 'code' in error && error.code === 'P2002') {
         const target = (error as any).meta?.target;
@@ -225,18 +345,90 @@ export class DocentesService {
     if (!usuarioId) {
       throw new NotFoundException('Usuario no autenticado');
     }
+
     const docente = await this.prisma.docente.findFirst({ where: { usuarioId } });
-    if (!docente) {
-      throw new NotFoundException('Ficha docente no encontrada para el usuario');
+    if (docente) {
+      return this.actualizarDocente(docente.id, data);
     }
-    return this.actualizarDocente(docente.id, data);
+
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: usuarioId }
+    });
+
+    if (!usuario) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    const crearData: any = {
+      usuarioId,
+      nombre: data.nombre ?? usuario.nombre,
+      apellido: data.apellido ?? usuario.apellido,
+      correoElectronico: data.correoElectronico ?? usuario.correoElectronico,
+      tipoDocumento: data.tipoDocumento ?? 'DNI',
+      numeroDocumento: data.numeroDocumento ?? '',
+      sexo: data.sexo ?? null,
+      fechaNacimiento: data.fechaNacimiento ? this.parseFechaNacimiento(data.fechaNacimiento) : null,
+      cuit: data.cuit ?? null,
+      telefono: data.telefono ?? null,
+      calle: data.calle ?? null,
+      numero: data.numero ?? null,
+      pisoDepto: data.pisoDepto ?? null,
+      residencia: data.residencia ?? null,
+      provincia: data.provincia ?? null,
+      localidad: data.localidad ?? null,
+      codigoPostal: data.codigoPostal ?? null,
+      domicilio: data.domicilio ?? null,
+      tituloGrado: data.tituloGrado ?? null,
+      tituloPosgrado: data.tituloPosgrado ?? null,
+      cargoDeclarado: data.cargoDeclarado ?? null,
+      justificacionPertinencia: data.justificacionPertinencia ?? null,
+      actividadesProfesionales: data.actividadesProfesionales ?? null,
+      antecedentesAcademicos: data.antecedentesAcademicos ?? null,
+      activo: data.activo ?? true
+    };
+
+    try {
+      this.validarNumeroDocumento(crearData.tipoDocumento, crearData.numeroDocumento);
+
+      const docenteCreado = await this.prisma.docente.create({
+        data: crearData,
+        include: {
+          usuario: {
+            select: {
+              id: true,
+              correoElectronico: true,
+              rol: {
+                select: {
+                  id: true,
+                  nombre: true
+                }
+              }
+            }
+          }
+        }
+      });
+
+      return this.formatearDocenteFecha(docenteCreado);
+    } catch (error: unknown) {
+      if (error instanceof Error && 'code' in error && error.code === 'P2002') {
+        const target = (error as any).meta?.target;
+        if (Array.isArray(target) && target.includes('numeroDocumento')) {
+          throw new BadRequestException('El número de documento ya está registrado para otro docente');
+        }
+        if (Array.isArray(target) && target.includes('correoElectronico')) {
+          throw new BadRequestException('El correo electrónico ya está registrado para otro docente');
+        }
+      }
+      throw error;
+    }
   }
 
   async eliminarDocente(id: string) {
     await this.obtenerDocentePorId(id);
-    return this.prisma.docente.update({
+    const docente = await this.prisma.docente.update({
       where: { id },
       data: { activo: false }
     });
+    return this.formatearDocenteFecha(docente);
   }
 }
