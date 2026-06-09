@@ -9,6 +9,7 @@ import { DocentesModule } from './modules/docentes/docentes.module';
 import { MateriasModule } from './modules/materias/materias.module';
 import { PlanesModule } from './modules/planes/planes.module';
 import { DocumentosModule } from './modules/documentos/documentos.module';
+import { ParametrosModule } from './modules/parametros/parametros.module';
 
 @Module({
   imports: [
@@ -21,7 +22,8 @@ import { DocumentosModule } from './modules/documentos/documentos.module';
     DocentesModule,
     MateriasModule,
     PlanesModule,
-    DocumentosModule
+    DocumentosModule,
+    ParametrosModule
   ],
   controllers: [],
   providers: []

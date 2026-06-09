@@ -108,6 +108,59 @@ export class CrearDocenteDto {
 
   @IsString()
   @IsOptional()
+  dedicacion?: string;
+
+  @IsString()
+  @IsOptional()
+  unidadAcademica?: string;
+
+  @IsString()
+  @IsOptional()
+  categoriaDocente?: string;
+
+  @IsString()
+  @IsOptional()
+  @Matches(SOLO_NUMEROS_REGEX, { message: 'La dedicación declarada semanal solo puede contener números' })
+  dedicacionDeclaradaSemanal?: string;
+
+  @IsString()
+  @IsOptional()
+  @Matches(SOLO_NUMEROS_REGEX, { message: 'El tiempo de docencia solo puede contener números' })
+  tiempoDocencia?: string;
+
+  @IsString()
+  @IsOptional()
+  @Matches(SOLO_NUMEROS_REGEX, { message: 'El tiempo de investigación solo puede contener números' })
+  tiempoInvestigacion?: string;
+
+  @IsString()
+  @IsOptional()
+  @Matches(SOLO_NUMEROS_REGEX, { message: 'El tiempo de extensión solo puede contener números' })
+  tiempoExtension?: string;
+
+  @IsString()
+  @IsOptional()
+  @Matches(SOLO_NUMEROS_REGEX, { message: 'El tiempo de gestión académica solo puede contener números' })
+  tiempoGestionAcademica?: string;
+
+  @IsOptional()
+  @Matches(FECHA_YYYY_MM_DD_REGEX, { message: 'La fecha de inicio debe tener formato YYYY-MM-DD' })
+  fechaInicioCargo?: string;
+
+  @IsOptional()
+  @Matches(FECHA_YYYY_MM_DD_REGEX, { message: 'La fecha de fin debe tener formato YYYY-MM-DD' })
+  fechaFinCargo?: string;
+
+  @IsString()
+  @IsOptional()
+  designacion?: string;
+
+  @IsString()
+  @IsOptional()
+  disciplinaCargo?: string;
+
+  @IsString()
+  @IsOptional()
   justificacionPertinencia?: string;
 
   @IsString()

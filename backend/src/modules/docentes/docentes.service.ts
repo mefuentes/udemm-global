@@ -151,7 +151,14 @@ export class DocentesService {
     ]);
 
     return {
-      data: data.map((docente) => this.formatearDocenteFecha(docente)),
+      data: data.map((docente) => {
+        const formatted = this.formatearDocenteFecha(docente) as any;
+        return {
+          ...formatted,
+          cargo: formatted.categoriaDocente ?? formatted.cargoDeclarado ?? '',
+          dedicacion: formatted.dedicacion ?? ''
+        };
+      }),
       total,
       pagina,
       limite
@@ -245,6 +252,18 @@ export class DocentesService {
       tituloGrado: '',
       tituloPosgrado: '',
       cargoDeclarado: '',
+      dedicacion: '',
+      unidadAcademica: '',
+      categoriaDocente: '',
+      dedicacionDeclaradaSemanal: '',
+      tiempoDocencia: '',
+      tiempoInvestigacion: '',
+      tiempoExtension: '',
+      tiempoGestionAcademica: '',
+      fechaInicioCargo: '',
+      fechaFinCargo: '',
+      designacion: '',
+      disciplinaCargo: '',
       justificacionPertinencia: '',
       actividadesProfesionales: '',
       antecedentesAcademicos: '',

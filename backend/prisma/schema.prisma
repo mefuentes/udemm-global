@@ -51,9 +51,18 @@ model Rol {
   id          String       @id @default(uuid())
   nombre      String       @unique
   descripcion String?
+  activo      Boolean      @default(true)
   permisos    RolPermiso[]
   usuarios    Usuario[]
   fechaCreacion DateTime   @default(now())
+}
+
+model ParametroGeneral {
+  id                 String   @id @default(uuid())
+  clave              String   @unique
+  valor              String
+  descripcion        String?
+  fechaActualizacion DateTime @updatedAt
 }
 
 model Permiso {
@@ -134,9 +143,77 @@ model Docente {
   tituloGrado           String?
   tituloPosgrado        String?
   cargoDeclarado        String?
+  dedicacion            String?
+  unidadAcademica       String?
+  categoriaDocente      String?
+  dedicacionDeclaradaSemanal String?
+  tiempoDocencia        String?
+  tiempoInvestigacion   String?
+  tiempoExtension       String?
+  tiempoGestionAcademica String?
+  fechaInicioCargo      String?
+  fechaFinCargo         String?
+  designacion           String?
+  disciplinaCargo       String?
   justificacionPertinencia String?
   actividadesProfesionales String?
   antecedentesAcademicos String?
+  otrosTitulos                  String?
+  carreraFormacionDocenteJson   String?
+  areaDisciplinar               String?
+  subarea                       String?
+  observacionesArea             String?
+  asignaturasVinculadas         String?
+  actividadesPosgradoJson       String?
+  trayectoriaCargosPasadosJson  String?
+  direccionTesisJson            String?
+  experienciaDistancia          String?
+  // Cargos académicos (gestión)
+  funcionGestion                         String?
+  unidadAcademicaGestion                 String?
+  tiempoDedicacionGestionSemanal         String?
+  fechaInicioGestion                     String?
+  fechaFinGestion                        String?
+  carreraAsociadaGestion                 String?
+  normativaDesignacionGestion            String?
+  cargosAcademicosJson                   String?
+  otrasDedicacionesJson                  String?
+  desempenoActualJson                    String?
+  desempenoPasadoJson                    String?
+  // Investigación
+  tituloProyectoInvestigacion                      String?
+  institucionProyectoInvestigacion                 String?
+  institucionEvaluadoraProyectoInvestigacion       String?
+  institucionFinanciadoraProyectoInvestigacion     String?
+  fechaInicioProyectoInvestigacion                 String?
+  fechaFinProyectoInvestigacion                    String?
+  vinculadoCarreraProyectoInvestigacion            String?
+  disciplinasVinculadasProyectoInvestigacion       String?
+  proyectosInvestigacionJson                       String?
+  sistemasPromocionInvestigacionJson               String?
+  participacionVinculacionJson                     String?
+  produccionCientificaJson                         String?
+  // Extensión
+  tituloActividadExtension               String?
+  rolActividadExtension                  String?
+  institucionDestinoActividadExtension   String?
+  fechaInicioActividadExtension          String?
+  finEstadoActividadExtension            String?
+  vinculadaActividadExtension            String?
+  actividadesExtensionJson               String?
+  reunionesCientificasJson               String?
+  comitesJuradosJson                     String?
+  // Otra Información (Tab 10)
+  carreraDocentePosgrado                 String?
+  actividadesTransferenciaExtension      String?
+  premiosDistinciones                    String?
+  estanciasCursosExterior                String?
+  membresiasInstituciones                String?
+  // Promoción
+  sistemaPromocion      String?
+  categoriaPromocion    String?
+  fechaAltaPromocion    String?
+  registrosPromocionJson String?
   activo                Boolean   @default(true)
   fechaCreacion         DateTime  @default(now())
   fechaActualizacion    DateTime  @updatedAt
