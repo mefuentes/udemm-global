@@ -86,6 +86,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       router.push('/');
     } catch (error) {
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        throw new Error(`No se pudo conectar al servidor. Backend no disponible en ${API_URL}`);
+      }
       throw error;
     }
   };

@@ -150,34 +150,32 @@ export default function NuevoDocentePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-900">
-      <div className="mx-auto max-w-4xl">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <Link href="/docentes" className="text-slate-600 hover:text-slate-900 font-semibold">
-              ← Volver al listado
-            </Link>
-            <h1 className="mt-4 text-3xl font-semibold text-slate-900">Nuevo docente</h1>
-            <p className="mt-2 text-slate-600">Complete el formulario para crear un nuevo docente.</p>
-          </div>
-        </div>
+    <main className="max-w-4xl mx-auto space-y-5">
+      <div>
+        <Link href="/docentes" className="text-xs text-slate-500 hover:text-slate-700 transition">
+          ← Volver al listado
+        </Link>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-0.5 mt-1">Docentes</p>
+        <h1 className="text-xl font-bold text-slate-800">Nuevo docente</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Complete el formulario para crear un nuevo docente.</p>
+      </div>
 
         {error && (
-          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="mb-6 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             {error}
           </div>
         )}
 
         {exito && (
-          <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+          <div className="mb-6 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
             {exito}
           </div>
         )}
 
-        <form className="space-y-6 rounded-3xl bg-white p-8 shadow-lg shadow-slate-200/50" onSubmit={guardar}>
+        <form className="space-y-5 rounded-xl bg-white p-6 shadow-sm border border-slate-200" onSubmit={guardar}>
           <fieldset disabled={enviando} className="space-y-6">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Datos personales</h2>
+              <h2 className="text-sm font-semibold text-slate-700 mb-3 border-b border-slate-100 pb-2">Datos personales</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 <input
                   value={formData.nombre}
@@ -185,7 +183,7 @@ export default function NuevoDocentePage() {
                   placeholder="Nombre *"
                   required
                   style={{ textTransform: 'uppercase' }}
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:bg-white"
+                  className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                 />
                 <input
                   value={formData.apellido}
@@ -193,13 +191,13 @@ export default function NuevoDocentePage() {
                   placeholder="Apellido *"
                   required
                   style={{ textTransform: 'uppercase' }}
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:bg-white"
+                  className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                 />
               </div>
             </div>
 
             <div>
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Documento</h2>
+              <h2 className="text-sm font-semibold text-slate-700 mb-3 border-b border-slate-100 pb-2">Documento</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
                   <span className="text-sm text-slate-500">Tipo de documento *</span>
@@ -207,7 +205,7 @@ export default function NuevoDocentePage() {
                     value={formData.tipoDocumento}
                     onChange={(e) => actualizarCampo('tipoDocumento', e.target.value)}
                     required
-                    className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:bg-white"
+                    className="mt-2 w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                   >
                     {tiposDocumento.map((tipo) => (
                       <option key={tipo} value={tipo}>
@@ -226,14 +224,14 @@ export default function NuevoDocentePage() {
                     pattern="[0-9]*"
                     required
                     style={{ textTransform: 'uppercase' }}
-                    className="mt-2 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:bg-white"
+                    className="mt-2 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                   />
                 </label>
               </div>
             </div>
 
             <div>
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Contacto</h2>
+              <h2 className="text-sm font-semibold text-slate-700 mb-3 border-b border-slate-100 pb-2">Contacto</h2>
               <div className="grid gap-4">
                 <input
                   type="email"
@@ -241,7 +239,7 @@ export default function NuevoDocentePage() {
                   onChange={(e) => actualizarCampo('correoElectronico', e.target.value)}
                   placeholder="Correo electrónico *"
                   required
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:bg-white"
+                  className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                 />
                 <input
                   value={formData.telefono}
@@ -250,47 +248,47 @@ export default function NuevoDocentePage() {
                   inputMode="numeric"
                   pattern="[0-9]*"
                   style={{ textTransform: 'uppercase' }}
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:bg-white"
+                  className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                 />
                 <input
                   value={formData.domicilio}
                   onChange={(e) => actualizarCampo('domicilio', e.target.value)}
                   placeholder="Domicilio"
                   style={{ textTransform: 'uppercase' }}
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:bg-white"
+                  className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                 />
               </div>
             </div>
 
             <div>
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Formación</h2>
+              <h2 className="text-sm font-semibold text-slate-700 mb-3 border-b border-slate-100 pb-2">Formación</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 <input
                   value={formData.tituloGrado}
                   onChange={(e) => actualizarCampo('tituloGrado', e.target.value)}
                   placeholder="Título de grado"
                   style={{ textTransform: 'uppercase' }}
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:bg-white"
+                  className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                 />
                 <input
                   value={formData.tituloPosgrado}
                   onChange={(e) => actualizarCampo('tituloPosgrado', e.target.value)}
                   placeholder="Título de posgrado"
                   style={{ textTransform: 'uppercase' }}
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:bg-white"
+                  className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                 />
               </div>
             </div>
 
             <div>
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Cargo y trayectoria</h2>
+              <h2 className="text-sm font-semibold text-slate-700 mb-3 border-b border-slate-100 pb-2">Cargo y trayectoria</h2>
               <div className="grid gap-4">
                 <textarea
                   value={formData.cargoDeclarado}
                   onChange={(e) => actualizarCampo('cargoDeclarado', e.target.value)}
                   placeholder="Cargo declarado"
                   style={{ textTransform: 'uppercase' }}
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:bg-white"
+                  className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                   rows={2}
                 />
                 <textarea
@@ -298,7 +296,7 @@ export default function NuevoDocentePage() {
                   onChange={(e) => actualizarCampo('justificacionPertinencia', e.target.value)}
                   placeholder="Justificación de pertinencia"
                   style={{ textTransform: 'uppercase' }}
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:bg-white"
+                  className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                   rows={2}
                 />
                 <textarea
@@ -306,7 +304,7 @@ export default function NuevoDocentePage() {
                   onChange={(e) => actualizarCampo('actividadesProfesionales', e.target.value)}
                   placeholder="Actividades profesionales"
                   style={{ textTransform: 'uppercase' }}
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:bg-white"
+                  className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                   rows={2}
                 />
                 <textarea
@@ -314,7 +312,7 @@ export default function NuevoDocentePage() {
                   onChange={(e) => actualizarCampo('antecedentesAcademicos', e.target.value)}
                   placeholder="Antecedentes académicos"
                   style={{ textTransform: 'uppercase' }}
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:bg-white"
+                  className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                   rows={2}
                 />
               </div>
@@ -324,22 +322,21 @@ export default function NuevoDocentePage() {
               <button
                 type="submit"
                 disabled={enviando}
-                className="rounded-full bg-slate-900 px-6 py-3 text-white font-semibold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="rounded-md bg-[#0f4c81] px-4 py-2 text-sm text-white font-medium hover:bg-[#0a3960] disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
                 {enviando ? 'Guardando...' : 'Guardar docente'}
               </button>
               <Link
                 href="/docentes"
-                className="rounded-full border border-slate-300 bg-white px-6 py-3 text-slate-700 font-semibold hover:bg-slate-50"
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 font-medium hover:bg-slate-50 transition"
               >
                 Cancelar
               </Link>
             </div>
           </fieldset>
 
-          <p className="text-xs text-slate-500 pt-2">Los campos marcados con * son obligatorios.</p>
+          <p className="text-xs text-slate-400 pt-2">Los campos marcados con * son obligatorios.</p>
         </form>
-      </div>
     </main>
   );
 }

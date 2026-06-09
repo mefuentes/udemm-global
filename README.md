@@ -229,6 +229,7 @@ Verificar:
 - Backend: `http://localhost:5000/health`
 - Frontend: `http://localhost:3000`
 
+<<<<<<< ours
 ## Notas de implementación
 - Fase 3 completada: Módulo Docentes con CRUD completo
 - Auth y RBAC funcionales
@@ -237,3 +238,19 @@ Verificar:
 - Backend NestJS modular
 - No se implementan módulos futuros aún (materias, carga horaria, reportes, etc.)
 - Las futuras extensiones pueden usar la estructura base como referencia
+=======
+## Notas de la Fase 1
+- Se ha preparado arquitectura base con health checks.
+- No se implementan aún funcionalidades como login, JWT, CRUDs, formularios, carga de archivos, reportes ni lógica de negocio.
+- Se define esquema inicial de Prisma con la jerarquía institucional.
+
+## Solución de errores de Fast Refresh o conflictos
+Si Next.js muestra `Merge conflict marker encountered` en `frontend/app/page.tsx`, abrir ese archivo y eliminar cualquier línea `<<<<<<<`, `=======` o `>>>>>>>` que haya quedado de un merge. La versión esperada de la home debe comenzar con `export default function Home()`.
+
+Si después de corregir el archivo aparece un error de caché como `webpack.cache.PackFileCacheStrategy` o un `hot-update.json` con estado 500, limpiar la caché local de Next.js y reiniciar el servidor:
+
+```bash
+cd frontend
+npm run dev:clean
+```
+>>>>>>> theirs
