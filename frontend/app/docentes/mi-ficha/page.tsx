@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { jsPDF } from 'jspdf';
 import { useAuth } from '@/lib/auth-context';
@@ -1000,20 +1000,6 @@ export default function MiFichaPage() {
       ? `${API_URL}/docentes/${docenteIdDesdeListado}`
       : `${API_URL}/docentes/mi-ficha`;
   }
-
-  const indicadores = useMemo(
-    () =>
-      formData
-        ? [
-            { key: 'MIN', label: 'Mínimo', activo: !!formData.nombre && !!formData.apellido && !!formData.tipoDocumento && !!formData.numeroDocumento },
-            { key: 'FOR', label: 'Formación', activo: titulosGrado.length > 0 || titulosPosgrado.length > 0 },
-            { key: 'INV', label: 'Investigación', activo: !!formData.actividadesProfesionales },
-            { key: 'PRO', label: 'Promoción', activo: !!formData.justificacionPertinencia },
-            { key: 'VIN', label: 'Vinculación', activo: !!formData.actividadesTransferenciaExtension || !!formData.tituloActividadExtension }
-          ]
-        : [],
-    [formData, titulosGrado, titulosPosgrado]
-  );
 
   function handleFieldChange(field: keyof FormData, value: string) {
     setFormData((current) => (current ? { ...current, [field]: value } : current));
@@ -2614,19 +2600,7 @@ export default function MiFichaPage() {
             </div>
           </div>
 
-          <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="text-sm font-semibold text-slate-700">Completitud</p>
-              {indicadores.map((item) => (
-                <div key={item.key} className={`flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium ${item.activo ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
-                  <span className={`inline-flex h-2 w-2 rounded-full ${item.activo ? 'bg-green-500' : 'bg-red-400'}`} />
-                  <span>{item.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-8 space-y-6">
+          <div className="mt-4 space-y-6">
             {activeTab === 1 && (
               <div className="space-y-6">
                 <div className="rounded-lg border border-slate-200 bg-white p-4">

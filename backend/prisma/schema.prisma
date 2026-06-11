@@ -95,9 +95,10 @@ model Usuario {
   fechaActualizacion DateTime      @updatedAt
   rol               Rol            @relation(fields: [rolId], references: [id])
   rolId             String
-  sesiones          Sesion[]
-  tokensRefresh     TokenRefresh[]
-  docente           Docente?
+  sesiones             Sesion[]
+  tokensRefresh        TokenRefresh[]
+  tokensRecuperacion   TokenRecuperacion[]
+  docente              Docente?
 }
 
 model Sesion {
@@ -119,6 +120,16 @@ model TokenRefresh {
   expiracion     DateTime
   activo         Boolean   @default(true)
   fechaCreacion  DateTime  @default(now())
+}
+
+model TokenRecuperacion {
+  id         String   @id @default(uuid())
+  token      String   @unique
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
+  usuarioId  String
+  expiracion DateTime
+  usado      Boolean  @default(false)
+  creadoEn   DateTime @default(now())
 }
 
 model Docente {

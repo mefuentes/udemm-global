@@ -8,14 +8,14 @@ import { ReactNode } from 'react';
 export function LayoutClient({ children }: { children: ReactNode }) {
   const { isOpen } = useSidebar();
   const pathname = usePathname();
-  const sidebarVisible = pathname !== '/login';
+  const sinSidebar = pathname === '/login' || pathname.startsWith('/restablecer-contrasena');
 
   return (
     <div className="flex">
       <Sidebar />
       <main
         className={`flex-1 transition-all duration-200 min-h-screen ${
-          sidebarVisible ? (isOpen ? 'ml-60' : 'ml-14') : ''
+          sinSidebar ? '' : (isOpen ? 'ml-60' : 'ml-14')
         }`}
       >
         {children}
