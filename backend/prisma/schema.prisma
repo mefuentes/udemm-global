@@ -31,20 +31,39 @@ model Carrera {
 }
 
 model PlanEstudio {
-  id          String     @id @default(uuid())
-  nombre      String
-  carrera     Carrera    @relation(fields: [carreraId], references: [id])
-  carreraId   String
-  materias    Materia[]
+  id                    String      @id @default(uuid())
+  codigo                String?     @unique
+  nombre                String
+  descripcion           String?
+  version               String?
+  estado                String      @default("ACTIVO")
+  duracionCuatrimestres Int?
+  totalCreditos         Int?
+  resolucionAprobacion  String?
+  fechaAprobacion       DateTime?
+  carrera               Carrera     @relation(fields: [carreraId], references: [id])
+  carreraId             String
+  materias              Materia[]
+  fechaCreacion         DateTime    @default(now())
+  fechaActualizacion    DateTime    @updatedAt
 }
 
 model Materia {
-  id            String      @id @default(uuid())
-  codigo        String      @unique
-  nombre        String
-  creditos      Int
-  planEstudio   PlanEstudio @relation(fields: [planEstudioId], references: [id])
-  planEstudioId String
+  id                 String      @id @default(uuid())
+  codigo             String      @unique
+  nombre             String
+  descripcion        String?
+  creditos           Int
+  horasSemanales     Int?
+  anio               Int?
+  cuatrimestre       Int?
+  tipo               String      @default("OBLIGATORIA")
+  estado             String      @default("ACTIVO")
+  correlativasJson   String?
+  planEstudio        PlanEstudio @relation(fields: [planEstudioId], references: [id])
+  planEstudioId      String
+  fechaCreacion      DateTime    @default(now())
+  fechaActualizacion DateTime    @updatedAt
 }
 
 model Rol {
