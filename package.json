@@ -1,0 +1,12 @@
+{
+  "name": "udemm-global",
+  "version": "1.0.0",
+  "private": true,
+  "description": "UDEMM Global — Monorepo (backend NestJS + frontend Next.js)",
+  "scripts": {
+    "kill:ports":    "node scripts/kill-port.mjs 5000 3000",
+    "dev:backend":   "node scripts/kill-port.mjs 5000 && npm run start:dev --prefix backend",
+    "dev:frontend":  "node scripts/kill-port.mjs 3000 && npm run dev --prefix frontend",
+    "dev:all":       "node scripts/dev-all.mjs"
+  }
+}
