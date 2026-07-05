@@ -10,6 +10,9 @@ import { MateriasModule } from './modules/materias/materias.module';
 import { PlanesModule } from './modules/planes/planes.module';
 import { DocumentosModule } from './modules/documentos/documentos.module';
 import { ParametrosModule } from './modules/parametros/parametros.module';
+import { FacultadesModule } from './modules/facultades/facultades.module';
+import { CarrerasModule } from './modules/carreras/carreras.module';
+import { ProgramasModule } from './modules/programas/programas.module';
 
 @Module({
   imports: [
@@ -23,7 +26,10 @@ import { ParametrosModule } from './modules/parametros/parametros.module';
     MateriasModule,
     PlanesModule,
     DocumentosModule,
-    ParametrosModule
+    ParametrosModule,
+    FacultadesModule,
+    CarrerasModule,
+    ProgramasModule
   ],
   controllers: [],
   providers: []

@@ -63,6 +63,12 @@ const IcPlanEstudios = () => (
   </svg>
 );
 
+const IcGestionAcademica = () => (
+  <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+  </svg>
+);
+
 const IcMenuOpen = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
@@ -99,21 +105,33 @@ export function Sidebar() {
   }
 
   const getMenuByRole = (): MenuItemType[] => {
+    const SUBMENU_GESTION_ACADEMICA = {
+      label: 'Gestión Académica',
+      icon: <IcGestionAcademica />,
+      submenu: [
+        { label: 'Facultades', href: '/gestion-academica/facultades' },
+        { label: 'Carreras',   href: '/gestion-academica/carreras'   },
+      ],
+    };
+
+    const SUBMENU_PLAN_ESTUDIOS = {
+      label: 'Plan de Estudios',
+      icon: <IcPlanEstudios />,
+      submenu: [
+        { label: 'Malla Curricular',        href: '/plan-estudios/malla-curricular'      },
+        { label: 'Ficha de Asignatura',     href: '/plan-estudios/ficha-asignatura'      },
+        { label: 'Programas de Asignatura', href: '/plan-estudios/programas-asignatura'  },
+        { label: 'Datos del Plan',          href: '/plan-estudios/datos-plan'            },
+      ],
+    };
+
     if (usuario.rol?.nombre === 'DOCENTE') {
       return [
         { label: 'Inicio', icon: <IcHome />, href: '/' },
         { label: 'Mi Ficha Docente', icon: <IcDocument />, href: '/docentes/mi-ficha' },
         { label: 'Bandeja de Aprobaciones', icon: <IcInbox />, href: '/docentes/aprobaciones' },
-        {
-          label: 'Plan de Estudios',
-          icon: <IcPlanEstudios />,
-          submenu: [
-            { label: 'Malla Curricular', href: '/plan-estudios/malla-curricular' },
-            { label: 'Ficha de Asignatura', href: '/plan-estudios/ficha-asignatura' },
-            { label: 'Programas de Asignatura', href: '/plan-estudios/programas-asignatura' },
-            { label: 'Datos del Plan', href: '/plan-estudios/datos-plan' },
-          ],
-        },
+        SUBMENU_PLAN_ESTUDIOS,
+        SUBMENU_GESTION_ACADEMICA,
       ];
     }
 
@@ -125,22 +143,14 @@ export function Sidebar() {
           icon: <IcUsers />,
           submenu: [{ label: 'Listado de Docentes', href: '/docentes' }],
         },
-        {
-          label: 'Plan de Estudios',
-          icon: <IcPlanEstudios />,
-          submenu: [
-            { label: 'Malla Curricular', href: '/plan-estudios/malla-curricular' },
-            { label: 'Ficha de Asignatura', href: '/plan-estudios/ficha-asignatura' },
-            { label: 'Programas de Asignatura', href: '/plan-estudios/programas-asignatura' },
-            { label: 'Datos del Plan', href: '/plan-estudios/datos-plan' },
-          ],
-        },
+        SUBMENU_PLAN_ESTUDIOS,
+        SUBMENU_GESTION_ACADEMICA,
         {
           label: 'Configuración',
           icon: <IcSettings />,
           submenu: [
-            { label: 'Usuarios', href: '/configuracion/usuarios' },
-            { label: 'Roles', href: '/configuracion/roles' },
+            { label: 'Usuarios',             href: '/configuracion/usuarios'   },
+            { label: 'Roles',                href: '/configuracion/roles'      },
             { label: 'Parámetros Generales', href: '/configuracion/parametros' },
           ],
         },
@@ -154,9 +164,9 @@ export function Sidebar() {
         label: 'Gestión Docentes',
         icon: <IcManage />,
         submenu: [
-          { label: 'Listado de Docentes', href: '/docentes' },
-          { label: 'Nuevos Docentes', href: '/docentes/nuevo' },
-          { label: 'Bandeja de Aprobaciones', href: '/docentes/aprobaciones' },
+          { label: 'Listado de Docentes',        href: '/docentes'              },
+          { label: 'Nuevos Docentes',            href: '/docentes/nuevo'        },
+          { label: 'Bandeja de Aprobaciones',    href: '/docentes/aprobaciones' },
         ],
       });
     } else {
@@ -167,16 +177,8 @@ export function Sidebar() {
       });
     }
 
-    base.push({
-      label: 'Plan de Estudios',
-      icon: <IcPlanEstudios />,
-      submenu: [
-        { label: 'Malla Curricular', href: '/plan-estudios/malla-curricular' },
-        { label: 'Ficha de Asignatura', href: '/plan-estudios/ficha-asignatura' },
-        { label: 'Programas de Asignatura', href: '/plan-estudios/programas-asignatura' },
-        { label: 'Datos del Plan', href: '/plan-estudios/datos-plan' },
-      ],
-    });
+    base.push(SUBMENU_PLAN_ESTUDIOS);
+    base.push(SUBMENU_GESTION_ACADEMICA);
 
     return base;
   };

@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   UsePipes,
   ValidationPipe
@@ -14,6 +15,8 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PlanesEstudioService } from './planes-estudio.service';
+import { CrearPlanDto } from './dto/crear-plan.dto';
+import { ActualizarPlanDto } from './dto/actualizar-plan.dto';
 
 const ROLES_VER = [
   'ADMINISTRADOR_SISTEMA',
@@ -25,17 +28,17 @@ const ROLES_VER = [
   'DOCENTE'
 ] as const;
 
+const ROLES_CREAR = [
+  'ADMINISTRADOR_SISTEMA',
+  'SECRETARIA_ACADEMICA',
+  'DIRECTOR_CARRERA'
+] as const;
+
 const ROLES_EDITAR = [
   'ADMINISTRADOR_SISTEMA',
   'SECRETARIA_ACADEMICA',
   'DIRECTOR_CARRERA',
   'ADMINISTRATIVO'
-] as const;
-
-const ROLES_CREAR = [
-  'ADMINISTRADOR_SISTEMA',
-  'SECRETARIA_ACADEMICA',
-  'DIRECTOR_CARRERA'
 ] as const;
 
 const ROLES_ADMIN = ['ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA'] as const;
@@ -46,16 +49,22 @@ const ROLES_ADMIN = ['ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA'] as const;
 export class PlanesEstudioController {
   constructor(private readonly planesEstudioService: PlanesEstudioService) {}
 
-  @Get()
+  @Get('carreras')
   @Roles(...ROLES_VER)
-  obtenerTodos() {
-    return this.planesEstudioService.obtenerTodos();
+  obtenerCarreras() {
+    return this.planesEstudioService.obtenerCarreras();
   }
 
   @Get('kpis')
   @Roles(...ROLES_VER)
   obtenerKpis() {
     return this.planesEstudioService.obtenerKpis();
+  }
+
+  @Get()
+  @Roles(...ROLES_VER)
+  obtenerTodos(@Query('carreraId') carreraId?: string) {
+    return this.planesEstudioService.obtenerTodos(carreraId);
   }
 
   @Get(':id')
@@ -66,14 +75,14 @@ export class PlanesEstudioController {
 
   @Post()
   @Roles(...ROLES_CREAR)
-  crear(@Body() body: Record<string, unknown>) {
-    return this.planesEstudioService.crear(body);
+  crear(@Body() dto: CrearPlanDto) {
+    return this.planesEstudioService.crear(dto);
   }
 
   @Patch(':id')
   @Roles(...ROLES_EDITAR)
-  actualizar(@Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.planesEstudioService.actualizar(id, body);
+  actualizar(@Param('id') id: string, @Body() dto: ActualizarPlanDto) {
+    return this.planesEstudioService.actualizar(id, dto);
   }
 
   @Delete(':id')

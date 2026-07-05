@@ -1,17 +1,30 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CrearPlanDto } from './dto/crear-plan.dto';
+import { ActualizarPlanDto } from './dto/actualizar-plan.dto';
 
 @Injectable()
 export class PlanesEstudioService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async obtenerTodos() {
+  async obtenerCarreras() {
+    return this.prisma.carrera.findMany({
+      include: {
+        facultad: true,
+        _count: { select: { planes: true } }
+      },
+      orderBy: { nombre: 'asc' }
+    });
+  }
+
+  async obtenerTodos(carreraId?: string) {
     return this.prisma.planEstudio.findMany({
+      where: carreraId ? { carreraId } : undefined,
       include: {
         carrera: true,
         _count: { select: { materias: true } }
       },
-      orderBy: { nombre: 'asc' }
+      orderBy: [{ anio: 'desc' }, { nombre: 'asc' }]
     });
   }
 
@@ -19,7 +32,7 @@ export class PlanesEstudioService {
     const [totalPlanes, totalMaterias, totalCarreras, planesActivos] =
       await Promise.all([
         this.prisma.planEstudio.count(),
-        this.prisma.materia.count(),
+        this.prisma.materia.count({ where: { estado: 'ACTIVO' } }),
         this.prisma.carrera.count(),
         this.prisma.planEstudio.count({ where: { estado: 'ACTIVO' } })
       ]);
@@ -31,7 +44,7 @@ export class PlanesEstudioService {
     const plan = await this.prisma.planEstudio.findUnique({
       where: { id },
       include: {
-        carrera: true,
+        carrera: { include: { facultad: true } },
         materias: {
           orderBy: [{ anio: 'asc' }, { cuatrimestre: 'asc' }, { nombre: 'asc' }]
         }
@@ -41,15 +54,24 @@ export class PlanesEstudioService {
     return plan;
   }
 
-  async crear(data: Record<string, unknown>) {
-    return this.prisma.planEstudio.create({ data: data as any });
+  async crear(dto: CrearPlanDto) {
+    return this.prisma.planEstudio.create({
+      data: { ...dto, estado: dto.estado ?? 'ACTIVO' },
+      include: { carrera: true }
+    });
   }
 
-  async actualizar(id: string, data: Record<string, unknown>) {
-    return this.prisma.planEstudio.update({ where: { id }, data: data as any });
+  async actualizar(id: string, dto: ActualizarPlanDto) {
+    await this.obtenerPorId(id);
+    return this.prisma.planEstudio.update({
+      where: { id },
+      data: dto,
+      include: { carrera: true }
+    });
   }
 
   async eliminar(id: string) {
+    await this.obtenerPorId(id);
     return this.prisma.planEstudio.update({
       where: { id },
       data: { estado: 'INACTIVO' }

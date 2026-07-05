@@ -1,3 +1,28 @@
+export interface PermisosPrograma {
+  ver: boolean;
+  editar: boolean;
+  aprobar: boolean;
+  exportar: boolean;
+}
+
+export function getPermisosPrograma(rolNombre: string): PermisosPrograma {
+  switch (rolNombre) {
+    case 'ADMINISTRADOR_SISTEMA':
+    case 'SECRETARIA_ACADEMICA':
+    case 'DIRECTOR_CARRERA':
+      return { ver: true, editar: true, aprobar: true, exportar: true };
+    case 'ADMINISTRATIVO':
+      return { ver: true, editar: true, aprobar: false, exportar: false };
+    case 'DECANO':
+    case 'RECTORADO':
+      return { ver: true, editar: false, aprobar: false, exportar: true };
+    case 'DOCENTE':
+      return { ver: true, editar: true, aprobar: false, exportar: false };
+    default:
+      return { ver: false, editar: false, aprobar: false, exportar: false };
+  }
+}
+
 export interface PermisosPlanEstudio {
   ver: boolean;
   crear: boolean;

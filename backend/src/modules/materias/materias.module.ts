@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
+import { MateriasController } from './materias.controller';
+import { MateriasService } from './materias.service';
 
 @Module({
-  imports: [],
-  controllers: [],
-  providers: []
+  controllers: [MateriasController],
+  providers: [MateriasService]
 })
 export class MateriasModule {}
