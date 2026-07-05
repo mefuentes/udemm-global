@@ -256,32 +256,51 @@ export default function MallaCurricularPage() {
     }
     setGuardando(true);
     try {
-      const payload: Record<string, unknown> = {
-        codigo: formMateria.codigo.trim(),
-        nombre: formMateria.nombre.trim(),
-        planEstudioId: planId,
-        tipoAsignatura: formMateria.tipoAsignatura,
-        estado: formMateria.estado
-      };
-      if (formMateria.descripcion) payload.descripcion = formMateria.descripcion;
-      if (formMateria.anio) payload.anio = parseInt(formMateria.anio);
-      if (formMateria.cuatrimestre !== '') payload.cuatrimestre = parseInt(formMateria.cuatrimestre);
-      if (formMateria.bloqueConocimiento) payload.bloqueConocimiento = formMateria.bloqueConocimiento;
-      if (formMateria.modalidadDictado) payload.modalidadDictado = formMateria.modalidadDictado;
-      if (formMateria.cargaHorariaSemanal) payload.cargaHorariaSemanal = parseInt(formMateria.cargaHorariaSemanal);
-      if (formMateria.cargaHorariaTotal) payload.cargaHorariaTotal = parseInt(formMateria.cargaHorariaTotal);
-      if (formMateria.creditos) payload.creditos = parseInt(formMateria.creditos);
-      if (formMateria.observaciones) payload.observaciones = formMateria.observaciones;
+      let payload: Record<string, unknown>;
 
       if (materiaEditar) {
+        // PATCH: siempre enviar todos los campos; null para limpiar opcionales
+        payload = {
+          codigo:            formMateria.codigo.trim(),
+          nombre:            formMateria.nombre.trim(),
+          tipoAsignatura:    formMateria.tipoAsignatura,
+          estado:            formMateria.estado,
+          descripcion:       formMateria.descripcion.trim() || null,
+          bloqueConocimiento: formMateria.bloqueConocimiento || null,
+          modalidadDictado:  formMateria.modalidadDictado   || null,
+          observaciones:     formMateria.observaciones.trim() || null,
+          anio:              formMateria.anio !== ''              ? parseInt(formMateria.anio)              : null,
+          cuatrimestre:      formMateria.cuatrimestre !== ''      ? parseInt(formMateria.cuatrimestre)      : null,
+          cargaHorariaSemanal: formMateria.cargaHorariaSemanal !== '' ? parseInt(formMateria.cargaHorariaSemanal) : null,
+          cargaHorariaTotal:   formMateria.cargaHorariaTotal   !== '' ? parseInt(formMateria.cargaHorariaTotal)   : null,
+          creditos:          formMateria.creditos !== ''        ? parseInt(formMateria.creditos)        : 0,
+        };
         await apiFetch(`${API_URL}/materias/${materiaEditar.id}`, {
           method: 'PATCH', body: JSON.stringify(payload)
         });
       } else {
+        // POST: solo enviar campos con valor
+        payload = {
+          codigo:         formMateria.codigo.trim(),
+          nombre:         formMateria.nombre.trim(),
+          planEstudioId:  planId,
+          tipoAsignatura: formMateria.tipoAsignatura,
+          estado:         formMateria.estado,
+        };
+        if (formMateria.descripcion.trim())   payload.descripcion       = formMateria.descripcion.trim();
+        if (formMateria.anio)                 payload.anio              = parseInt(formMateria.anio);
+        if (formMateria.cuatrimestre !== '')  payload.cuatrimestre      = parseInt(formMateria.cuatrimestre);
+        if (formMateria.bloqueConocimiento)   payload.bloqueConocimiento = formMateria.bloqueConocimiento;
+        if (formMateria.modalidadDictado)     payload.modalidadDictado  = formMateria.modalidadDictado;
+        if (formMateria.cargaHorariaSemanal)  payload.cargaHorariaSemanal = parseInt(formMateria.cargaHorariaSemanal);
+        if (formMateria.cargaHorariaTotal)    payload.cargaHorariaTotal = parseInt(formMateria.cargaHorariaTotal);
+        if (formMateria.creditos)             payload.creditos          = parseInt(formMateria.creditos);
+        if (formMateria.observaciones.trim()) payload.observaciones     = formMateria.observaciones.trim();
         await apiFetch(`${API_URL}/materias`, {
           method: 'POST', body: JSON.stringify(payload)
         });
       }
+
       cerrarModalMateria();
       await fetchMaterias(planId);
     } catch (e) {
@@ -1032,7 +1051,7 @@ function MateriaRow({
         <div className="flex items-center justify-end gap-1">
           <Link
             href={`/plan-estudios/ficha-asignatura?id=${m.id}`}
-            className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-[#0f4c81] hover:bg-[#0f4c81]/5 px-2 py-1 rounded transition-colors whitespace-nowrap"
+            className="flex items-center gap-1 text-[11px] font-semibold bg-[#0f4c81] text-white hover:bg-[#0d3d6b] px-2.5 py-1 rounded transition-colors whitespace-nowrap"
           >
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />

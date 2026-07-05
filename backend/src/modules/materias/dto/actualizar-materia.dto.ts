@@ -1,5 +1,9 @@
 import { IsString, IsOptional, IsInt, IsIn } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
+
+// Transforma null explícito en null (sin aplicar Number(null) = 0)
+const ToIntOrNull = () =>
+  Transform(({ value }) => (value === null || value === undefined ? null : parseInt(value, 10)));
 
 export class ActualizarMateriaDto {
   @IsOptional()
@@ -12,36 +16,36 @@ export class ActualizarMateriaDto {
 
   @IsOptional()
   @IsString()
-  descripcion?: string;
+  descripcion?: string | null;
 
   @IsOptional()
   @IsInt()
-  @Type(() => Number)
-  creditos?: number;
+  @ToIntOrNull()
+  creditos?: number | null;
 
   @IsOptional()
   @IsInt()
-  @Type(() => Number)
-  cargaHorariaSemanal?: number;
+  @ToIntOrNull()
+  cargaHorariaSemanal?: number | null;
 
   @IsOptional()
   @IsInt()
-  @Type(() => Number)
-  cargaHorariaTotal?: number;
+  @ToIntOrNull()
+  cargaHorariaTotal?: number | null;
 
   @IsOptional()
   @IsInt()
-  @Type(() => Number)
-  anio?: number;
+  @ToIntOrNull()
+  anio?: number | null;
 
   @IsOptional()
   @IsInt()
-  @Type(() => Number)
-  cuatrimestre?: number;
+  @ToIntOrNull()
+  cuatrimestre?: number | null;
 
   @IsOptional()
   @IsString()
-  bloqueConocimiento?: string;
+  bloqueConocimiento?: string | null;
 
   @IsOptional()
   @IsString()
@@ -51,7 +55,7 @@ export class ActualizarMateriaDto {
   @IsOptional()
   @IsString()
   @IsIn(['PRESENCIAL', 'VIRTUAL', 'MIXTA'])
-  modalidadDictado?: string;
+  modalidadDictado?: string | null;
 
   @IsOptional()
   @IsString()
@@ -64,5 +68,5 @@ export class ActualizarMateriaDto {
 
   @IsOptional()
   @IsString()
-  observaciones?: string;
+  observaciones?: string | null;
 }
