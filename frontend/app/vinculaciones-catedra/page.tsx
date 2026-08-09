@@ -23,6 +23,15 @@ interface Vinculacion {
   designacion: { nombre: string };
   usuarioSolicitante: { nombre: string; apellido: string };
   observaciones?: string;
+  // Aprobación / rechazo
+  aprobador?: { nombre: string; apellido: string } | null;
+  fechaAprobacion?: string | null;
+  motivoRechazo?: string | null;
+  // Desvinculación
+  desvinculador?: { nombre: string; apellido: string } | null;
+  fechaDesvinculacion?: string | null;
+  motivoDesvinculacion?: string | null;
+  fechaRegistroDesvinculacion?: string | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -37,12 +46,15 @@ function badgeEstado(estado: string) {
       return <span className="inline-flex text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Aprobada</span>;
     case 'RECHAZADA':
       return <span className="inline-flex text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">Rechazada</span>;
+    case 'DESVINCULADA':
+      return <span className="inline-flex text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">Desvinculada</span>;
     default:
       return <span className="inline-flex text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">{estado}</span>;
   }
 }
 
-function formatFecha(iso: string) {
+function formatFecha(iso?: string | null) {
+  if (!iso) return '—';
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
@@ -66,6 +78,35 @@ const IcEmpty = () => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899l4-4a4 4 0 115.656 5.656l-1.1 1.1" />
   </svg>
 );
+const IcX = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
+// ── CampoDetalle — campo de solo lectura para el modal Ver ───────────────────
+
+function CampoDetalle({
+  label,
+  valor,
+  sub,
+  largo = false,
+}: {
+  label: string;
+  valor?: string | null;
+  sub?: string | null;
+  largo?: boolean;
+}) {
+  return (
+    <div className={largo ? '' : ''}>
+      <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-0.5">{label}</dt>
+      <dd className={`text-sm text-slate-800 ${largo ? 'whitespace-pre-wrap break-words leading-relaxed' : 'font-medium'}`}>
+        {valor ?? <span className="text-slate-400 font-normal italic text-xs">—</span>}
+        {sub && <span className="block text-xs text-slate-400 font-normal">{sub}</span>}
+      </dd>
+    </div>
+  );
+}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -79,6 +120,57 @@ export default function VinculacionesCatedraPage() {
   const [filtroEstado, setFiltroEstado] = useState('');
   const [formulario, setFormulario] = useState(false);
   const [exito, setExito]           = useState<string | null>(null);
+
+  // Ver detalle
+  const [verTarget, setVerTarget] = useState<Vinculacion | null>(null);
+
+  // Desvincular
+  const [desvinculandoTarget, setDesvinculandoTarget] = useState<Vinculacion | null>(null);
+  const [formDesvincular, setFormDesvincular] = useState({ fecha: '', motivo: '' });
+  const [desvinculando, setDesvinculando]     = useState(false);
+  const [errorDesvincular, setErrorDesvincular] = useState<string | null>(null);
+
+  function abrirDesvincular(v: Vinculacion) {
+    setDesvinculandoTarget(v);
+    setFormDesvincular({ fecha: new Date().toISOString().split('T')[0], motivo: '' });
+    setErrorDesvincular(null);
+  }
+
+  function cerrarDesvincular() {
+    setDesvinculandoTarget(null);
+    setErrorDesvincular(null);
+  }
+
+  async function confirmarDesvincular() {
+    if (!desvinculandoTarget) return;
+    setDesvinculando(true);
+    setErrorDesvincular(null);
+    try {
+      const r = await fetch(`${API}/vinculaciones-catedra/${desvinculandoTarget.id}/desvincular`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${obtenerTokenActual()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fechaDesvinculacion:  formDesvincular.fecha,
+          motivoDesvinculacion: formDesvincular.motivo,
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message ?? `Error ${r.status}`);
+      }
+      cerrarDesvincular();
+      setExito(`Vinculación de ${desvinculandoTarget.docente.apellido}, ${desvinculandoTarget.docente.nombre} finalizada correctamente.`);
+      setTimeout(() => setExito(null), 6000);
+      cargar();
+    } catch (e) {
+      setErrorDesvincular((e as Error).message);
+    } finally {
+      setDesvinculando(false);
+    }
+  }
 
   const cargar = useCallback(async () => {
     setLoading(true); setError(null);
@@ -158,6 +250,7 @@ export default function VinculacionesCatedraPage() {
           <option value="PENDIENTE_DE_APROBACION">Pendiente de aprobación</option>
           <option value="APROBADA">Aprobada</option>
           <option value="RECHAZADA">Rechazada</option>
+          <option value="DESVINCULADA">Desvinculada</option>
         </select>
       </div>
 
@@ -179,12 +272,13 @@ export default function VinculacionesCatedraPage() {
                 <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 hidden lg:table-cell whitespace-nowrap">H/SEM · Año</th>
                 <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">Estado</th>
                 <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 hidden sm:table-cell whitespace-nowrap">Fecha</th>
+                <th className="text-right px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-10 text-center">
+                  <td colSpan={9} className="px-5 py-10 text-center">
                     <div className="flex items-center justify-center gap-2 text-slate-400 text-sm">
                       <IcSpinner />
                       Cargando…
@@ -193,7 +287,7 @@ export default function VinculacionesCatedraPage() {
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-14 text-center">
+                  <td colSpan={9} className="px-5 py-14 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <IcEmpty />
                       <div>
@@ -238,6 +332,24 @@ export default function VinculacionesCatedraPage() {
                   <td className="px-4 py-3.5 text-xs text-slate-500 hidden sm:table-cell whitespace-nowrap">
                     {formatFecha(v.fechaCreacion)}
                   </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => setVerTarget(v)}
+                        className="text-[11px] font-semibold text-slate-600 border border-slate-200 bg-white px-2.5 py-1 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap"
+                      >
+                        Ver
+                      </button>
+                      {v.estado === 'APROBADA' && (
+                        <button
+                          onClick={() => abrirDesvincular(v)}
+                          className="text-[11px] font-semibold text-red-600 border border-red-200 bg-red-50 px-2.5 py-1 rounded-lg hover:bg-red-100 transition-colors whitespace-nowrap"
+                        >
+                          Desvincular
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -260,6 +372,223 @@ export default function VinculacionesCatedraPage() {
           onGuardado={onGuardado}
           onCerrar={() => setFormulario(false)}
         />
+      )}
+
+      {/* Modal Ver — detalle solo lectura */}
+      {verTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+
+            {/* Header */}
+            <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-slate-100 flex-shrink-0">
+              <div>
+                <h2 className="text-base font-bold text-slate-800">Detalle de Vinculación</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {verTarget.docente.apellido}, {verTarget.docente.nombre} · {verTarget.materia.nombre}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {badgeEstado(verTarget.estado)}
+                <button
+                  onClick={() => setVerTarget(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors ml-1"
+                >
+                  <IcX />
+                </button>
+              </div>
+            </div>
+
+            {/* Body scrollable */}
+            <div className="overflow-y-auto px-6 py-5 space-y-5 flex-1">
+
+              {/* Sección: Asignación Académica */}
+              <section>
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Asignación Académica</h3>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                  <CampoDetalle label="Facultad"       valor={verTarget.facultad.nombre} />
+                  <CampoDetalle label="Carrera"        valor={verTarget.carrera.nombre} />
+                  <CampoDetalle label="Plan de Estudios" valor={verTarget.planEstudio.nombre} sub={verTarget.planEstudio.codigo} />
+                  <CampoDetalle label="Asignatura"     valor={verTarget.materia.nombre} sub={verTarget.materia.codigo} />
+                </dl>
+              </section>
+
+              <hr className="border-slate-100" />
+
+              {/* Sección: Docente */}
+              <section>
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Docente y Cátedra</h3>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                  <CampoDetalle label="Docente"    valor={`${verTarget.docente.apellido}, ${verTarget.docente.nombre}`} />
+                  <CampoDetalle label="Cátedra"    valor={verTarget.catedra.nombre} />
+                  <CampoDetalle label="Cargo"      valor={verTarget.cargo.nombre} />
+                  <CampoDetalle label="Modalidad"  valor={verTarget.modalidad.nombre} />
+                  <CampoDetalle label="Designación" valor={verTarget.designacion.nombre} />
+                  <CampoDetalle label="Horas semanales" valor={verTarget.horasSemana != null ? `${verTarget.horasSemana} h/sem` : null} />
+                  <CampoDetalle label="Año inicio" valor={verTarget.anioInicio?.toString() ?? null} />
+                  {verTarget.observaciones && (
+                    <div className="sm:col-span-2">
+                      <CampoDetalle label="Observaciones" valor={verTarget.observaciones} largo />
+                    </div>
+                  )}
+                </dl>
+              </section>
+
+              <hr className="border-slate-100" />
+
+              {/* Sección: Trazabilidad */}
+              <section>
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Estado y Trazabilidad</h3>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                  <CampoDetalle label="Estado" valor={
+                    verTarget.estado === 'PENDIENTE_DE_APROBACION' ? 'Pendiente de aprobación'
+                    : verTarget.estado === 'APROBADA'              ? 'Aprobada'
+                    : verTarget.estado === 'RECHAZADA'             ? 'Rechazada'
+                    : verTarget.estado === 'DESVINCULADA'          ? 'Desvinculada'
+                    : verTarget.estado
+                  } />
+                  <CampoDetalle label="Fecha de solicitud"   valor={formatFecha(verTarget.fechaCreacion)} />
+                  <CampoDetalle label="Usuario solicitante"  valor={`${verTarget.usuarioSolicitante.apellido}, ${verTarget.usuarioSolicitante.nombre}`} />
+                  {verTarget.aprobador && (
+                    <CampoDetalle label="Usuario aprobador" valor={`${verTarget.aprobador.apellido}, ${verTarget.aprobador.nombre}`} />
+                  )}
+                  {verTarget.fechaAprobacion && (
+                    <CampoDetalle label="Fecha de aprobación" valor={formatFecha(verTarget.fechaAprobacion)} />
+                  )}
+                  {verTarget.motivoRechazo && (
+                    <div className="sm:col-span-2">
+                      <CampoDetalle label="Motivo de rechazo" valor={verTarget.motivoRechazo} largo />
+                    </div>
+                  )}
+                </dl>
+              </section>
+
+              {/* Sección: Desvinculación — solo si corresponde */}
+              {verTarget.estado === 'DESVINCULADA' && (
+                <>
+                  <hr className="border-slate-100" />
+                  <section>
+                    <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Desvinculación</h3>
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                      <CampoDetalle label="Fecha de desvinculación" valor={formatFecha(verTarget.fechaDesvinculacion)} />
+                      {verTarget.desvinculador && (
+                        <CampoDetalle label="Registrado por" valor={`${verTarget.desvinculador.apellido}, ${verTarget.desvinculador.nombre}`} />
+                      )}
+                      {verTarget.fechaRegistroDesvinculacion && (
+                        <CampoDetalle label="Fecha de registro" valor={formatFecha(verTarget.fechaRegistroDesvinculacion)} />
+                      )}
+                      {verTarget.motivoDesvinculacion && (
+                        <div className="sm:col-span-2">
+                          <CampoDetalle label="Motivo de desvinculación" valor={verTarget.motivoDesvinculacion} largo />
+                        </div>
+                      )}
+                    </dl>
+                  </section>
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end px-6 py-4 border-t border-slate-100 flex-shrink-0">
+              <button
+                onClick={() => setVerTarget(null)}
+                className="px-5 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                Volver
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal desvincular */}
+      {desvinculandoTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4">
+
+            {/* Header */}
+            <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-slate-100">
+              <div>
+                <h2 className="text-base font-bold text-slate-800">Finalizar Vinculación</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {desvinculandoTarget.docente.apellido}, {desvinculandoTarget.docente.nombre}
+                </p>
+              </div>
+              <button
+                onClick={cerrarDesvincular}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <IcX />
+              </button>
+            </div>
+
+            {/* Resumen */}
+            <div className="px-6 pt-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800 space-y-1">
+                <p><strong>Asignatura:</strong> {desvinculandoTarget.materia.nombre}</p>
+                <p><strong>Carrera:</strong> {desvinculandoTarget.carrera.nombre} · {desvinculandoTarget.planEstudio.nombre}</p>
+                <p><strong>Cátedra:</strong> {desvinculandoTarget.catedra.nombre} · <strong>Cargo:</strong> {desvinculandoTarget.cargo.nombre}</p>
+                <p className="text-amber-700 pt-1 border-t border-amber-200 mt-2">
+                  Esta acción no elimina la vinculación. Cambia su estado a <strong>Desvinculada</strong> y notifica al docente.
+                </p>
+              </div>
+            </div>
+
+            {/* Formulario */}
+            <div className="px-6 pt-4 pb-2 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Fecha de desvinculación <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={formDesvincular.fecha}
+                  onChange={e => setFormDesvincular(f => ({ ...f, fecha: e.target.value }))}
+                  className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white outline-none focus:border-[#0f4c81] focus:ring-2 focus:ring-[#0f4c81]/15 transition"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Motivo de desvinculación <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={formDesvincular.motivo}
+                  onChange={e => setFormDesvincular(f => ({ ...f, motivo: e.target.value }))}
+                  rows={4}
+                  maxLength={2000}
+                  placeholder="Describa el motivo de la finalización de la vinculación…"
+                  className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white outline-none focus:border-[#0f4c81] focus:ring-2 focus:ring-[#0f4c81]/15 transition resize-none"
+                />
+                <p className="text-[11px] text-slate-400 mt-0.5 text-right">
+                  {formDesvincular.motivo.length}/2000 · mínimo 10 caracteres
+                </p>
+              </div>
+
+              {errorDesvincular && (
+                <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">
+                  {errorDesvincular}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100">
+              <button
+                onClick={cerrarDesvincular}
+                disabled={desvinculando}
+                className="px-4 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarDesvincular}
+                disabled={desvinculando || !formDesvincular.fecha || formDesvincular.motivo.trim().length < 10}
+                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {desvinculando ? 'Procesando…' : 'Confirmar desvinculación'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

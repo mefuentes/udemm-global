@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { AuthProvider } from '@/lib/auth-context';
 import { SidebarProvider } from '@/lib/sidebar-context';
+import { NotificacionesProvider } from '@/lib/notificaciones-context';
 import { LayoutClient } from './layout-client';
 import { UppercaseInputGuard } from '@/components/UppercaseInputGuard';
 
@@ -16,8 +17,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-slate-50">
         <AuthProvider>
           <SidebarProvider>
-            <UppercaseInputGuard />
-            <LayoutClient>{children}</LayoutClient>
+            <NotificacionesProvider>
+              <UppercaseInputGuard />
+              <LayoutClient>{children}</LayoutClient>
+            </NotificacionesProvider>
           </SidebarProvider>
         </AuthProvider>
       </body>

@@ -260,6 +260,7 @@ model Usuario {
   historialProgramas         HistorialPrograma[]
   vinculacionesSolicitadas   VinculacionCatedra[] @relation("VinculacionSolicitante")
   vinculacionesAprobadas     VinculacionCatedra[] @relation("VinculacionAprobador")
+  vinculacionesDesvinculadas VinculacionCatedra[] @relation("VinculacionDesvinculador")
 }
 
 model Sesion {
@@ -452,6 +453,7 @@ model Docente {
   fechaAltaPromocion    String?
   registrosPromocionJson String?
   vinculaciones          VinculacionCatedra[]
+  notificaciones         Notificacion[]
   activo                Boolean   @default(true)
   fechaCreacion         DateTime  @default(now())
   fechaActualizacion    DateTime  @updatedAt
@@ -497,6 +499,28 @@ model VinculacionCatedra {
   fechaAprobacion      DateTime?
   motivoRechazo        String?
 
+  desvinculador               Usuario?    @relation("VinculacionDesvinculador", fields: [desvinculadorId], references: [id])
+  desvinculadorId             String?
+  fechaDesvinculacion         DateTime?
+  motivoDesvinculacion        String?
+  fechaRegistroDesvinculacion DateTime?
+
   fechaCreacion        DateTime    @default(now())
   fechaActualizacion   DateTime    @updatedAt
+}
+
+// ── Notificaciones ─────────────────────────────────────────────────────────────
+
+model Notificacion {
+  id                 String    @id @default(uuid())
+  tipo               String
+  titulo             String
+  cuerpo             String
+  leida              Boolean   @default(false)
+  fechaLectura       DateTime?
+  docente            Docente   @relation(fields: [docenteId], references: [id])
+  docenteId          String
+  vinculacionId      String?
+  fechaCreacion      DateTime  @default(now())
+  fechaActualizacion DateTime  @updatedAt
 }

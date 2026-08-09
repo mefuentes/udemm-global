@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CrearVinculacionDto } from './dto/crear-vinculacion.dto';
+import { DesvincularVinculacionDto } from './dto/desvincular-vinculacion.dto';
 import { FiltrarVinculacionesDto } from './dto/filtrar-vinculaciones.dto';
 import { RechazarVinculacionDto } from './dto/rechazar-vinculacion.dto';
 
@@ -22,6 +23,7 @@ const INCLUDE_COMPLETO = {
   designacion:         { select: { id: true, nombre: true } },
   usuarioSolicitante:  { select: { id: true, nombre: true, apellido: true } },
   aprobador:           { select: { id: true, nombre: true, apellido: true } },
+  desvinculador:       { select: { id: true, nombre: true, apellido: true } },
 };
 
 @Injectable()
@@ -214,6 +216,71 @@ export class VinculacionesService {
         motivoRechazo:   dto.motivo,
       },
       include: INCLUDE_COMPLETO,
+    });
+  }
+
+  // ── Desvincular ────────────────────────────────────────────────────────────
+
+  async desvincular(id: string, dto: DesvincularVinculacionDto, usuarioId: string) {
+    const vc = await this.prisma.vinculacionCatedra.findUnique({
+      where: { id },
+      include: {
+        materia:     { select: { nombre: true } },
+        carrera:     { select: { nombre: true } },
+        planEstudio: { select: { nombre: true } },
+        catedra:     { select: { nombre: true } },
+        cargo:       { select: { nombre: true } },
+        docente:     { select: { id: true } },
+      },
+    });
+
+    if (!vc) throw new NotFoundException('Vinculación no encontrada');
+
+    if (vc.estado !== 'APROBADA') {
+      throw new BadRequestException(
+        `Solo se pueden desvincular vinculaciones APROBADAS. Estado actual: "${vc.estado}"`,
+      );
+    }
+
+    const fechaParsed = new Date(`${dto.fechaDesvinculacion}T00:00:00.000Z`);
+    if (isNaN(fechaParsed.getTime())) {
+      throw new BadRequestException('Fecha de desvinculación inválida');
+    }
+
+    const cuerpoNotificacion = JSON.stringify({
+      carrera:             vc.carrera.nombre,
+      plan:                vc.planEstudio.nombre,
+      asignatura:          vc.materia.nombre,
+      catedra:             vc.catedra.nombre,
+      cargo:               vc.cargo.nombre,
+      fechaDesvinculacion: dto.fechaDesvinculacion,
+      motivo:              dto.motivoDesvinculacion,
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      const actualizada = await tx.vinculacionCatedra.update({
+        where: { id },
+        data: {
+          estado:                      'DESVINCULADA',
+          desvinculadorId:             usuarioId,
+          fechaDesvinculacion:         fechaParsed,
+          motivoDesvinculacion:        dto.motivoDesvinculacion,
+          fechaRegistroDesvinculacion: new Date(),
+        } as any,
+        include: INCLUDE_COMPLETO,
+      });
+
+      await (tx as any).notificacion.create({
+        data: {
+          tipo:          'DESVINCULACION',
+          titulo:        `Se ha registrado la finalización de su vinculación con la asignatura ${vc.materia.nombre}`,
+          cuerpo:        cuerpoNotificacion,
+          docenteId:     vc.docente.id,
+          vinculacionId: id,
+        },
+      });
+
+      return actualizada;
     });
   }
 }

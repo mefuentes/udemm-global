@@ -15,6 +15,7 @@ import { CarrerasModule } from './modules/carreras/carreras.module';
 import { ProgramasModule } from './modules/programas/programas.module';
 import { TablasMaestrasModule } from './modules/tablas-maestras/tablas-maestras.module';
 import { VinculacionesModule } from './modules/vinculaciones/vinculaciones.module';
+import { NotificacionesModule } from './modules/notificaciones/notificaciones.module';
 import { AreasDisiplinaresModule } from './modules/areas-disciplinares/areas-disciplinares.module';
 
 @Module({
@@ -35,6 +36,7 @@ import { AreasDisiplinaresModule } from './modules/areas-disciplinares/areas-dis
     ProgramasModule,
     TablasMaestrasModule,
     VinculacionesModule,
+    NotificacionesModule,
     AreasDisiplinaresModule,
   ],
   controllers: [],
