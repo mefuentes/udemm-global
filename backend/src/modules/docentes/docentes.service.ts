@@ -279,6 +279,29 @@ export class DocentesService {
     } as any;
   }
 
+  private async validarTrayectoriaCargosPasados(json: string): Promise<void> {
+    let items: Array<{ cargoId?: string; modalidadId?: string }>;
+    try {
+      const parsed = JSON.parse(json);
+      if (!Array.isArray(parsed)) return;
+      items = parsed;
+    } catch {
+      return;
+    }
+    for (const item of items) {
+      if (item.cargoId) {
+        const cargo = await (this.prisma as any).cargo.findUnique({ where: { id: item.cargoId } });
+        if (!cargo) throw new BadRequestException('El cargo seleccionado no existe');
+        if (!cargo.activo) throw new BadRequestException(`El cargo "${cargo.nombre}" está inactivo y no puede utilizarse`);
+      }
+      if (item.modalidadId) {
+        const modalidad = await (this.prisma as any).modalidad.findUnique({ where: { id: item.modalidadId } });
+        if (!modalidad) throw new BadRequestException('La modalidad seleccionada no existe');
+        if (!modalidad.activo) throw new BadRequestException(`La modalidad "${modalidad.nombre}" está inactiva y no puede utilizarse`);
+      }
+    }
+  }
+
   async actualizarDocente(id: string, data: ActualizarDocenteDto) {
     const docenteExistente = await this.obtenerDocentePorId(id);
 
@@ -310,6 +333,10 @@ export class DocentesService {
           }
         }
       }
+    }
+
+    if (data.trayectoriaCargosPasadosJson !== undefined) {
+      await this.validarTrayectoriaCargosPasados(data.trayectoriaCargosPasadosJson);
     }
 
     const dataToUpdate = {

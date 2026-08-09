@@ -15,50 +15,53 @@ model Universidad {
 }
 
 model Facultad {
-  id                 String      @id @default(uuid())
-  codigo             String?     @unique
+  id                 String               @id @default(uuid())
+  codigo             String?              @unique
   nombre             String
   descripcion        String?
-  estado             String      @default("ACTIVO")
-  universidad        Universidad @relation(fields: [universidadId], references: [id])
+  estado             String               @default("ACTIVO")
+  universidad        Universidad          @relation(fields: [universidadId], references: [id])
   universidadId      String
   carreras           Carrera[]
-  fechaCreacion      DateTime    @default(now())
-  fechaActualizacion DateTime    @updatedAt
+  vinculaciones      VinculacionCatedra[]
+  fechaCreacion      DateTime             @default(now())
+  fechaActualizacion DateTime             @updatedAt
 }
 
 model Carrera {
-  id                 String        @id @default(uuid())
-  codigo             String?       @unique
+  id                 String               @id @default(uuid())
+  codigo             String?              @unique
   nombre             String
-  facultad           Facultad      @relation(fields: [facultadId], references: [id])
+  facultad           Facultad             @relation(fields: [facultadId], references: [id])
   facultadId         String
   tituloOtorgado     String?
   duracionAnios      Int?
   modalidad          String?
-  estado             String        @default("ACTIVO")
+  estado             String               @default("ACTIVO")
   planes             PlanEstudio[]
-  fechaCreacion      DateTime      @default(now())
-  fechaActualizacion DateTime      @updatedAt
+  vinculaciones      VinculacionCatedra[]
+  fechaCreacion      DateTime             @default(now())
+  fechaActualizacion DateTime             @updatedAt
 }
 
 model PlanEstudio {
-  id                    String      @id @default(uuid())
-  codigo                String?     @unique
+  id                    String               @id @default(uuid())
+  codigo                String?              @unique
   nombre                String
   descripcion           String?
   version               String?
   anio                  Int?
-  estado                String      @default("ACTIVO")
+  estado                String               @default("ACTIVO")
   duracionCuatrimestres Int?
   totalCreditos         Int?
   resolucionAprobacion  String?
   fechaAprobacion       DateTime?
-  carrera               Carrera     @relation(fields: [carreraId], references: [id])
+  carrera               Carrera              @relation(fields: [carreraId], references: [id])
   carreraId             String
   materias              Materia[]
-  fechaCreacion         DateTime    @default(now())
-  fechaActualizacion    DateTime    @updatedAt
+  vinculaciones         VinculacionCatedra[]
+  fechaCreacion         DateTime             @default(now())
+  fechaActualizacion    DateTime             @updatedAt
 }
 
 model Materia {
@@ -83,6 +86,7 @@ model Materia {
   esCorrelativaDe      Correlatividad[]   @relation("MateriaCorrelativa")
   historial            HistorialMateria[]
   programa             ProgramaAsignatura?
+  vinculaciones        VinculacionCatedra[]
   fechaCreacion        DateTime           @default(now())
   fechaActualizacion   DateTime           @updatedAt
 }
@@ -97,10 +101,24 @@ model ProgramaAsignatura {
   elaboradoPor    String?
   anioVigencia    Int?
 
-  // S2 — Fundamentos y Objetivos
+  // S1 — Objetivos y perfil
+  objetivosGenerales    String?
+  aportesPerfilTitulo   String?
+  recomendacionesCursado String?
+
+  // S2 — Competencias y contenidos (grids)
+  competenciasResultadosJson String?
+  contenidosGridJson         String?
+
+  // S3 — Unidades didácticas (grid)
+  unidadesDidacticasJson String?
+
+  // S4 — Formación práctica (grid)
+  formacionPracticaJson String?
+
+  // S2 — legacy
   fundamentacion        String?
   propositos            String?
-  objetivosGenerales    String?
   objetivosEspecificos  String?
 
   // S3 — Contenidos Curriculares
@@ -131,7 +149,7 @@ model ProgramaAsignatura {
   competenciasVinculadas   String?
   fechaUltimaActualizacion String?
   observacionesGestion     String?
-  estadoPrograma         String    @default("BORRADOR")
+  estadoPrograma         String    @default("PENDIENTE")
   fechaAprobacion        DateTime?
   resolucionAprobacion   String?
   observacionesGenerales String?
@@ -238,8 +256,10 @@ model Usuario {
   tokensRefresh        TokenRefresh[]
   tokensRecuperacion   TokenRecuperacion[]
   docente              Docente?
-  historialMaterias    HistorialMateria[]
-  historialProgramas   HistorialPrograma[]
+  historialMaterias          HistorialMateria[]
+  historialProgramas         HistorialPrograma[]
+  vinculacionesSolicitadas   VinculacionCatedra[] @relation("VinculacionSolicitante")
+  vinculacionesAprobadas     VinculacionCatedra[] @relation("VinculacionAprobador")
 }
 
 model Sesion {
@@ -271,6 +291,67 @@ model TokenRecuperacion {
   expiracion DateTime
   usado      Boolean  @default(false)
   creadoEn   DateTime @default(now())
+}
+
+// ── Tablas maestras ────────────────────────────────────────────────────────────
+
+model Catedra {
+  id                 String               @id @default(uuid())
+  nombre             String               @unique
+  activo             Boolean              @default(true)
+  vinculaciones      VinculacionCatedra[]
+  fechaCreacion      DateTime             @default(now())
+  fechaActualizacion DateTime             @updatedAt
+}
+
+model Cargo {
+  id                 String               @id @default(uuid())
+  nombre             String               @unique
+  activo             Boolean              @default(true)
+  vinculaciones      VinculacionCatedra[]
+  fechaCreacion      DateTime             @default(now())
+  fechaActualizacion DateTime             @updatedAt
+}
+
+model Designacion {
+  id                 String               @id @default(uuid())
+  nombre             String               @unique
+  activo             Boolean              @default(true)
+  vinculaciones      VinculacionCatedra[]
+  fechaCreacion      DateTime             @default(now())
+  fechaActualizacion DateTime             @updatedAt
+}
+
+model Modalidad {
+  id                 String               @id @default(uuid())
+  nombre             String               @unique
+  activo             Boolean              @default(true)
+  vinculaciones      VinculacionCatedra[]
+  fechaCreacion      DateTime             @default(now())
+  fechaActualizacion DateTime             @updatedAt
+}
+
+model AreaDisciplinar {
+  id                 String    @id @default(uuid())
+  nombre             String    @unique
+  activo             Boolean   @default(true)
+  subareas           Subarea[]
+  docentes           Docente[]
+  fechaCreacion      DateTime  @default(now())
+  fechaActualizacion DateTime  @updatedAt
+}
+
+model Subarea {
+  id                 String          @id @default(uuid())
+  nombre             String
+  areaDisciplinarId  String
+  areaDisciplinar    AreaDisciplinar @relation(fields: [areaDisciplinarId], references: [id])
+  activo             Boolean         @default(true)
+  docentes           Docente[]
+  fechaCreacion      DateTime        @default(now())
+  fechaActualizacion DateTime        @updatedAt
+
+  @@unique([nombre, areaDisciplinarId])
 }
 
 model Docente {
@@ -314,6 +395,10 @@ model Docente {
   carreraFormacionDocenteJson   String?
   areaDisciplinar               String?
   subarea                       String?
+  areaDisciplinarId             String?
+  areaDisciplinarRel            AreaDisciplinar? @relation(fields: [areaDisciplinarId], references: [id])
+  subareaId                     String?
+  subareaRel                    Subarea?         @relation(fields: [subareaId], references: [id])
   observacionesArea             String?
   asignaturasVinculadas         String?
   actividadesPosgradoJson       String?
@@ -366,9 +451,52 @@ model Docente {
   categoriaPromocion    String?
   fechaAltaPromocion    String?
   registrosPromocionJson String?
+  vinculaciones          VinculacionCatedra[]
   activo                Boolean   @default(true)
   fechaCreacion         DateTime  @default(now())
   fechaActualizacion    DateTime  @updatedAt
   usuario               Usuario?  @relation(fields: [usuarioId], references: [id])
   usuarioId             String?   @unique
+}
+
+// ── Vinculación Docente-Cátedra ────────────────────────────────────────────────
+
+model VinculacionCatedra {
+  id                   String      @id @default(uuid())
+
+  facultad             Facultad    @relation(fields: [facultadId], references: [id])
+  facultadId           String
+  carrera              Carrera     @relation(fields: [carreraId], references: [id])
+  carreraId            String
+  planEstudio          PlanEstudio @relation(fields: [planEstudioId], references: [id])
+  planEstudioId        String
+  materia              Materia     @relation(fields: [materiaId], references: [id])
+  materiaId            String
+  docente              Docente     @relation(fields: [docenteId], references: [id])
+  docenteId            String
+  catedra              Catedra     @relation(fields: [catedraId], references: [id])
+  catedraId            String
+  cargo                Cargo       @relation(fields: [cargoId], references: [id])
+  cargoId              String
+  modalidad            Modalidad   @relation(fields: [modalidadId], references: [id])
+  modalidadId          String
+  designacion          Designacion @relation(fields: [designacionId], references: [id])
+  designacionId        String
+
+  horasSemana          Int?
+  anioInicio           Int?
+
+  estado               String      @default("PENDIENTE_DE_APROBACION")
+  observaciones        String?
+
+  usuarioSolicitante   Usuario     @relation("VinculacionSolicitante", fields: [usuarioSolicitanteId], references: [id])
+  usuarioSolicitanteId String
+
+  aprobador            Usuario?    @relation("VinculacionAprobador", fields: [aprobadorId], references: [id])
+  aprobadorId          String?
+  fechaAprobacion      DateTime?
+  motivoRechazo        String?
+
+  fechaCreacion        DateTime    @default(now())
+  fechaActualizacion   DateTime    @updatedAt
 }

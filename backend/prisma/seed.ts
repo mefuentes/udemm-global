@@ -62,47 +62,53 @@ async function main() {
 
   // ── Facultad ──────────────────────────────────────────────────────────────
 
-  let facultad = await prisma.facultad.findFirst({
-    where: { nombre: 'Facultad de Ingeniería', universidadId: universidad.id }
-  });
-  if (!facultad) {
-    facultad = await prisma.facultad.create({
-      data: {
-        nombre: 'Facultad de Ingeniería', universidadId: universidad.id,
-        codigo: 'FAC-ING', descripcion: 'Facultad de Ingeniería y Tecnologías', estado: 'ACTIVO'
-      }
-    });
-  } else if (!facultad.codigo) {
-    await prisma.facultad.update({
-      where: { id: facultad.id },
-      data: { codigo: 'FAC-ING', descripcion: 'Facultad de Ingeniería y Tecnologías', estado: 'ACTIVO' }
-    });
-  }
-  console.log('Facultad:', facultad.nombre);
+  const facultad = await prisma.facultad.upsert({
+  where: {
+    codigo: 'FAC-ING',
+  },
+  update: {
+    nombre: 'Facultad de Ingeniería',
+    descripcion: 'Facultad de Ingeniería y Tecnologías',
+    estado: 'ACTIVO',
+    universidadId: universidad.id,
+  },
+  create: {
+    codigo: 'FAC-ING',
+    nombre: 'Facultad de Ingeniería',
+    descripcion: 'Facultad de Ingeniería y Tecnologías',
+    estado: 'ACTIVO',
+    universidadId: universidad.id,
+  },
+});
+
+console.log('Facultad:', facultad.nombre);
 
   // ── Carrera ───────────────────────────────────────────────────────────────
 
-  let carrera = await prisma.carrera.findFirst({
-    where: { nombre: 'Ingeniería Industrial', facultadId: facultad.id }
-  });
-  if (!carrera) {
-    carrera = await prisma.carrera.create({
-      data: {
-        nombre: 'Ingeniería Industrial', facultadId: facultad.id,
-        codigo: 'ING-IND', tituloOtorgado: 'Ingeniero/a Industrial',
-        duracionAnios: 5, modalidad: 'Presencial', estado: 'ACTIVO'
-      }
-    });
-  } else if (!carrera.codigo) {
-    await prisma.carrera.update({
-      where: { id: carrera.id },
-      data: {
-        codigo: 'ING-IND', tituloOtorgado: 'Ingeniero/a Industrial',
-        duracionAnios: 5, modalidad: 'Presencial', estado: 'ACTIVO'
-      }
-    });
-  }
-  console.log('Carrera:', carrera.nombre);
+ const carrera = await prisma.carrera.upsert({
+  where: {
+    codigo: 'ING-IND',
+  },
+  update: {
+    nombre: 'Ingeniería Industrial',
+    facultadId: facultad.id,
+    tituloOtorgado: 'Ingeniero/a Industrial',
+    duracionAnios: 5,
+    modalidad: 'Presencial',
+    estado: 'ACTIVO',
+  },
+  create: {
+    codigo: 'ING-IND',
+    nombre: 'Ingeniería Industrial',
+    facultadId: facultad.id,
+    tituloOtorgado: 'Ingeniero/a Industrial',
+    duracionAnios: 5,
+    modalidad: 'Presencial',
+    estado: 'ACTIVO',
+  },
+});
+
+console.log('Carrera:', carrera.nombre);
 
   // ── Plan de Estudio ───────────────────────────────────────────────────────
 
@@ -192,6 +198,38 @@ async function main() {
     });
     console.log('  Correlatividad:', pair.tipo);
   }
+
+  // ── Tablas maestras ───────────────────────────────────────────────────────
+
+  const catedras = ['ÚNICA', 'CÁTEDRA 1', 'CÁTEDRA 2'];
+  for (const nombre of catedras) {
+    await prisma.catedra.upsert({ where: { nombre }, update: {}, create: { nombre } });
+  }
+  console.log('Cátedras:', catedras.join(', '));
+
+  const cargos = [
+    'PROFESOR TITULAR', 'PROFESOR ASOCIADO', 'PROFESOR ADJUNTO',
+    'JTP', 'AYUDANTE GRADUADO', 'AYUDANTE NO GRADUADO', 'OTROS',
+  ];
+  for (const nombre of cargos) {
+    await prisma.cargo.upsert({ where: { nombre }, update: {}, create: { nombre } });
+  }
+  console.log('Cargos:', cargos.length, 'registros');
+
+  const designaciones = [
+    'REGULAR RENTADO', 'REGULAR AD HONOREM',
+    'INTERINO RENTADO', 'INTERINO AD HONOREM', 'CONTRATADO',
+  ];
+  for (const nombre of designaciones) {
+    await prisma.designacion.upsert({ where: { nombre }, update: {}, create: { nombre } });
+  }
+  console.log('Designaciones:', designaciones.join(', '));
+
+  const modalidades = ['CUATRIMESTRAL', 'SEMESTRAL', 'ANUAL'];
+  for (const nombre of modalidades) {
+    await prisma.modalidad.upsert({ where: { nombre }, update: {}, create: { nombre } });
+  }
+  console.log('Modalidades:', modalidades.join(', '));
 
   console.log('\n✓ Seed ejecutado correctamente.');
 }

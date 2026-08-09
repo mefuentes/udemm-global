@@ -69,6 +69,12 @@ const IcGestionAcademica = () => (
   </svg>
 );
 
+const IcVinculacion = () => (
+  <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899l4-4a4 4 0 115.656 5.656l-1.1 1.1" />
+  </svg>
+);
+
 const IcMenuOpen = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
@@ -118,10 +124,9 @@ export function Sidebar() {
       label: 'Plan de Estudios',
       icon: <IcPlanEstudios />,
       submenu: [
-        { label: 'Malla Curricular',        href: '/plan-estudios/malla-curricular'      },
-        { label: 'Ficha de Asignatura',     href: '/plan-estudios/ficha-asignatura'      },
-        { label: 'Programas de Asignatura', href: '/plan-estudios/programas-asignatura'  },
-        { label: 'Datos del Plan',          href: '/plan-estudios/datos-plan'            },
+        { label: 'Carreras',                         href: '/plan-estudios/carreras'            },
+        { label: 'Programas de Asignatura',          href: '/plan-estudios/programas-asignatura' },
+        { label: 'Información de Planes de Estudio', href: '/plan-estudios/informacion-planes'  },
       ],
     };
 
@@ -129,13 +134,62 @@ export function Sidebar() {
       return [
         { label: 'Inicio', icon: <IcHome />, href: '/' },
         { label: 'Mi Ficha Docente', icon: <IcDocument />, href: '/docentes/mi-ficha' },
-        { label: 'Bandeja de Aprobaciones', icon: <IcInbox />, href: '/docentes/aprobaciones' },
+        { label: 'Bandeja de Aprobaciones', icon: <IcInbox />, href: '/bandeja-aprobaciones' },
         SUBMENU_PLAN_ESTUDIOS,
-        SUBMENU_GESTION_ACADEMICA,
       ];
     }
 
+    const ITEM_VINCULACION: MenuItemType = {
+      label: 'Vinculación a Cátedra',
+      icon:  <IcVinculacion />,
+      href:  '/vinculaciones-catedra',
+    };
+
     if (usuario.rol?.nombre === 'ADMINISTRADOR_SISTEMA') {
+      return [
+        { label: 'Inicio', icon: <IcHome />, href: '/' },
+        {
+          label: 'Docentes',
+          icon: <IcUsers />,
+          submenu: [{ label: 'Listado de Docentes', href: '/docentes' }],
+        },
+        SUBMENU_PLAN_ESTUDIOS,
+        SUBMENU_GESTION_ACADEMICA,
+        ITEM_VINCULACION,
+        { label: 'Bandeja de Aprobaciones', icon: <IcInbox />, href: '/bandeja-aprobaciones' },
+        {
+          label: 'Configuración',
+          icon: <IcSettings />,
+          submenu: [
+            { label: 'Usuarios',             href: '/configuracion/usuarios'          },
+            { label: 'Roles',                href: '/configuracion/roles'             },
+            { label: 'Parámetros Generales', href: '/configuracion/parametros'        },
+            { label: 'Tablas Maestras',      href: '/configuracion/tablas-maestras'   },
+          ],
+        },
+      ];
+    }
+
+    if (usuario.rol?.nombre === 'SECRETARIA_ACADEMICA') {
+      return [
+        { label: 'Inicio', icon: <IcHome />, href: '/' },
+        {
+          label: 'Docentes',
+          icon: <IcUsers />,
+          submenu: [{ label: 'Listado de Docentes', href: '/docentes' }],
+        },
+        SUBMENU_PLAN_ESTUDIOS,
+        SUBMENU_GESTION_ACADEMICA,
+        ITEM_VINCULACION,
+        {
+          label: 'Configuración',
+          icon: <IcSettings />,
+          submenu: [{ label: 'Tablas Maestras', href: '/configuracion/tablas-maestras' }],
+        },
+      ];
+    }
+
+    if (usuario.rol?.nombre === 'DIRECTOR_CARRERA') {
       return [
         { label: 'Inicio', icon: <IcHome />, href: '/' },
         {
@@ -148,12 +202,22 @@ export function Sidebar() {
         {
           label: 'Configuración',
           icon: <IcSettings />,
-          submenu: [
-            { label: 'Usuarios',             href: '/configuracion/usuarios'   },
-            { label: 'Roles',                href: '/configuracion/roles'      },
-            { label: 'Parámetros Generales', href: '/configuracion/parametros' },
-          ],
+          submenu: [{ label: 'Tablas Maestras', href: '/configuracion/tablas-maestras' }],
         },
+      ];
+    }
+
+    if (usuario.rol?.nombre === 'DECANO' || usuario.rol?.nombre === 'RECTORADO') {
+      return [
+        { label: 'Inicio', icon: <IcHome />, href: '/' },
+        {
+          label: 'Docentes',
+          icon: <IcUsers />,
+          submenu: [{ label: 'Listado de Docentes', href: '/docentes' }],
+        },
+        SUBMENU_PLAN_ESTUDIOS,
+        SUBMENU_GESTION_ACADEMICA,
+        ITEM_VINCULACION,
       ];
     }
 

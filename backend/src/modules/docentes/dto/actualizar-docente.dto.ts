@@ -164,10 +164,6 @@ export class ActualizarDocenteDto {
 
   @IsString()
   @IsOptional()
-  codigoPostal?: string;
-
-  @IsString()
-  @IsOptional()
   otrosTitulos?: string;
 
   @IsString()
@@ -181,6 +177,14 @@ export class ActualizarDocenteDto {
   @IsString()
   @IsOptional()
   subarea?: string;
+
+  @IsUUID()
+  @IsOptional()
+  areaDisciplinarId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  subareaId?: string;
 
   @IsString()
   @IsOptional()

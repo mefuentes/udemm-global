@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { getPermisosPlanEstudio } from '@/lib/permisos-plan-estudios';
 
@@ -11,10 +11,9 @@ import { getPermisosPlanEstudio } from '@/lib/permisos-plan-estudios';
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
 const NAV_INTERNA = [
-  { label: 'Malla Curricular', href: '/plan-estudios/malla-curricular' },
-  { label: 'Ficha de Asignatura', href: '/plan-estudios/ficha-asignatura' },
-  { label: 'Programas de Asignatura', href: '/plan-estudios/programas-asignatura' },
-  { label: 'Datos del Plan', href: '/plan-estudios/datos-plan' },
+  { label: 'Carreras',                         href: '/plan-estudios/carreras' },
+  { label: 'Programas de Asignatura',          href: '/plan-estudios/programas-asignatura' },
+  { label: 'Información de Planes de Estudio', href: '/plan-estudios/informacion-planes' },
 ];
 
 const TIPOS_ASIGNATURA = ['OBLIGATORIA', 'ELECTIVA', 'OPTATIVA'];
@@ -126,8 +125,10 @@ const IcChevron = ({ up }: { up: boolean }) => (
 
 export default function MallaCurricularPage() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { usuario, token, obtenerTokenActual, logout } = useAuth();
   const permisos = getPermisosPlanEstudio(usuario?.rol?.nombre ?? '');
+  const paramPlanId = useRef(searchParams.get('planId'));
 
   // ── State: datos ─────────────────────────────────────────────────────────
   const [carreras, setCarreras] = useState<Carrera[]>([]);
@@ -214,7 +215,12 @@ export default function MallaCurricularPage() {
     setError(null);
     try {
       const data = await apiFetch(`${API_URL}/plan-estudios/carreras`);
-      setCarreras(data ?? []);
+      const list: Carrera[] = data ?? [];
+      setCarreras(list);
+      const paramCarreraId = searchParams.get('carreraId');
+      if (paramCarreraId && list.some(c => c.id === paramCarreraId)) {
+        setCarreraId(paramCarreraId);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -228,7 +234,12 @@ export default function MallaCurricularPage() {
     setPlanId('');
     try {
       const data = await apiFetch(`${API_URL}/plan-estudios?carreraId=${id}`);
-      setPlanes(data ?? []);
+      const list: Plan[] = data ?? [];
+      setPlanes(list);
+      if (paramPlanId.current && list.some(p => p.id === paramPlanId.current)) {
+        setPlanId(paramPlanId.current);
+        paramPlanId.current = null;
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {

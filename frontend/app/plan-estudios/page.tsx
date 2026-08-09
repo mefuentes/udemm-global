@@ -46,36 +46,28 @@ const IcArrow = () => (
 
 const SECCIONES = [
   {
-    href: '/plan-estudios/malla-curricular',
-    titulo: 'Malla Curricular',
-    descripcion: 'Estructura de asignaturas distribuidas por año y cuatrimestre del plan de estudios.',
-    inicial: 'MC',
+    href: '/plan-estudios/carreras',
+    titulo: 'Carreras',
+    descripcion: 'Carreras con planes de estudio activos. Accedé a la malla y programas desde cada carrera.',
+    inicial: 'CA',
     color: 'bg-[#0f4c81]',
     icon: <IcGrid />,
   },
   {
-    href: '/plan-estudios/ficha-asignatura',
-    titulo: 'Ficha de Asignatura',
-    descripcion: 'Datos identificatorios de cada asignatura: código, créditos, correlativas y régimen.',
-    inicial: 'FA',
-    color: 'bg-[#1a5ea8]',
-    icon: <IcClipboard />,
-  },
-  {
     href: '/plan-estudios/programas-asignatura',
     titulo: 'Programas de Asignatura',
-    descripcion: 'Contenidos, objetivos, bibliografía y metodología de cada asignatura.',
+    descripcion: 'Estado de completitud de los programas analíticos por carrera y plan de estudio.',
     inicial: 'PA',
     color: 'bg-[#f26b22]',
     icon: <IcBook />,
   },
   {
-    href: '/plan-estudios/datos-plan',
-    titulo: 'Datos del Plan',
-    descripcion: 'Información general del plan: carrera, resolución de aprobación, versión y vigencia.',
-    inicial: 'DP',
-    color: 'bg-slate-600',
-    icon: <IcInfo />,
+    href: '/plan-estudios/informacion-planes',
+    titulo: 'Información de Planes de Estudio',
+    descripcion: 'Datos generales, estructura y distribución de asignaturas de cada plan de estudio.',
+    inicial: 'IP',
+    color: 'bg-[#1a5ea8]',
+    icon: <IcDocument />,
   },
 ];
 

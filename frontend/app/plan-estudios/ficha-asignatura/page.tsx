@@ -11,19 +11,14 @@ import { getPermisosPlanEstudio, getPermisosPrograma, PermisosPrograma } from '@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
 const NAV_INTERNA = [
-  { label: 'Malla Curricular', href: '/plan-estudios/malla-curricular' },
-  { label: 'Ficha de Asignatura', href: '/plan-estudios/ficha-asignatura' },
-  { label: 'Programas de Asignatura', href: '/plan-estudios/programas-asignatura' },
-  { label: 'Datos del Plan', href: '/plan-estudios/datos-plan' },
+  { label: 'Carreras',                         href: '/plan-estudios/carreras' },
+  { label: 'Programas de Asignatura',          href: '/plan-estudios/programas-asignatura' },
+  { label: 'Información de Planes de Estudio', href: '/plan-estudios/informacion-planes' },
 ];
 
 const TABS_FICHA = [
-  { id: 'general', label: 'Datos Generales' },
-  { id: 'correlativas', label: 'Correlatividades' },
-  { id: 'carga', label: 'Carga Horaria' },
-  { id: 'programa', label: 'Programa' },
-  { id: 'documentacion', label: 'Documentación' },
-  { id: 'historial', label: 'Historial' },
+  { id: 'general',  label: 'Datos Generales' },
+  { id: 'programa', label: 'Programa de Asignatura' },
 ] as const;
 
 type TabId = typeof TABS_FICHA[number]['id'];
@@ -95,9 +90,15 @@ interface ProgramaAsignatura {
   equipoDocente?: string;
   elaboradoPor?: string;
   anioVigencia?: number;
+  objetivosGenerales?: string;
+  aportesPerfilTitulo?: string;
+  recomendacionesCursado?: string;
+  competenciasResultadosJson?: string;
+  contenidosGridJson?: string;
+  unidadesDidacticasJson?: string;
+  formacionPracticaJson?: string;
   fundamentacion?: string;
   propositos?: string;
-  objetivosGenerales?: string;
   objetivosEspecificos?: string;
   contenidosSinteticos?: string;
   contenidosTematicos?: string;
@@ -230,6 +231,12 @@ function formatFecha(iso: string) {
   });
 }
 
+function formatFechaCorta(iso: string) {
+  if (!iso) return '—';
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
 function colorTipo(tipo: string) {
   if (tipo === 'ELECTIVA') return 'bg-amber-50 text-amber-700 border border-amber-200';
   if (tipo === 'OPTATIVA') return 'bg-purple-50 text-purple-700 border border-purple-200';
@@ -262,6 +269,11 @@ function FichaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const materiaId = searchParams.get('id');
+  const tabParam  = searchParams.get('tab') as TabId | null;
+  const modoVer   = searchParams.get('modo') === 'ver';
+  const initialTab: TabId = (TABS_FICHA.map(t => t.id) as string[]).includes(tabParam ?? '')
+    ? (tabParam as TabId)
+    : 'general';
 
   const { usuario, token, obtenerTokenActual, logout } = useAuth();
   const permisos = getPermisosPlanEstudio(usuario?.rol?.nombre ?? '');
@@ -331,7 +343,7 @@ function FichaContent() {
 
       {/* Vista de ficha o selector */}
       {materiaId
-        ? <FichaView materiaId={materiaId} permisos={permisos} permisosPrograma={permisosPrograma} apiFetch={apiFetch} token={token} router={router} />
+        ? <FichaView materiaId={materiaId} permisos={permisos} permisosPrograma={permisosPrograma} apiFetch={apiFetch} token={token} router={router} initialTab={initialTab} modoVer={modoVer} />
         : <SelectorView apiFetch={apiFetch} token={token} router={router} />
       }
     </div>
@@ -580,18 +592,20 @@ function SelectorView({ apiFetch, token, router }: {
 
 // ── Vista: Ficha completa ─────────────────────────────────────────────────────
 
-function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, token, router }: {
+function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, token, router, initialTab, modoVer = false }: {
   materiaId: string;
   permisos: ReturnType<typeof getPermisosPlanEstudio>;
   permisosPrograma: PermisosPrograma;
   apiFetch: (url: string, opts?: RequestInit) => Promise<any>;
   token: string | null;
   router: ReturnType<typeof useRouter>;
+  initialTab: TabId;
+  modoVer?: boolean;
 }) {
   const [ficha, setFicha] = useState<FichaCompleta | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabId>('general');
+  const [tab, setTab] = useState<TabId>(initialTab);
   const [modoEditar, setModoEditar] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
@@ -608,37 +622,10 @@ function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, token, rou
   const [agregandoCorr, setAgregandoCorr] = useState(false);
   const [mostrarFormCorr, setMostrarFormCorr] = useState(false);
 
-  // Historial
-  const [historial, setHistorial] = useState<HistorialUnificado[]>([]);
-  const [cargandoHistorial, setCargandoHistorial] = useState(false);
-  const [paginaHistorial, setPaginaHistorial] = useState(1);
-  const HISTORIAL_POR_PAGINA = 5;
-
   useEffect(() => {
     if (!token || !materiaId) return;
     fetchFicha();
   }, [token, materiaId]);
-
-  useEffect(() => {
-    if (tab !== 'historial' || !token || !materiaId) return;
-    setCargandoHistorial(true);
-    Promise.all([
-      apiFetch(`${API_URL}/materias/${materiaId}/historial`),
-      apiFetch(`${API_URL}/programas/materia/${materiaId}`),
-    ])
-      .then(([materiaH, progData]) => {
-        const fromMateria: HistorialUnificado[] = (materiaH as HistorialItem[]).map(h => ({ ...h, fuente: 'materia' as const }));
-        const fromPrograma: HistorialUnificado[] = ((progData?.historial ?? []) as HistorialProgramaItem[]).map(h => ({ ...h, fuente: 'programa' as const }));
-        setHistorial(
-          [...fromMateria, ...fromPrograma].sort(
-            (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
-          )
-        );
-        setPaginaHistorial(1);
-      })
-      .catch(() => setHistorial([]))
-      .finally(() => setCargandoHistorial(false));
-  }, [tab, token, materiaId]);
 
   async function fetchFicha() {
     setCargando(true);
@@ -749,11 +736,11 @@ function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, token, rou
       creditos: ficha.creditos?.toString() ?? ''
     });
     setModoEditar(false);
+    setMostrarFormCorr(false);
+    setCorrAgregar({ correlativaId: '', tipo: 'CURSADO' });
   }
 
   // ── Datos derivados ─────────────────────────────────────────────────────
-
-  const correlativasCursado = ficha?.correlativas.filter(c => c.tipo === 'CURSADO') ?? [];
 
   const materiasPicker = useMemo(
     () => materiasDelPlan.filter(m =>
@@ -793,11 +780,11 @@ function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, token, rou
 
       {/* Volver */}
       <button
-        onClick={() => router.push('/plan-estudios/ficha-asignatura')}
+        onClick={() => router.push(modoVer ? '/plan-estudios/programas-asignatura' : '/plan-estudios/ficha-asignatura')}
         className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 mb-4 transition-colors"
       >
         <IcBack />
-        Volver al selector
+        {modoVer ? 'Volver a Programas de Asignatura' : 'Volver al selector'}
       </button>
 
       {/* Header de la ficha */}
@@ -834,184 +821,179 @@ function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, token, rou
             </p>
           </div>
 
-          {/* Acciones */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {permisos.editar && !modoEditar && (
-              <button
-                onClick={() => setModoEditar(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-[#0f4c81] text-[#0f4c81] rounded-lg hover:bg-[#0f4c81]/5 transition-colors"
-              >
-                <IcEdit />
-                Editar
-              </button>
-            )}
-            {modoEditar && (
-              <>
-                <button
-                  onClick={cancelarEdicion}
-                  className="px-3 py-1.5 text-xs font-semibold border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={guardarCambios}
-                  disabled={guardando}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#0f4c81] text-white rounded-lg hover:bg-[#0d3e6b] transition-colors disabled:opacity-60"
-                >
-                  {guardando ? 'Guardando...' : 'Guardar cambios'}
-                </button>
-              </>
-            )}
-          </div>
         </div>
       </div>
 
       {/* Tabs de secciones */}
-      <div className="flex gap-0.5 mb-4 border-b border-slate-200 overflow-x-auto">
-        {TABS_FICHA.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`px-4 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors ${
-              tab === t.id
-                ? 'border-[#0f4c81] text-[#0f4c81]'
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-            }`}
-          >
-            {t.label}
-            {t.id === 'correlativas' && ficha.correlativas.length > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] bg-[#0f4c81] text-white rounded-full">
-                {ficha.correlativas.length}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      {!modoVer && (
+        <div className="flex gap-0.5 mb-4 border-b border-slate-200">
+          {TABS_FICHA.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`px-4 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors ${
+                tab === t.id
+                  ? 'border-[#0f4c81] text-[#0f4c81]'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Contenido de sección */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
 
         {/* ── TAB: Datos Generales ─────────────────────────────────────── */}
         {tab === 'general' && (
-          <div className="divide-y divide-slate-50">
-            <CampoFicha label="Código" valor={ficha.codigo} monospace />
-            <CampoEditable label="Nombre" valor={ficha.nombre} editar={modoEditar}
-              input={<input value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
-                className={inputCls} />} />
-            <CampoFicha label="Carrera" valor={ficha.planEstudio.carrera.nombre} />
-            <CampoFicha label="Facultad" valor={ficha.planEstudio.carrera.facultad.nombre} />
-            <CampoFicha label="Plan de Estudio"
-              valor={`${ficha.planEstudio.nombre}${ficha.planEstudio.version ? ` (v${ficha.planEstudio.version})` : ''}`} />
-            <CampoEditable label="Bloque de Conocimiento" valor={ficha.bloqueConocimiento ?? '—'} editar={modoEditar}
-              input={
-                <select value={form.bloqueConocimiento} onChange={e => setForm(f => ({ ...f, bloqueConocimiento: e.target.value }))} className={inputCls}>
-                  <option value="">-- Sin asignar --</option>
-                  {BLOQUES_CONOCIMIENTO.map(b => (
-                    <option key={b.codigo} value={b.label}>{b.label}</option>
-                  ))}
-                </select>
-              } />
-            <div className="flex">
-              <div className="flex-1">
-                <CampoEditable label="Año" valor={ficha.anio ? `${ficha.anio}°` : '—'} editar={modoEditar}
-                  input={<select value={form.anio} onChange={e => setForm(f => ({ ...f, anio: e.target.value }))} className={inputCls}>
-                    <option value="">—</option>
-                    {[1,2,3,4,5].map(a => <option key={a} value={a}>{a}°</option>)}
-                  </select>} />
-              </div>
-              <div className="flex-1">
-                <CampoEditable
-                  label="Duración"
-                  valor={ficha.cuatrimestre === 0 ? 'Anual' : ficha.cuatrimestre ? `${ficha.cuatrimestre}° Cuatrimestre` : '—'}
-                  editar={modoEditar}
-                  input={<select value={form.cuatrimestre} onChange={e => setForm(f => ({ ...f, cuatrimestre: e.target.value }))} className={inputCls}>
-                    <option value="">—</option>
-                    <option value="1">1° Cuatrimestre</option>
-                    <option value="2">2° Cuatrimestre</option>
-                    <option value="0">Anual</option>
-                  </select>} />
-              </div>
-            </div>
-            <CampoEditable label="Tipo de Asignatura" valor={ficha.tipoAsignatura} editar={modoEditar}
-              input={<select value={form.tipoAsignatura} onChange={e => setForm(f => ({ ...f, tipoAsignatura: e.target.value }))} className={inputCls}>
-                {TIPOS_ASIGNATURA.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>} />
-            <CampoEditable label="Modalidad de Dictado"
-              valor={ficha.modalidadDictado ? labelModalidad(ficha.modalidadDictado) : '—'}
-              editar={modoEditar}
-              input={<select value={form.modalidadDictado} onChange={e => setForm(f => ({ ...f, modalidadDictado: e.target.value }))} className={inputCls}>
-                <option value="">— Sin asignar —</option>
-                {MODALIDADES_DICTADO.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>} />
-            <CampoEditable label="Régimen de Cursado" valor={ficha.regimenCursado ?? '—'} editar={modoEditar}
-              input={<select value={form.regimenCursado} onChange={e => setForm(f => ({ ...f, regimenCursado: e.target.value }))} className={inputCls}>
-                <option value="">—</option>
-                {REGIMENES.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>} />
-            <CampoEditable label="Estado" valor={ficha.estado} editar={modoEditar}
-              input={<select value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))} className={inputCls}>
-                <option value="ACTIVO">ACTIVO</option>
-                <option value="INACTIVO">INACTIVO</option>
-              </select>} />
-            <CampoEditable label="Observaciones" valor={ficha.observaciones ?? '—'} editar={modoEditar}
-              input={<textarea value={form.observaciones} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))}
-                rows={2} className={`${inputCls} resize-none`} placeholder="Notas adicionales..." />} />
-          </div>
-        )}
+          <div>
 
-        {/* ── TAB: Correlatividades ────────────────────────────────────── */}
-        {tab === 'correlativas' && (
-          <div className="p-5 space-y-5">
-
-            {/* Para cursar */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Para cursar</h3>
-                <span className="text-[11px] text-slate-400">Requeridas para inscribirse</span>
-                <div className="flex-1 h-px bg-slate-100" />
-                <span className="text-[11px] text-slate-400">{correlativasCursado.length}</span>
-              </div>
-              {correlativasCursado.length === 0 ? (
-                <p className="text-xs text-slate-400 italic">Sin correlativas de cursado</p>
-              ) : (
-                <div className="space-y-2">
-                  {correlativasCursado.map(c => (
-                    <CorrelativaRow
-                      key={c.id}
-                      item={c.correlativa}
-                      tipo="CURSADO"
-                      permisos={permisos}
-                      onQuitar={() => quitarCorrelativa(c.correlativa.id)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Es correlativa de */}
-            {ficha.esCorrelativaDe.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wide">Es requerida por</h3>
-                  <div className="flex-1 h-px bg-slate-100" />
-                </div>
-                <div className="space-y-2">
-                  {ficha.esCorrelativaDe.map(c => (
-                    <div key={c.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                      <span className="text-[10px] font-bold font-mono text-slate-600 bg-slate-200 px-1.5 py-0.5 rounded">{c.materia.codigo}</span>
-                      <span className="text-xs text-slate-700 flex-1">{c.materia.nombre}</span>
-                      {c.materia.anio && <span className="text-[11px] text-slate-400">{c.materia.anio}°A</span>}
-                      <span className="text-[10px] text-slate-400 font-medium">{c.tipo}</span>
-                    </div>
-                  ))}
-                </div>
+            {/* Barra de acciones */}
+            {permisos.editar && !modoVer && (
+              <div className="flex items-center justify-end gap-2 px-5 py-3 border-b border-slate-100 bg-slate-50/40">
+                {!modoEditar ? (
+                  <button
+                    onClick={() => setModoEditar(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-[#0f4c81] text-[#0f4c81] rounded-lg hover:bg-[#0f4c81]/5 transition-colors"
+                  >
+                    <IcEdit />
+                    Editar
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={cancelarEdicion}
+                      className="px-3 py-1.5 text-xs font-semibold border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={guardarCambios}
+                      disabled={guardando}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#0f4c81] text-white rounded-lg hover:bg-[#0d3e6b] transition-colors disabled:opacity-60"
+                    >
+                      {guardando ? 'Guardando...' : 'Guardar cambios'}
+                    </button>
+                  </>
+                )}
               </div>
             )}
 
-            {/* Agregar correlativa */}
-            {permisos.editar && (
-              <div className="pt-4 border-t border-slate-100">
-                {!mostrarFormCorr ? (
+            {/* IDENTIFICACIÓN */}
+            <SeccionHeader label="Identificación" />
+            <div className="divide-y divide-slate-50">
+              <CampoFicha label="Código" valor={ficha.codigo} monospace />
+              <CampoEditable label="Nombre" valor={ficha.nombre} editar={modoEditar}
+                input={<input value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
+                  className={inputCls} />} />
+              <CampoFicha label="Carrera" valor={ficha.planEstudio.carrera.nombre} />
+              <CampoFicha label="Plan de Estudio"
+                valor={`${ficha.planEstudio.nombre}${ficha.planEstudio.version ? ` (v${ficha.planEstudio.version})` : ''}`} />
+              <CampoEditable label="Bloque de Conocimiento" valor={ficha.bloqueConocimiento ?? '—'} editar={modoEditar}
+                input={
+                  <select value={form.bloqueConocimiento} onChange={e => setForm(f => ({ ...f, bloqueConocimiento: e.target.value }))} className={inputCls}>
+                    <option value="">-- Sin asignar --</option>
+                    {BLOQUES_CONOCIMIENTO.map(b => <option key={b.codigo} value={b.label}>{b.label}</option>)}
+                  </select>
+                } />
+              <div className="flex">
+                <div className="flex-1 border-r border-slate-50">
+                  <CampoEditable label="Año" valor={ficha.anio ? `${ficha.anio}°` : '—'} editar={modoEditar}
+                    input={<select value={form.anio} onChange={e => setForm(f => ({ ...f, anio: e.target.value }))} className={inputCls}>
+                      <option value="">—</option>
+                      {[1,2,3,4,5].map(a => <option key={a} value={a}>{a}°</option>)}
+                    </select>} />
+                </div>
+                <div className="flex-1">
+                  <CampoEditable label="Cuatrimestre"
+                    valor={ficha.cuatrimestre === 0 ? 'Anual' : ficha.cuatrimestre ? `${ficha.cuatrimestre}° Cuatrimestre` : '—'}
+                    editar={modoEditar}
+                    input={<select value={form.cuatrimestre} onChange={e => setForm(f => ({ ...f, cuatrimestre: e.target.value }))} className={inputCls}>
+                      <option value="">—</option>
+                      <option value="1">1° Cuatrimestre</option>
+                      <option value="2">2° Cuatrimestre</option>
+                      <option value="0">Anual</option>
+                    </select>} />
+                </div>
+              </div>
+              <CampoEditable label="Régimen de Cursado" valor={ficha.regimenCursado ?? '—'} editar={modoEditar}
+                input={<select value={form.regimenCursado} onChange={e => setForm(f => ({ ...f, regimenCursado: e.target.value }))} className={inputCls}>
+                  <option value="">—</option>
+                  {REGIMENES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>} />
+              <CampoEditable label="Observaciones" valor={ficha.observaciones ?? '—'} editar={modoEditar}
+                input={<textarea value={form.observaciones} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))}
+                  rows={2} className={`${inputCls} resize-none`} placeholder="Notas adicionales..." />} />
+            </div>
+
+            {/* CARGA HORARIA */}
+            <SeccionHeader label="Carga Horaria" />
+            <div className="divide-y divide-slate-50">
+              <CampoEditable label="Horas semanales"
+                valor={ficha.cargaHorariaSemanal ? `${ficha.cargaHorariaSemanal} horas` : '—'}
+                editar={modoEditar}
+                input={<input type="number" min="0" value={form.cargaHorariaSemanal}
+                  onChange={e => setForm(f => ({ ...f, cargaHorariaSemanal: e.target.value }))}
+                  className={inputCls} placeholder="0" />} />
+              <CampoEditable label="Horas totales"
+                valor={ficha.cargaHorariaTotal ? `${ficha.cargaHorariaTotal} horas` : '—'}
+                editar={modoEditar}
+                input={<input type="number" min="0" value={form.cargaHorariaTotal}
+                  onChange={e => setForm(f => ({ ...f, cargaHorariaTotal: e.target.value }))}
+                  className={inputCls} placeholder="0" />} />
+              <CampoEditable label="Créditos"
+                valor={ficha.creditos > 0 ? `${ficha.creditos} créditos` : '—'}
+                editar={modoEditar}
+                input={<input type="number" min="0" value={form.creditos}
+                  onChange={e => setForm(f => ({ ...f, creditos: e.target.value }))}
+                  className={inputCls} placeholder="0" />} />
+            </div>
+
+            {/* CORRELATIVIDADES */}
+            <SeccionHeader label="Correlatividades" subtitle="Requisito para cursar" />
+            <div className="px-5 py-4 space-y-3">
+              {ficha.correlativas.length === 0 ? (
+                <p className="text-xs text-slate-400 italic py-1">Sin correlativas definidas</p>
+              ) : (
+                <div className="rounded-lg border border-slate-200 overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="text-left px-3 py-2 font-semibold text-slate-500 uppercase tracking-wide text-[10px] w-24">Código</th>
+                        <th className="text-left px-3 py-2 font-semibold text-slate-500 uppercase tracking-wide text-[10px]">Nombre</th>
+                        {permisos.editar && <th className="w-10 px-3 py-2" />}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {ficha.correlativas.map(c => (
+                        <tr key={c.id} className="hover:bg-slate-50/60 transition-colors">
+                          <td className="px-3 py-2.5">
+                            <span className="text-[10px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/15">
+                              {c.correlativa.codigo}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-700">{c.correlativa.nombre}</td>
+                          {permisos.editar && (
+                            <td className="px-3 py-2.5 text-right">
+                              <button
+                                onClick={() => quitarCorrelativa(c.correlativa.id)}
+                                className="text-slate-300 hover:text-red-500 transition-colors p-0.5 rounded"
+                                title="Eliminar correlativa"
+                              >
+                                <IcClose />
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {permisos.editar && modoEditar && (
+                !mostrarFormCorr ? (
                   <button
                     onClick={() => setMostrarFormCorr(true)}
                     className="flex items-center gap-1.5 text-xs font-semibold text-[#0f4c81] hover:bg-[#0f4c81]/5 px-3 py-2 rounded-lg transition-colors"
@@ -1021,21 +1003,19 @@ function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, token, rou
                   </button>
                 ) : (
                   <div className="bg-slate-50 rounded-lg p-4 space-y-3">
-                    <p className="text-xs font-semibold text-slate-700">Agregar correlativa</p>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <select
-                        value={corrAgregar.correlativaId}
-                        onChange={e => setCorrAgregar(c => ({ ...c, correlativaId: e.target.value }))}
-                        className="flex-1 text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]"
-                      >
-                        <option value="">-- Seleccionar asignatura --</option>
-                        {materiasPicker.map(m => (
-                          <option key={m.id} value={m.id}>
-                            [{m.codigo}] {m.nombre}{m.anio ? ` · ${m.anio}°A` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <p className="text-xs font-semibold text-slate-700">Nueva correlativa</p>
+                    <select
+                      value={corrAgregar.correlativaId}
+                      onChange={e => setCorrAgregar(c => ({ ...c, correlativaId: e.target.value }))}
+                      className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]"
+                    >
+                      <option value="">-- Seleccionar asignatura --</option>
+                      {materiasPicker.map(m => (
+                        <option key={m.id} value={m.id}>
+                          [{m.codigo}] {m.nombre}{m.anio ? ` · ${m.anio}°A` : ''}
+                        </option>
+                      ))}
+                    </select>
                     <div className="flex gap-2">
                       <button
                         onClick={agregarCorrelativa}
@@ -1052,181 +1032,25 @@ function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, token, rou
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                )
+              )}
+            </div>
 
-        {/* ── TAB: Carga Horaria ───────────────────────────────────────── */}
-        {tab === 'carga' && (
-          <div className="divide-y divide-slate-50">
-            <CampoEditable label="Régimen de Cursado" valor={ficha.regimenCursado ?? '—'} editar={modoEditar}
-              input={<select value={form.regimenCursado} onChange={e => setForm(f => ({ ...f, regimenCursado: e.target.value }))} className={inputCls}>
-                <option value="">—</option>
-                {REGIMENES.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>} />
-            <CampoEditable label="Carga Horaria Semanal" valor={ficha.cargaHorariaSemanal ? `${ficha.cargaHorariaSemanal} horas` : '—'} editar={modoEditar}
-              input={<input type="number" min="0" value={form.cargaHorariaSemanal} onChange={e => setForm(f => ({ ...f, cargaHorariaSemanal: e.target.value }))}
-                className={inputCls} placeholder="0" />} />
-            <CampoEditable label="Carga Horaria Total" valor={ficha.cargaHorariaTotal ? `${ficha.cargaHorariaTotal} horas` : '—'} editar={modoEditar}
-              input={<input type="number" min="0" value={form.cargaHorariaTotal} onChange={e => setForm(f => ({ ...f, cargaHorariaTotal: e.target.value }))}
-                className={inputCls} placeholder="0" />} />
-            <CampoEditable label="Créditos" valor={ficha.creditos > 0 ? `${ficha.creditos} créditos` : '—'} editar={modoEditar}
-              input={<input type="number" min="0" value={form.creditos} onChange={e => setForm(f => ({ ...f, creditos: e.target.value }))}
-                className={inputCls} placeholder="0" />} />
-
-            {/* Resumen visual */}
-            {!modoEditar && (
-              <div className="px-5 py-4">
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: 'Hs/Semana', valor: ficha.cargaHorariaSemanal ?? 0, unidad: 'h' },
-                    { label: 'Hs Totales', valor: ficha.cargaHorariaTotal ?? 0, unidad: 'h' },
-                    { label: 'Créditos', valor: ficha.creditos ?? 0, unidad: 'cr' },
-                  ].map(item => (
-                    <div key={item.label} className="bg-slate-50 rounded-xl p-4 text-center border border-slate-100">
-                      <p className="text-2xl font-bold text-[#0f4c81]">
-                        {item.valor}<span className="text-sm font-normal text-slate-500 ml-1">{item.unidad}</span>
-                      </p>
-                      <p className="text-[11px] text-slate-500 mt-1">{item.label}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
         {/* ── TAB: Programa ────────────────────────────────────────────── */}
-        {tab === 'programa' && (
+        {(tab === 'programa' || modoVer) && (
           <ProgramaView
             materiaId={ficha.id}
             ficha={ficha}
             permisosPrograma={permisosPrograma}
             apiFetch={apiFetch}
             onRefreshFicha={fetchFicha}
+            modoVer={modoVer}
           />
         )}
 
-        {/* ── TAB: Documentación ──────────────────────────────────────── */}
-        {tab === 'documentacion' && (
-          <div className="p-8 text-center">
-            <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
-              <svg className="w-6 h-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-              </svg>
-            </div>
-            <p className="text-sm font-medium text-slate-600 mb-1">Sin documentos adjuntos</p>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              La carga documental (resoluciones, programas en PDF, etc.) estará disponible en una próxima versión.
-            </p>
-            <div className="mt-4 inline-flex px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200">
-              <span className="text-[11px] font-medium text-amber-700">En desarrollo · Próxima versión</span>
-            </div>
-          </div>
-        )}
-
-        {/* ── TAB: Historial ───────────────────────────────────────────── */}
-        {tab === 'historial' && (() => {
-          const totalPaginas = Math.max(1, Math.ceil(historial.length / HISTORIAL_POR_PAGINA));
-          const paginaActual = Math.min(paginaHistorial, totalPaginas);
-          const registrosPagina = historial.slice(
-            (paginaActual - 1) * HISTORIAL_POR_PAGINA,
-            paginaActual * HISTORIAL_POR_PAGINA
-          );
-          const inicio = historial.length === 0 ? 0 : (paginaActual - 1) * HISTORIAL_POR_PAGINA + 1;
-          const fin = Math.min(paginaActual * HISTORIAL_POR_PAGINA, historial.length);
-          return (
-            <div>
-              {cargandoHistorial ? (
-                <div className="flex justify-center py-12">
-                  <IcSpinner />
-                </div>
-              ) : historial.length === 0 ? (
-                <div className="px-5 py-10 text-center">
-                  <p className="text-xs text-slate-400 italic">Sin movimientos registrados para esta asignatura.</p>
-                </div>
-              ) : (
-                <>
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="bg-slate-50/80 border-b border-slate-100">
-                        <th className="text-left px-5 py-3 font-semibold text-slate-500 uppercase tracking-wide w-44">Fecha y hora</th>
-                        <th className="text-left px-5 py-3 font-semibold text-slate-500 uppercase tracking-wide w-44">Acción</th>
-                        <th className="text-left px-5 py-3 font-semibold text-slate-500 uppercase tracking-wide">Descripción</th>
-                        <th className="text-left px-5 py-3 font-semibold text-slate-500 uppercase tracking-wide w-44">Usuario</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {registrosPagina.map(h => (
-                        <tr key={`${h.fuente}-${h.id}`} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-5 py-3 text-slate-500 whitespace-nowrap font-mono text-[11px]">
-                            {formatFecha(h.fecha)}
-                          </td>
-                          <td className="px-5 py-3">
-                            <AccionBadge accion={h.accion} />
-                            {h.fuente === 'programa' && (
-                              <span className="ml-1.5 inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-indigo-50 text-indigo-600 border-indigo-200 whitespace-nowrap">
-                                PROGRAMA
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-5 py-3 text-slate-600 leading-relaxed">
-                            {h.descripcion ?? '—'}
-                            {h.seccion && (
-                              <p className="text-[10px] text-slate-400 mt-0.5">{h.seccion}</p>
-                            )}
-                          </td>
-                          <td className="px-5 py-3">
-                            <p className="text-slate-700 font-medium">{h.usuario.nombre} {h.usuario.apellido}</p>
-                            <p className="text-[10px] text-slate-400">{h.usuario.correoElectronico}</p>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-
-                  {/* Paginación */}
-                  <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/60">
-                    <span className="text-[11px] text-slate-400">
-                      Mostrando {inicio}–{fin} de {historial.length} registro{historial.length !== 1 ? 's' : ''}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setPaginaHistorial(p => Math.max(1, p - 1))}
-                        disabled={paginaActual === 1}
-                        className="px-2.5 py-1 rounded text-[11px] font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        ← Anterior
-                      </button>
-                      {Array.from({ length: totalPaginas }, (_, i) => i + 1).map(p => (
-                        <button
-                          key={p}
-                          onClick={() => setPaginaHistorial(p)}
-                          className={`w-7 h-7 rounded text-[11px] font-medium border transition-colors ${
-                            p === paginaActual
-                              ? 'bg-[#0f4c81] text-white border-[#0f4c81]'
-                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                          }`}
-                        >
-                          {p}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => setPaginaHistorial(p => Math.min(totalPaginas, p + 1))}
-                        disabled={paginaActual === totalPaginas}
-                        className="px-2.5 py-1 rounded text-[11px] font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        Siguiente →
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })()}
       </div>
     </div>
   );
@@ -1237,6 +1061,15 @@ function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, token, rou
 const inputCls = 'w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]';
 
 // ── Sub-componentes ───────────────────────────────────────────────────────────
+
+function SeccionHeader({ label, subtitle }: { label: string; subtitle?: string }) {
+  return (
+    <div className="flex items-center gap-2 px-5 py-2.5 bg-slate-50/80 border-y border-slate-100">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{label}</span>
+      {subtitle && <span className="text-[10px] text-slate-400">· {subtitle}</span>}
+    </div>
+  );
+}
 
 function CampoFicha({ label, valor, monospace }: { label: string; valor: string; monospace?: boolean }) {
   return (
@@ -1321,7 +1154,7 @@ function duracionLabel(c: number | undefined | null): string {
 interface CampoConfig {
   key: string;
   label: string;
-  tipo: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'checkboxgroup';
+  tipo: 'text' | 'textarea' | 'number' | 'date' | 'year' | 'select' | 'checkboxgroup';
   placeholder?: string;
   opciones?: string[];
   rows?: number;
@@ -1337,82 +1170,92 @@ interface SeccionConfig {
   titulo: string;
   estadoKey: keyof ProgramaAsignatura;
   campos: CampoConfig[];
+  renderTipo?: 'grids' | 'unidades' | 'formacion';
+}
+
+type CompetenciaFila      = { competencia: string; resultadoAprendizaje: string };
+type ContenidoFila        = { conceptuales: string; procedimentales: string; actitudinales: string };
+type UnidadDidacticaFila  = { unidad: string; horas: string };
+type FormacionPracticaFila = { actividad: string; competenciaIdx: number; hsPres: number; hsSinc: number };
+
+function tryParseJson<T>(str: string | undefined | null): T | null {
+  if (!str) return null;
+  try { return JSON.parse(str) as T; } catch { return null; }
+}
+
+function calcEstadoS2(prog: ProgramaAsignatura): string {
+  const comps = tryParseJson<CompetenciaFila[]>(prog.competenciasResultadosJson) ?? [];
+  const conts = tryParseJson<ContenidoFila[]>(prog.contenidosGridJson) ?? [];
+  const hasComp = comps.some(r => r.competencia?.trim().length > 0 && r.resultadoAprendizaje?.trim().length > 0);
+  const hasCont = conts.some(r => r.conceptuales?.trim().length > 0 && r.procedimentales?.trim().length > 0 && r.actitudinales?.trim().length > 0);
+  return hasComp && hasCont ? 'COMPLETO' : 'PENDIENTE';
+}
+
+function calcEstadoS3(prog: ProgramaAsignatura): string {
+  const uds = tryParseJson<UnidadDidacticaFila[]>(prog.unidadesDidacticasJson) ?? [];
+  return uds.some(r => r.unidad?.trim().length > 0) ? 'COMPLETO' : 'PENDIENTE';
+}
+
+function calcEstadoS4(prog: ProgramaAsignatura): string {
+  const filas = tryParseJson<FormacionPracticaFila[]>(prog.formacionPracticaJson) ?? [];
+  return filas.some(f =>
+    f.actividad?.trim().length > 0 &&
+    f.competenciaIdx >= 0 &&
+    typeof f.hsPres === 'number' && f.hsPres >= 0 &&
+    typeof f.hsSinc === 'number' && f.hsSinc >= 0
+  ) ? 'COMPLETO' : 'PENDIENTE';
 }
 
 const SECCIONES_PROGRAMA: SeccionConfig[] = [
   {
-    id: 's1', numero: 1, titulo: 'Identificación', estadoKey: 'estadoS1',
-    campos: [] // Render custom — estado calculado desde ficha (presencia de selects)
-  },
-  {
-    id: 's2', numero: 2, titulo: 'Fundamentos y Objetivos', estadoKey: 'estadoS2',
+    id: 's1', numero: 1, titulo: 'Objetivos y perfil', estadoKey: 'estadoS1',
     campos: [
-      { key: 'fundamentacion',     label: 'Fundamentación',                         tipo: 'textarea', rows: 8, obligatorio: true,  placeholder: 'Justificación pedagógica de la asignatura en el plan de estudios, relevancia en la formación del estudiante...' },
-      { key: 'propositos',         label: 'Propósitos',                             tipo: 'textarea', rows: 8, obligatorio: true,  placeholder: 'Intenciones educativas del docente, orientaciones generales del proceso de enseñanza-aprendizaje...' },
-      { key: 'objetivosGenerales', label: 'Objetivos / Resultados de aprendizaje',  tipo: 'textarea', rows: 8, obligatorio: true,  placeholder: 'Al finalizar el cursado, el estudiante será capaz de...' },
+      { key: 'objetivosGenerales',    label: 'Objetivos',                                   tipo: 'textarea', rows: 7, obligatorio: true,  placeholder: 'Describa los objetivos generales y específicos de la asignatura. Al finalizar el cursado, el estudiante será capaz de...' },
+      { key: 'aportesPerfilTitulo',   label: 'Aportes al perfil del título',                tipo: 'textarea', rows: 7, obligatorio: true,  placeholder: 'Describa cómo contribuye esta asignatura al perfil profesional del egresado de la carrera...' },
+      { key: 'recomendacionesCursado',label: 'Recomendaciones para cursar la asignatura',   tipo: 'textarea', rows: 5, obligatorio: false, placeholder: 'Conocimientos previos, habilidades o recomendaciones para cursar la asignatura...' },
     ]
   },
   {
-    id: 's3', numero: 3, titulo: 'Contenidos Curriculares', estadoKey: 'estadoS3',
-    campos: [
-      { key: 'contenidosSinteticos',       label: 'Contenidos mínimos / sintéticos',         tipo: 'textarea', rows: 7, obligatorio: true, placeholder: 'Síntesis de los contenidos mínimos establecidos por el plan de estudios para esta asignatura...' },
-      { key: 'contenidosTematicos',        label: 'Programa analítico (unidades temáticas)', tipo: 'textarea', rows: 9, obligatorio: true, placeholder: 'Unidad 1: Título\n  1.1 Subtema...\nUnidad 2: Título\n  2.1 Subtema...' },
-      { key: 'bibliografiaBasica',         label: 'Bibliografía obligatoria',                tipo: 'textarea', rows: 6, obligatorio: true, placeholder: 'Autor, A. (año). Título. Editorial.\nAutor, B. (año). Título. Editorial.' },
-      { key: 'bibliografiaComplementaria', label: 'Bibliografía complementaria',             tipo: 'textarea', rows: 6, obligatorio: true, placeholder: 'Autor, A. (año). Título. Editorial.\nRecursos en línea: URL' },
-    ]
+    id: 's2', numero: 2, titulo: 'Competencias y contenidos', estadoKey: 'estadoS2',
+    campos: [],
+    renderTipo: 'grids',
   },
   {
-    id: 's4', numero: 4, titulo: 'Metodología y Formación Práctica', estadoKey: 'estadoS4',
+    id: 's3', numero: 3, titulo: 'Unidades didácticas', estadoKey: 'estadoS3',
+    campos: [],
+    renderTipo: 'unidades',
+  },
+  {
+    id: 's4', numero: 4, titulo: 'Formación práctica', estadoKey: 'estadoS4',
+    campos: [],
+    renderTipo: 'formacion',
+  },
+  {
+    id: 's5', numero: 5, titulo: 'Metodología y evaluación', estadoKey: 'estadoS5',
     campos: [
+      { key: 'recursosDidacticos',   label: 'Recursos para el dictado de la asignatura', tipo: 'textarea', rows: 5, obligatorio: true,
+        placeholder: 'Describa los recursos físicos, tecnológicos, bibliográficos y de laboratorio utilizados durante el dictado de la asignatura...' },
       { key: 'metodologiaEnsenanza', label: 'Metodología de enseñanza', tipo: 'textarea', rows: 5, obligatorio: true,
-        placeholder: 'Describa las estrategias y métodos de enseñanza utilizados: clases magistrales, aprendizaje colaborativo, resolución de problemas...' },
-      { key: 'tiposFormacionPractica', label: 'Tipos de formación práctica incluidos', tipo: 'checkboxgroup', obligatorio: true,
-        opciones: [
-          'FORMACIÓN EXPERIMENTAL / LABORATORIO / CAMPO',
-          'RESOLUCIÓN DE PROBLEMAS ABIERTOS DE INGENIERÍA',
-          'ACTIVIDADES DE PROYECTO Y DISEÑO',
-          'PRÁCTICA PROFESIONAL SUPERVISADA / PROYECTO INTEGRADOR',
-          'FORMACIÓN TEÓRICA (CLASES TEÓRICAS)',
-        ],
-        tieneOtra: true },
-      { key: 'porcentajeTiempoFormacion', label: '% de tiempo dedicado por el alumno (por tipo)', tipo: 'textarea', rows: 5, obligatorio: true,
-        placeholder: 'Formación teórica: 60%\nFormación experimental / laboratorio: 25%\nProyecto y diseño: 15%...' },
-      { key: 'recursosDidacticos', label: 'Recursos', tipo: 'textarea', rows: 5, obligatorio: true,
-        placeholder: 'Bibliografía de referencia, plataformas digitales, software especializado, laboratorios, materiales de práctica...' },
-    ]
-  },
-  {
-    id: 's5', numero: 5, titulo: 'Evaluación', estadoKey: 'estadoS5',
-    campos: [
-      { key: 'modalidadEvaluacion', label: 'Modalidad e instancias de evaluación', tipo: 'textarea', rows: 5, obligatorio: true,
-        placeholder: 'Describa las modalidades de evaluación utilizadas (parciales escritos, coloquios, trabajos prácticos) y las instancias previstas a lo largo del cuatrimestre...' },
+        placeholder: 'Describa las estrategias didácticas y metodológicas utilizadas para el desarrollo de la asignatura...' },
+      { key: 'modalidadEvaluacion',  label: 'Modalidad e instancias de evaluación', tipo: 'textarea', rows: 5, obligatorio: true,
+        placeholder: 'Describa las modalidades de evaluación, instrumentos utilizados y las distintas instancias previstas durante el cursado...' },
       { key: 'requisitosAprobacion', label: 'Requisitos para aprobar la materia', tipo: 'textarea', rows: 5, obligatorio: true,
-        placeholder: 'Indique los requisitos de regularidad, asistencia mínima, calificaciones mínimas y condiciones para la aprobación de la materia...' },
+        placeholder: 'Describa las condiciones necesarias para obtener la regularidad, promoción o aprobación de la asignatura...' },
     ]
   },
   {
-    id: 's6', numero: 6, titulo: 'Gestión y Vigencia', estadoKey: 'estadoS6',
+    id: 's6', numero: 6, titulo: 'Bibliografía y gestión', estadoKey: 'estadoS6',
     campos: [
-      { key: 'fechaVigenciaPrograma',   label: 'Año de vigencia del programa',       tipo: 'number', obligatorio: false, placeholder: String(new Date().getFullYear()), digitosExactos: 4 },
-      { key: 'anioAprobacionRevision',  label: 'Periodo de aprobación / revisión',   tipo: 'text', obligatorio: false, placeholder: 'Ej: MARZO 2026' },
-      { key: 'profesorACargo',          label: 'Profesor a cargo',               tipo: 'textarea', rows: 3, obligatorio: true, validacion: 'masDeUnaPalabra',
-        placeholder: 'Nombre completo, título y cargo del profesor responsable del programa...' },
-      { key: 'competenciasVinculadas',  label: 'Competencias genéricas/específicas vinculadas', tipo: 'checkboxgroup', obligatorio: true,
-        opciones: [
-          'IDENTIFICAR, FORMULAR Y RESOLVER PROBLEMAS DE INGENIERÍA',
-          'CONCEBIR, DISEÑAR Y DESARROLLAR PROYECTOS DE INGENIERÍA',
-          'COMUNICARSE CON EFECTIVIDAD',
-          'TRABAJAR EN FORMA EFECTIVA EN EQUIPOS',
-          'ACTUAR CON ÉTICA Y RESPONSABILIDAD PROFESIONAL Y SOCIAL',
-          'APRENDER EN FORMA CONTINUA Y AUTÓNOMA',
-        ],
-        tieneOtra: true },
+      { key: 'bibliografiaBasica',         label: 'Bibliografía obligatoria',        tipo: 'textarea', rows: 6, obligatorio: true,  placeholder: 'Autor, A. (año). Título. Editorial.\nAutor, B. (año). Título. Editorial.' },
+      { key: 'bibliografiaComplementaria', label: 'Bibliografía de consulta',         tipo: 'textarea', rows: 6, obligatorio: false, placeholder: 'Autor, A. (año). Título. Editorial.\nRecursos en línea: URL' },
+      { key: 'fechaVigenciaPrograma',      label: 'Año de vigencia del programa',    tipo: 'year',   obligatorio: true },
+      { key: 'fechaAprobacion',            label: 'Fecha de aprobación / revisión',  tipo: 'date',   obligatorio: true },
     ]
   },
 ];
 
 const ESTADO_PROG_CFG: Record<string, { label: string; cls: string }> = {
-  BORRADOR:    { label: 'Borrador',    cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+  PENDIENTE:   { label: 'Pendiente',   cls: 'bg-slate-100 text-slate-500 border-slate-200' },
   EN_REVISION: { label: 'En revisión', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
   APROBADO:    { label: 'Aprobado',    cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
 };
@@ -1420,71 +1263,211 @@ const ESTADO_PROG_CFG: Record<string, { label: string; cls: string }> = {
 const ACCION_PROG_CFG: Record<string, { label: string; cls: string }> = {
   ACTUALIZACION: { label: 'Actualización', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
   APROBACION:    { label: 'Aprobación',    cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  REVERSION:     { label: 'En revisión',   cls: 'bg-amber-50 text-amber-700 border-amber-200' },
 };
 
 function exportarProgramaPDF(ficha: FichaCompleta, programa: ProgramaAsignatura) {
-  const estadoCfg = ESTADO_PROG_CFG[programa.estadoPrograma] ?? ESTADO_PROG_CFG.BORRADOR;
-  const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const fecha     = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const estadoCfg = ESTADO_PROG_CFG[programa.estadoPrograma] ?? ESTADO_PROG_CFG.PENDIENTE;
 
-  const campo = (label: string, valor: string) =>
-    valor ? `<div class="campo"><div class="label">${label}</div><div class="valor">${valor.replace(/\n/g, '<br>')}</div></div>` : '';
+  // ── Mini helpers ─────────────────────────────────────────────────────────
+  const esc   = (s: unknown) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const nl2br = (s: string)  => esc(s).replace(/\n/g,'<br>');
+  const fmtN  = (n: number)  => n % 1 === 0 ? String(n) : n.toFixed(1);
+  const SIN   = '<span class="sin-info">Sin información registrada</span>';
 
-  // S1 desde la materia
-  const s1HTML = `<div class="seccion"><h2>1. Identificación</h2>
-    ${campo('Carrera/s en que se dicta', ficha.planEstudio.carrera.nombre)}
-    ${campo('Bloque de Conocimiento', ficha.bloqueConocimiento ?? '')}
-    ${campo('Modalidad de Dictado', ficha.modalidadDictado ? labelModalidad(ficha.modalidadDictado) : '')}
-    ${campo('Duración', ficha.cuatrimestre != null ? duracionLabel(ficha.cuatrimestre) : '')}
-    ${ficha.correlativas.length > 0 ? campo('Correlativas', ficha.correlativas.map(c => `[${c.correlativa.codigo}] ${c.correlativa.nombre}`).join('\n')) : ''}
-  </div>`;
+  const campoTxt = (label: string, v: string) =>
+    `<div class="campo"><div class="lbl">${label}</div><div class="val">${v ? nl2br(v) : SIN}</div></div>`;
 
-  // S2-S6 desde el programa
-  const seccionesHTML = SECCIONES_PROGRAMA.filter(s => s.id !== 's1').map(s => {
-    const camposHTML = s.campos.map(c => {
-      const valor = String((programa as unknown as Record<string, unknown>)[c.key] ?? '');
-      if (!valor) return '';
-      const label = c.key === 'estadoPrograma' ? (ESTADO_PROG_CFG[valor]?.label ?? valor)
-                  : c.key === 'fechaAprobacion' ? new Date(valor).toLocaleDateString('es-AR') : valor;
-      return campo(c.label, label);
-    }).filter(Boolean).join('');
-    if (!camposHTML) return '';
-    return `<div class="seccion"><h2>${s.numero}. ${s.titulo}</h2>${camposHTML}</div>`;
-  }).filter(Boolean).join('');
+  const campoTabla = (label: string, tbl: string) =>
+    `<div class="campo"><div class="lbl">${label}</div>${tbl}</div>`;
 
-  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
-<title>Programa — ${ficha.nombre}</title>
+  const sec = (num: number, titulo: string, contenido: string) =>
+    `<div class="seccion"><h2>${num}. ${titulo}</h2>${contenido}</div>`;
+
+  // ── Datos JSON ───────────────────────────────────────────────────────────
+  const compFilas = tryParseJson<CompetenciaFila[]>(programa.competenciasResultadosJson) ?? [];
+  const contFilas = tryParseJson<ContenidoFila[]>(programa.contenidosGridJson) ?? [];
+  const udFilas   = tryParseJson<UnidadDidacticaFila[]>(programa.unidadesDidacticasJson) ?? [];
+  const fpFilas   = tryParseJson<FormacionPracticaFila[]>(programa.formacionPracticaJson) ?? [];
+
+  // ── S1: Objetivos y perfil (campos genéricos) ─────────────────────────
+  const s1Cfg = SECCIONES_PROGRAMA.find(s => s.id === 's1')!;
+  const s1HTML = s1Cfg.campos.map(c => {
+    const v = String((programa as unknown as Record<string,unknown>)[c.key] ?? '');
+    return campoTxt(c.label, v);
+  }).join('');
+
+  // ── S2: Competencias y contenidos ─────────────────────────────────────
+  const tblComp = compFilas.length === 0 ? SIN :
+    `<table><thead><tr><th style="width:50%">Competencia</th><th style="width:50%">Resultado de aprendizaje</th></tr></thead>
+    <tbody>${compFilas.map(r =>
+      `<tr><td>${nl2br(r.competencia||'—')}</td><td>${nl2br(r.resultadoAprendizaje||'—')}</td></tr>`
+    ).join('')}</tbody></table>`;
+
+  const tblCont = contFilas.length === 0 ? SIN :
+    `<table><thead><tr><th>Conceptuales</th><th>Procedimentales</th><th>Actitudinales</th></tr></thead>
+    <tbody>${contFilas.map(r =>
+      `<tr><td>${nl2br(r.conceptuales||'—')}</td><td>${nl2br(r.procedimentales||'—')}</td><td>${nl2br(r.actitudinales||'—')}</td></tr>`
+    ).join('')}</tbody></table>`;
+
+  const s2HTML = campoTabla('Competencias / Resultados de aprendizaje', tblComp)
+               + campoTabla('Contenidos', tblCont);
+
+  // ── S3: Unidades didácticas ───────────────────────────────────────────
+  const tblUD = udFilas.length === 0 ? SIN :
+    `<table><thead><tr><th style="width:80%">Unidad didáctica</th><th>Horas</th></tr></thead>
+    <tbody>${udFilas.map(r =>
+      `<tr><td>${nl2br(r.unidad||'—')}</td><td>${esc(r.horas||'—')}</td></tr>`
+    ).join('')}</tbody></table>`;
+
+  const s3HTML = campoTabla('Unidades didácticas', tblUD);
+
+  // ── S4: Formación práctica ────────────────────────────────────────────
+  let tblFP: string;
+  if (fpFilas.length === 0) {
+    tblFP = SIN;
+  } else {
+    const tPres = fpFilas.reduce((s,f) => s + (f.hsPres||0), 0);
+    const tSinc = fpFilas.reduce((s,f) => s + (f.hsSinc||0), 0);
+    tblFP = `<table>
+      <thead><tr>
+        <th style="width:35%">Actividad / tipo</th>
+        <th style="width:30%">Competencia vinculada</th>
+        <th style="width:10%;text-align:center">Hs pres.</th>
+        <th style="width:10%;text-align:center">Hs sinc.</th>
+        <th style="width:10%;text-align:center">Total</th>
+      </tr></thead>
+      <tbody>
+        ${fpFilas.map(f => {
+          const comp = compFilas[f.competenciaIdx]?.competencia ?? '—';
+          const tot  = (f.hsPres||0) + (f.hsSinc||0);
+          return `<tr>
+            <td>${nl2br(f.actividad||'—')}</td>
+            <td>${esc(comp)}</td>
+            <td style="text-align:center">${fmtN(f.hsPres||0)}</td>
+            <td style="text-align:center">${fmtN(f.hsSinc||0)}</td>
+            <td style="text-align:center;font-weight:bold">${fmtN(tot)}</td>
+          </tr>`;
+        }).join('')}
+        <tr class="tot-row">
+          <td colspan="2" style="text-align:right;padding-right:12px">Totales</td>
+          <td style="text-align:center">${fmtN(tPres)}</td>
+          <td style="text-align:center">${fmtN(tSinc)}</td>
+          <td style="text-align:center">${fmtN(tPres+tSinc)}</td>
+        </tr>
+      </tbody></table>`;
+  }
+  const s4HTML = campoTabla('Actividades de formación práctica', tblFP);
+
+  // ── S5: Metodología y evaluación (campos genéricos) ───────────────────
+  const s5Cfg = SECCIONES_PROGRAMA.find(s => s.id === 's5')!;
+  const s5HTML = s5Cfg.campos.map(c => {
+    const v = String((programa as unknown as Record<string,unknown>)[c.key] ?? '');
+    return campoTxt(c.label, v);
+  }).join('');
+
+  // ── S6: Bibliografía y gestión (campos genéricos) ─────────────────────
+  const s6Cfg = SECCIONES_PROGRAMA.find(s => s.id === 's6')!;
+  const s6HTML = s6Cfg.campos.map(c => {
+    const raw = (programa as unknown as Record<string,unknown>)[c.key];
+    const v   = raw != null ? String(raw) : '';
+    const display = c.tipo === 'date' && v ? formatFechaCorta(v) : v;
+    return campoTxt(c.label, display);
+  }).join('');
+
+  // ── HTML final ────────────────────────────────────────────────────────
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Programa de Asignatura — ${esc(ficha.nombre)}</title>
 <style>
-  body{font-family:Arial,sans-serif;font-size:11pt;color:#1e293b;margin:0;padding:15mm 20mm}
-  h1{font-size:17pt;color:#0f4c81;margin:0 0 4px}
-  h2{font-size:12pt;color:#0f4c81;border-bottom:1.5px solid #e2e8f0;padding-bottom:5px;margin:22px 0 10px}
-  .meta{font-size:9pt;color:#64748b;margin-bottom:4px}
-  .badge{display:inline-block;font-size:9pt;font-weight:bold;padding:2px 8px;border-radius:4px;background:#f1f5f9;color:#475569;margin-left:8px}
-  .campo{margin-bottom:14px}
-  .label{font-size:9pt;font-weight:bold;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
-  .valor{font-size:11pt;white-space:pre-wrap;line-height:1.5}
-  .seccion{margin-bottom:8px}
-  .footer{margin-top:30px;border-top:1px solid #e2e8f0;padding-top:8px;font-size:9pt;color:#94a3b8}
-  @media print{body{padding:10mm 15mm}}
-</style></head><body>
-<h1>${ficha.nombre} <span class="badge">${estadoCfg.label}</span></h1>
-<div class="meta">${ficha.planEstudio.carrera.nombre} · ${ficha.planEstudio.nombre}</div>
-<div class="meta">Código: <strong>${ficha.codigo}</strong>&nbsp;&nbsp;|&nbsp;&nbsp;Año ${ficha.anio ?? '—'}&nbsp;&nbsp;|&nbsp;&nbsp;${duracionLabel(ficha.cuatrimestre)}</div>
-${s1HTML}${seccionesHTML}
-<div class="footer">Exportado el ${fecha}</div>
-</body></html>`;
+@page {
+  size: A4; margin: 15mm 20mm 22mm 20mm;
+  @bottom-right { content: "Página " counter(page) " de " counter(pages); font-size:8pt; color:#94a3b8; }
+  @bottom-left  { content: "UDEMM — Programa de Asignatura"; font-size:8pt; color:#94a3b8; }
+}
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;font-size:10pt;color:#1e293b;margin:0}
+.hdr{background:#0f4c81;color:white;padding:14px 18px 16px}
+.hdr-univ{font-size:7.5pt;letter-spacing:.06em;text-transform:uppercase;opacity:.8}
+.hdr-fac{font-size:9.5pt;margin:3px 0 2px;opacity:.9}
+.hdr-mat{font-size:14pt;font-weight:bold;margin:6px 0 0}
+.hdr-bar{height:3px;background:#f26b22}
+.meta-grid{display:flex;flex-wrap:wrap;gap:5px 22px;border:1px solid #e2e8f0;border-top:0;padding:9px 18px;background:#f8fafc;margin-bottom:22px}
+.mi{font-size:8.5pt;color:#475569}
+.mi strong{color:#1e293b}
+.est-lbl{display:inline-block;font-size:8pt;font-weight:bold;padding:1px 7px;border-radius:3px}
+.est-pend{background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1}
+.est-rev{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
+.est-apr{background:#d1fae5;color:#065f46;border:1px solid #a7f3d0}
+h2{font-size:11pt;color:#0f4c81;border-bottom:2px solid #0f4c81;padding-bottom:4px;margin:24px 0 10px;break-after:avoid;page-break-after:avoid}
+.seccion{break-inside:avoid;page-break-inside:avoid}
+.campo{margin-bottom:13px;break-inside:avoid;page-break-inside:avoid}
+.lbl{font-size:8pt;font-weight:bold;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
+.val{font-size:10pt;line-height:1.55;color:#1e293b}
+.sin-info{color:#94a3b8;font-style:italic}
+table{width:100%;border-collapse:collapse;margin-bottom:6px;font-size:9pt}
+thead{display:table-header-group;background:#0f4c81;color:white}
+th{padding:6px 8px;text-align:left;font-size:8pt;font-weight:600}
+td{padding:5px 8px;border-bottom:1px solid #e2e8f0;vertical-align:top}
+tr{break-inside:avoid;page-break-inside:avoid}
+.tot-row td{background:#f1f5f9;font-weight:bold;border-top:2px solid #cbd5e1}
+.footer{margin-top:28px;padding-top:8px;border-top:1px solid #e2e8f0;font-size:8pt;color:#94a3b8;display:flex;justify-content:space-between}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="hdr-univ">UDEMM — Universidad de la Marina Mercante</div>
+  <div class="hdr-fac">${esc(ficha.planEstudio.carrera.facultad.nombre)}</div>
+  <div class="hdr-mat">${esc(ficha.nombre)}</div>
+</div>
+<div class="hdr-bar"></div>
+<div class="meta-grid">
+  <div class="mi"><strong>Carrera:</strong> ${esc(ficha.planEstudio.carrera.nombre)}</div>
+  <div class="mi"><strong>Plan de Estudios:</strong> ${esc(ficha.planEstudio.nombre)}${ficha.planEstudio.version ? ` (v${esc(ficha.planEstudio.version)})` : ''}</div>
+  <div class="mi"><strong>Código:</strong> ${esc(ficha.codigo)}</div>
+  ${ficha.anio ? `<div class="mi"><strong>Año:</strong> ${ficha.anio}°</div>` : ''}
+  ${ficha.cuatrimestre != null ? `<div class="mi"><strong>Cuatrimestre:</strong> ${esc(duracionLabel(ficha.cuatrimestre))}</div>` : ''}
+  ${ficha.bloqueConocimiento ? `<div class="mi"><strong>Bloque de conocimiento:</strong> ${esc(ficha.bloqueConocimiento)}</div>` : ''}
+  <div class="mi"><strong>Estado:</strong> <span class="est-lbl ${programa.estadoPrograma === 'APROBADO' ? 'est-apr' : programa.estadoPrograma === 'EN_REVISION' ? 'est-rev' : 'est-pend'}">${estadoCfg.label}</span></div>
+  ${(() => {
+    const aprobacion = programa.historial.find(h => h.accion === 'APROBACION');
+    if (!aprobacion) return '';
+    const quien = `${aprobacion.usuario.nombre} ${aprobacion.usuario.apellido}`;
+    const cuando = new Date(aprobacion.fecha).toLocaleDateString('es-AR', { day:'2-digit', month:'long', year:'numeric' });
+    return `<div class="mi"><strong>Aprobado por:</strong> ${esc(quien)} el ${esc(cuando)}</div>`;
+  })()}
+</div>
+
+${sec(1,'Objetivos y perfil', s1HTML)}
+${sec(2,'Competencias y contenidos', s2HTML)}
+${sec(3,'Unidades didácticas', s3HTML)}
+${sec(4,'Formación práctica', s4HTML)}
+${sec(5,'Metodología y evaluación', s5HTML)}
+${sec(6,'Bibliografía y gestión', s6HTML)}
+
+<div class="footer">
+  <span>Generado el ${fecha}</span>
+  <span>${esc(ficha.planEstudio.carrera.facultad.nombre)} · UDEMM</span>
+</div>
+</body>
+</html>`;
 
   const w = window.open('', '_blank');
-  if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 400); }
+  if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 500); }
 }
 
 function ProgramaView({
-  materiaId, ficha, permisosPrograma, apiFetch, onRefreshFicha
+  materiaId, ficha, permisosPrograma, apiFetch, onRefreshFicha, modoVer = false
 }: {
   materiaId: string;
   ficha: FichaCompleta;
   permisosPrograma: PermisosPrograma;
   apiFetch: (url: string, opts?: RequestInit) => Promise<any>;
   onRefreshFicha?: () => void;
+  modoVer?: boolean;
 }) {
   const [programa, setPrograma] = useState<ProgramaAsignatura | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -1493,9 +1476,19 @@ function ProgramaView({
   const fieldRefs = useRef<Record<string, HTMLTextAreaElement | HTMLInputElement | HTMLSelectElement | null>>({});
   const [editCheckboxes, setEditCheckboxes] = useState<Record<string, string[]>>({});
   const [editOtras, setEditOtras] = useState<Record<string, string>>({});
-  const [formS1, setFormS1] = useState({ bloqueConocimiento: '', modalidadDictado: '', cuatrimestre: '' });
+  const gridIdCounter = useRef(0);
+  const [editCompRows, setEditCompRows] = useState<Array<{ _id: string; comp: string; res: string }>>([]);
+  const [editContRows, setEditContRows] = useState<Array<{ _id: string; conc: string; proc: string; act: string }>>([]);
+  const compRefMap = useRef<Record<string, { comp: HTMLTextAreaElement | null; res: HTMLTextAreaElement | null }>>({});
+  const contRefMap = useRef<Record<string, { conc: HTMLTextAreaElement | null; proc: HTMLTextAreaElement | null; act: HTMLTextAreaElement | null }>>({});
+  const [editUDRows, setEditUDRows] = useState<Array<{ _id: string; unidad: string; horas: string }>>([]);
+  const udRefMap = useRef<Record<string, { unidad: HTMLTextAreaElement | null; horas: HTMLInputElement | null }>>({});
+  const [editFPRows, setEditFPRows] = useState<Array<{ _id: string; actividad: string; competenciaIdx: number; hsPres: string; hsSinc: string }>>([]);
+  const fpActivRef = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const [guardando, setGuardando] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [confirmarAprobacion, setConfirmarAprobacion] = useState(false);
+  const [aprobando, setAprobando] = useState(false);
 
   useEffect(() => {
     setCargando(true);
@@ -1505,13 +1498,7 @@ function ProgramaView({
       .finally(() => setCargando(false));
   }, [materiaId]);
 
-  // S1: presencia de los 3 selects (no aplica regla de 50 chars por ser selects)
-  function calcEstadoS1(): string {
-    const completo = !!(ficha.bloqueConocimiento && ficha.modalidadDictado && ficha.cuatrimestre != null);
-    return completo ? 'COMPLETO' : 'PENDIENTE';
-  }
-
-  // S2-S6: todos los campos obligatorios deben tener >50 chars (textarea) o no estar vacíos (otros)
+  // S1-S6: todos los campos obligatorios deben tener >50 chars (textarea) o no estar vacíos (otros)
   // Excepción: validacion='masDeUnaPalabra' → completo cuando tiene más de una palabra
   function calcEstadoFromCampos(s: SeccionConfig, prog: ProgramaAsignatura): string {
     const reqs = s.campos.filter(c => c.obligatorio);
@@ -1525,54 +1512,55 @@ function ProgramaView({
   }
 
   function getEstadoSeccion(seccionId: string, prog: ProgramaAsignatura | null = programa): string {
-    if (seccionId === 's1') return calcEstadoS1();
+    if (!prog) return 'PENDIENTE';
     const s = SECCIONES_PROGRAMA.find(x => x.id === seccionId);
-    return s && prog ? calcEstadoFromCampos(s, prog) : 'PENDIENTE';
+    if (!s) return 'PENDIENTE';
+    return String((prog as unknown as Record<string, unknown>)[s.estadoKey as string] ?? 'PENDIENTE');
   }
 
   const seccion = SECCIONES_PROGRAMA.find(s => s.id === seccionActiva)!;
   const estadoSeccion = getEstadoSeccion(seccionActiva);
 
-  // ── Handlers S1 ─────────────────────────────────────────────────────────────
+  // ── Handlers ─────────────────────────────────────────────────────────────────
 
-  function iniciarEdicionS1() {
-    setFormS1({
-      bloqueConocimiento: ficha.bloqueConocimiento ?? '',
-      modalidadDictado: ficha.modalidadDictado ?? '',
-      cuatrimestre: ficha.cuatrimestre?.toString() ?? '',
-    });
+  function iniciarEdicionGrids() {
+    const mkId = () => String(gridIdCounter.current++);
+    const comps = tryParseJson<CompetenciaFila[]>(programa?.competenciasResultadosJson) ?? [];
+    const conts  = tryParseJson<ContenidoFila[]>(programa?.contenidosGridJson) ?? [];
+    compRefMap.current = {};
+    contRefMap.current = {};
+    setEditCompRows((comps.length > 0 ? comps : [{ competencia: '', resultadoAprendizaje: '' }])
+      .map(c => ({ _id: mkId(), comp: c.competencia ?? '', res: c.resultadoAprendizaje ?? '' })));
+    setEditContRows((conts.length > 0 ? conts : [{ conceptuales: '', procedimentales: '', actitudinales: '' }])
+      .map(c => ({ _id: mkId(), conc: c.conceptuales ?? '', proc: c.procedimentales ?? '', act: c.actitudinales ?? '' })));
     setEditando(true);
     setErrorMsg(null);
   }
 
-  async function guardarS1() {
+  async function guardarGrids() {
+    const competencias: CompetenciaFila[] = editCompRows.map(row => ({
+      competencia:          compRefMap.current[row._id]?.comp?.value ?? '',
+      resultadoAprendizaje: compRefMap.current[row._id]?.res?.value  ?? '',
+    }));
+    const contenidos: ContenidoFila[] = editContRows.map(row => ({
+      conceptuales:    contRefMap.current[row._id]?.conc?.value ?? '',
+      procedimentales: contRefMap.current[row._id]?.proc?.value ?? '',
+      actitudinales:   contRefMap.current[row._id]?.act?.value  ?? '',
+    }));
     setGuardando(true);
     setErrorMsg(null);
     try {
-      // PATCH materia con los campos editables de S1
       const payload: Record<string, unknown> = {
-        bloqueConocimiento: formS1.bloqueConocimiento || undefined,
-        modalidadDictado: formS1.modalidadDictado || undefined,
+        seccionModificada:          seccion.titulo,
+        competenciasResultadosJson: JSON.stringify(competencias),
+        contenidosGridJson:         JSON.stringify(contenidos),
       };
-      if (formS1.cuatrimestre !== '') payload.cuatrimestre = parseInt(formS1.cuatrimestre);
-
-      await apiFetch(`${API_URL}/materias/${materiaId}`, {
+      const data = await apiFetch(`${API_URL}/programas/materia/${materiaId}`, {
         method: 'PATCH',
         body: JSON.stringify(payload)
       });
-
-      // Auto-sync estadoS1 al programa
-      const newCuatri = formS1.cuatrimestre !== '' ? parseInt(formS1.cuatrimestre) : null;
-      const completo = !!(formS1.bloqueConocimiento && formS1.modalidadDictado && newCuatri != null);
-      const nuevoEstadoS1 = completo ? 'COMPLETO' : 'PENDIENTE';
-
-      const progData = await apiFetch(`${API_URL}/programas/materia/${materiaId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ estadoS1: nuevoEstadoS1, seccionModificada: 'Identificación' })
-      });
-      setPrograma(progData);
+      setPrograma(data);
       setEditando(false);
-      onRefreshFicha?.();
     } catch (e: unknown) {
       setErrorMsg(e instanceof Error ? e.message : 'Error al guardar');
     } finally {
@@ -1580,7 +1568,83 @@ function ProgramaView({
     }
   }
 
-  // ── Handlers S2-S6 ───────────────────────────────────────────────────────────
+  function iniciarEdicionUnidades() {
+    const mkId = () => String(gridIdCounter.current++);
+    const uds = tryParseJson<UnidadDidacticaFila[]>(programa?.unidadesDidacticasJson) ?? [];
+    udRefMap.current = {};
+    setEditUDRows((uds.length > 0 ? uds : [{ unidad: '', horas: '' }])
+      .map(u => ({ _id: mkId(), unidad: u.unidad ?? '', horas: u.horas ?? '' })));
+    setEditando(true);
+    setErrorMsg(null);
+  }
+
+  async function guardarUnidades() {
+    const unidades: UnidadDidacticaFila[] = editUDRows.map(row => ({
+      unidad: udRefMap.current[row._id]?.unidad?.value ?? '',
+      horas:  udRefMap.current[row._id]?.horas?.value  ?? '',
+    }));
+    setGuardando(true);
+    setErrorMsg(null);
+    try {
+      const payload: Record<string, unknown> = {
+        seccionModificada:    seccion.titulo,
+        unidadesDidacticasJson: JSON.stringify(unidades),
+      };
+      const data = await apiFetch(`${API_URL}/programas/materia/${materiaId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+      setPrograma(data);
+      setEditando(false);
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : 'Error al guardar');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  function iniciarEdicionFormacion() {
+    const mkId = () => String(gridIdCounter.current++);
+    const filas = tryParseJson<FormacionPracticaFila[]>(programa?.formacionPracticaJson) ?? [];
+    fpActivRef.current = {};
+    setEditFPRows((filas.length > 0 ? filas : [{ actividad: '', competenciaIdx: -1, hsPres: 0, hsSinc: 0 }])
+      .map(f => ({
+        _id: mkId(),
+        actividad:      f.actividad ?? '',
+        competenciaIdx: f.competenciaIdx ?? -1,
+        hsPres:         f.hsPres != null ? String(f.hsPres) : '',
+        hsSinc:         f.hsSinc != null ? String(f.hsSinc) : '',
+      })));
+    setEditando(true);
+    setErrorMsg(null);
+  }
+
+  async function guardarFormacion() {
+    const filas: FormacionPracticaFila[] = editFPRows.map(row => ({
+      actividad:      fpActivRef.current[row._id]?.value ?? '',
+      competenciaIdx: row.competenciaIdx,
+      hsPres:         parseFloat(row.hsPres) >= 0 ? parseFloat(row.hsPres) : 0,
+      hsSinc:         parseFloat(row.hsSinc) >= 0 ? parseFloat(row.hsSinc) : 0,
+    }));
+    setGuardando(true);
+    setErrorMsg(null);
+    try {
+      const payload: Record<string, unknown> = {
+        seccionModificada:   seccion.titulo,
+        formacionPracticaJson: JSON.stringify(filas),
+      };
+      const data = await apiFetch(`${API_URL}/programas/materia/${materiaId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+      setPrograma(data);
+      setEditando(false);
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : 'Error al guardar');
+    } finally {
+      setGuardando(false);
+    }
+  }
 
   function iniciarEdicion() {
     fieldRefs.current = {};
@@ -1611,6 +1675,21 @@ function ProgramaView({
     setErrorMsg(null);
   }
 
+  async function aprobarPrograma() {
+    setAprobando(true);
+    setErrorMsg(null);
+    try {
+      const data = await apiFetch(`${API_URL}/programas/materia/${materiaId}/aprobar`, { method: 'POST' });
+      setPrograma(data);
+      setConfirmarAprobacion(false);
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : 'Error al aprobar el programa');
+      setConfirmarAprobacion(false);
+    } finally {
+      setAprobando(false);
+    }
+  }
+
   async function guardarSeccion() {
     for (const campo of seccion.campos) {
       if (campo.digitosExactos) {
@@ -1639,17 +1718,13 @@ function ProgramaView({
         } else {
           const el = fieldRefs.current[campo.key];
           const value = el ? el.value : '';
-          if (campo.tipo === 'number') {
+          if (campo.tipo === 'number' || campo.tipo === 'year') {
             payload[campo.key] = value !== '' ? parseInt(value, 10) : null;
           } else {
             payload[campo.key] = value === '' ? null : value;
           }
         }
       }
-
-      // Auto-calcular estadoSN desde los campos guardados
-      const merged = { ...programa, ...payload } as ProgramaAsignatura;
-      payload[seccion.estadoKey as string] = calcEstadoFromCampos(seccion, merged);
 
       const data = await apiFetch(`${API_URL}/programas/materia/${materiaId}`, {
         method: 'PATCH',
@@ -1667,18 +1742,27 @@ function ProgramaView({
   // ── Progreso global ───────────────────────────────────────────────────────────
 
   const completadas = SECCIONES_PROGRAMA.filter(s => getEstadoSeccion(s.id) === 'COMPLETO').length;
+  const porcentaje  = Math.round((completadas / SECCIONES_PROGRAMA.length) * 100);
 
   if (cargando) return <div className="flex justify-center py-12"><IcSpinner /></div>;
   if (!programa) return <div className="p-8 text-center text-xs text-slate-400">{errorMsg ?? 'No se pudo cargar el programa.'}</div>;
 
-  const estadoProgCfg = ESTADO_PROG_CFG[programa.estadoPrograma] ?? ESTADO_PROG_CFG.BORRADOR;
-  const sectCls = 'w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]';
+  const estadoProgCfg = ESTADO_PROG_CFG[programa.estadoPrograma] ?? ESTADO_PROG_CFG.PENDIENTE;
+  const ultimaAprobacion = programa.historial.find(h => h.accion === 'APROBACION');
+  const puedeAprobar = permisosPrograma.aprobar
+    && porcentaje === 100
+    && programa.estadoPrograma === 'EN_REVISION';
+  const cellCls = 'w-full text-sm border border-slate-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] resize-none';
+  const compFilas = tryParseJson<CompetenciaFila[]>(programa.competenciasResultadosJson) ?? [];
+  const contFilas = tryParseJson<ContenidoFila[]>(programa.contenidosGridJson) ?? [];
+  const udFilas   = tryParseJson<UnidadDidacticaFila[]>(programa.unidadesDidacticasJson) ?? [];
+  const fpFilas   = tryParseJson<FormacionPracticaFila[]>(programa.formacionPracticaJson) ?? [];
 
   return (
     <div>
       {/* Header del programa */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50/60">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${estadoProgCfg.cls}`}>
             {estadoProgCfg.label}
           </span>
@@ -1690,19 +1774,127 @@ function ProgramaView({
               · Actualizado {formatFecha(programa.fechaActualizacion)}
             </span>
           )}
+          {programa.estadoPrograma === 'APROBADO' && ultimaAprobacion && (
+            <span className="text-[11px] text-emerald-600">
+              · Aprobado por {ultimaAprobacion.usuario.nombre} {ultimaAprobacion.usuario.apellido} el {formatFechaCorta(ultimaAprobacion.fecha)}
+            </span>
+          )}
         </div>
-        {permisosPrograma.exportar && (
-          <button
-            onClick={() => exportarProgramaPDF(ficha, programa)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Exportar PDF
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {puedeAprobar && !modoVer && (
+            <button
+              onClick={() => setConfirmarAprobacion(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Aprobar programa
+            </button>
+          )}
+          {permisosPrograma.exportar && (
+            <button
+              onClick={() => exportarProgramaPDF(ficha, programa)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Exportar PDF
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* ── Indicador de completitud ─────────────────────────────────── */}
+      {(() => {
+        const radio = 30;
+        const circ  = 2 * Math.PI * radio;
+        const offset = circ * (1 - porcentaje / 100);
+        const color  = porcentaje === 100 ? '#10b981' : porcentaje >= 50 ? '#f59e0b' : '#ef4444';
+        return (
+          <div className="px-5 pt-4 pb-1">
+            <div className="bg-white border border-slate-200 rounded-xl px-5 py-4 flex items-center gap-5">
+
+              {/* Gráfico circular */}
+              <div className="relative flex-shrink-0 w-20 h-20">
+                <svg width="80" height="80" viewBox="0 0 80 80" className="-rotate-90">
+                  <circle cx="40" cy="40" r={radio} fill="none" stroke="#e2e8f0" strokeWidth="8" />
+                  <circle
+                    cx="40" cy="40" r={radio}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth="8"
+                    strokeLinecap="round"
+                    strokeDasharray={circ}
+                    strokeDashoffset={offset}
+                    style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-sm font-bold tabular-nums" style={{ color }}>{porcentaje}%</span>
+                </div>
+              </div>
+
+              {/* Texto */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-sm font-bold text-slate-800">Avance del Formulario Programa Asignatura</h3>
+                  <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${
+                    porcentaje === 100
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : porcentaje >= 50
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-red-50 text-red-600 border-red-200'
+                  }`}>
+                    {porcentaje === 100 ? 'Completo' : porcentaje >= 50 ? 'En progreso' : 'Pendiente'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  {completadas} de {SECCIONES_PROGRAMA.length} secciones completas
+                </p>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Resumen ejecutivo ─────────────────────────────────────────── */}
+      {(() => {
+        const pendientes = SECCIONES_PROGRAMA.filter(s => getEstadoSeccion(s.id) !== 'COMPLETO');
+        return (
+          <div className="px-5 pb-3">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-1.5">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                <span className="text-emerald-600 font-bold">✔</span>
+                {completadas} de {SECCIONES_PROGRAMA.length} secciones completas
+              </p>
+              {pendientes.length === 0 ? (
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                  <span className="font-bold">✔</span>
+                  Programa de Asignatura completo.
+                </p>
+              ) : (
+                <div>
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-red-600 mb-1">
+                    <span className="font-bold">✖</span>
+                    Falta completar:
+                  </p>
+                  <ul className="ml-5 space-y-0.5">
+                    {pendientes.map(s => (
+                      <li key={s.id} className="flex items-center gap-1.5 text-xs text-slate-600">
+                        <span className="w-1 h-1 rounded-full bg-red-400 flex-shrink-0" />
+                        {s.titulo}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Navegación de secciones */}
       <div className="flex gap-1 px-5 pt-4 pb-2 overflow-x-auto">
@@ -1738,8 +1930,6 @@ function ProgramaView({
         {/* Encabezado de sección */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-slate-800">{seccion.numero}. {seccion.titulo}</h3>
-            {/* Badge siempre read-only — estado auto-calculado desde los campos obligatorios */}
             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${
               estadoSeccion === 'COMPLETO'
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -1748,9 +1938,9 @@ function ProgramaView({
               {estadoSeccion === 'COMPLETO' ? '✓ Completo' : '○ Pendiente'}
             </span>
           </div>
-          {permisosPrograma.editar && !editando && (
+          {permisosPrograma.editar && !editando && !modoVer && (
             <button
-              onClick={seccionActiva === 's1' ? iniciarEdicionS1 : iniciarEdicion}
+              onClick={seccion.renderTipo === 'grids' ? iniciarEdicionGrids : seccion.renderTipo === 'unidades' ? iniciarEdicionUnidades : seccion.renderTipo === 'formacion' ? iniciarEdicionFormacion : iniciarEdicion}
               className="flex items-center gap-1.5 text-[11px] font-semibold text-[#0f4c81] hover:bg-[#0f4c81]/5 px-2.5 py-1.5 rounded-lg transition-colors"
             >
               <IcEdit />
@@ -1766,7 +1956,7 @@ function ProgramaView({
                 Cancelar
               </button>
               <button
-                onClick={seccionActiva === 's1' ? guardarS1 : guardarSeccion}
+                onClick={seccion.renderTipo === 'grids' ? guardarGrids : seccion.renderTipo === 'unidades' ? guardarUnidades : seccion.renderTipo === 'formacion' ? guardarFormacion : guardarSeccion}
                 disabled={guardando}
                 className="flex items-center gap-1.5 text-[11px] font-semibold bg-[#0f4c81] text-white px-3 py-1.5 rounded-lg hover:bg-[#0d3e6b] disabled:opacity-50 transition-colors"
               >
@@ -1782,107 +1972,411 @@ function ProgramaView({
           </div>
         )}
 
-        {/* ── Sección 1: Identificación (render custom desde materia) ── */}
-        {seccionActiva === 's1' && (
-          <div className="divide-y divide-slate-50 -mx-5 px-0">
+        {/* ── Sección 2: grids dinámicos ── */}
+        {seccion.renderTipo === 'grids' && (
+          <div className="space-y-6">
 
-            {/* Carrera — siempre read-only */}
-            <CampoFicha label="Carrera/s en que se dicta" valor={ficha.planEstudio.carrera.nombre} />
-
-            {/* Bloque de Conocimiento * */}
-            <CampoEditable
-              label={<>Bloque de Conocimiento <span className="text-red-500">*</span></>}
-              valor={ficha.bloqueConocimiento ?? '—'}
-              editar={editando}
-              input={
-                <select
-                  value={formS1.bloqueConocimiento}
-                  onChange={e => setFormS1(f => ({ ...f, bloqueConocimiento: e.target.value }))}
-                  className={sectCls}
+            {/* Grid 1 — Competencias / Resultados */}
+            <div>
+              <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-3">
+                Competencias / Resultados de aprendizaje
+              </p>
+              <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-1/2">
+                        Competencia <span className="text-red-500">*</span>
+                      </th>
+                      <th className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-1/2">
+                        Resultado de aprendizaje <span className="text-red-500">*</span>
+                      </th>
+                      {editando && <th className="w-10" />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editando ? (
+                      editCompRows.map(row => (
+                        <tr key={row._id} className="border-b border-slate-100 last:border-0">
+                          <td className="px-2 py-1.5 align-top">
+                            <textarea
+                              ref={el => { if (!compRefMap.current[row._id]) compRefMap.current[row._id] = { comp: null, res: null }; compRefMap.current[row._id].comp = el; }}
+                              defaultValue={row.comp}
+                              rows={2}
+                              className={cellCls}
+                            />
+                          </td>
+                          <td className="px-2 py-1.5 align-top">
+                            <textarea
+                              ref={el => { if (!compRefMap.current[row._id]) compRefMap.current[row._id] = { comp: null, res: null }; compRefMap.current[row._id].res = el; }}
+                              defaultValue={row.res}
+                              rows={2}
+                              className={cellCls}
+                            />
+                          </td>
+                          <td className="px-2 py-1.5 align-middle text-center">
+                            {editCompRows.length > 1 && (
+                              <button
+                                onClick={() => { delete compRefMap.current[row._id]; setEditCompRows(prev => prev.filter(r => r._id !== row._id)); }}
+                                className="text-slate-300 hover:text-red-500 transition-colors text-base leading-none"
+                                title="Eliminar fila"
+                              >✕</button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    ) : compFilas.length === 0 ? (
+                      <tr>
+                        <td colSpan={2} className="px-3 py-5 text-center text-sm text-slate-300 italic">Sin datos</td>
+                      </tr>
+                    ) : (
+                      compFilas.map((row, i) => (
+                        <tr key={i} className="border-b border-slate-100 last:border-0">
+                          <td className="px-3 py-2.5 text-sm text-slate-700 align-top whitespace-pre-wrap">{row.competencia || <span className="text-slate-300 italic">—</span>}</td>
+                          <td className="px-3 py-2.5 text-sm text-slate-700 align-top whitespace-pre-wrap">{row.resultadoAprendizaje || <span className="text-slate-300 italic">—</span>}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {editando && (
+                <button
+                  onClick={() => setEditCompRows(prev => [...prev, { _id: String(gridIdCounter.current++), comp: '', res: '' }])}
+                  className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-[#0f4c81] hover:bg-[#0f4c81]/5 px-2.5 py-1.5 rounded-lg transition-colors"
                 >
-                  <option value="">— Sin asignar —</option>
-                  {BLOQUES_CONOCIMIENTO.map(b => (
-                    <option key={b.codigo} value={b.label}>{b.label}</option>
-                  ))}
-                </select>
-              }
-            />
-
-            {/* Modalidad de Dictado * */}
-            <CampoEditable
-              label={<>Modalidad de Dictado <span className="text-red-500">*</span></>}
-              valor={ficha.modalidadDictado ? labelModalidad(ficha.modalidadDictado) : '—'}
-              editar={editando}
-              input={
-                <select
-                  value={formS1.modalidadDictado}
-                  onChange={e => setFormS1(f => ({ ...f, modalidadDictado: e.target.value }))}
-                  className={sectCls}
-                >
-                  <option value="">— Sin asignar —</option>
-                  {MODALIDADES_DICTADO.map(m => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </select>
-              }
-            />
-
-            {/* Duración * */}
-            <CampoEditable
-              label={<>Duración <span className="text-red-500">*</span></>}
-              valor={duracionLabel(ficha.cuatrimestre)}
-              editar={editando}
-              input={
-                <select
-                  value={formS1.cuatrimestre}
-                  onChange={e => setFormS1(f => ({ ...f, cuatrimestre: e.target.value }))}
-                  className={sectCls}
-                >
-                  <option value="">— Sin asignar —</option>
-                  <option value="1">1° Cuatrimestre</option>
-                  <option value="2">2° Cuatrimestre</option>
-                  <option value="0">Anual</option>
-                </select>
-              }
-            />
-
-            {/* Correlativas — siempre read-only */}
-            <div className="px-5 py-3.5">
-              <p className="text-xs font-medium text-slate-500 mb-2.5">Correlativas</p>
-              {ficha.correlativas.length === 0 ? (
-                <p className="text-sm text-slate-400 italic">Sin correlativas definidas</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {ficha.correlativas.map(c => (
-                    <div key={c.id} className="flex items-center gap-2.5 py-1.5 px-3 rounded-lg bg-slate-50 border border-slate-100">
-                      <span className="font-mono text-[11px] font-bold text-[#0f4c81] bg-[#0f4c81]/10 px-1.5 py-0.5 rounded border border-[#0f4c81]/10 whitespace-nowrap">
-                        {c.correlativa.codigo}
-                      </span>
-                      <span className="text-xs text-slate-700 flex-1">{c.correlativa.nombre}</span>
-                      {c.correlativa.anio && (
-                        <span className="text-[11px] text-slate-400 whitespace-nowrap">
-                          {c.correlativa.anio}°A{c.correlativa.cuatrimestre ? ` · ${c.correlativa.cuatrimestre}°C` : ''}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                  <span className="text-base leading-none">+</span> Agregar fila
+                </button>
               )}
             </div>
 
-            {/* Nota de campos obligatorios */}
-            <div className="px-5 py-3">
-              <p className="text-[11px] text-slate-400">
-                <span className="text-red-500 font-semibold">*</span> Los campos marcados con asterisco son obligatorios.
+            {/* Grid 2 — Contenidos */}
+            <div>
+              <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-3">
+                Contenidos
               </p>
+              <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                        Conceptuales <span className="text-red-500">*</span>
+                      </th>
+                      <th className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                        Procedimentales <span className="text-red-500">*</span>
+                      </th>
+                      <th className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                        Actitudinales <span className="text-red-500">*</span>
+                      </th>
+                      {editando && <th className="w-10" />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editando ? (
+                      editContRows.map(row => (
+                        <tr key={row._id} className="border-b border-slate-100 last:border-0">
+                          <td className="px-2 py-1.5 align-top">
+                            <textarea
+                              ref={el => { if (!contRefMap.current[row._id]) contRefMap.current[row._id] = { conc: null, proc: null, act: null }; contRefMap.current[row._id].conc = el; }}
+                              defaultValue={row.conc}
+                              rows={2}
+                              className={cellCls}
+                            />
+                          </td>
+                          <td className="px-2 py-1.5 align-top">
+                            <textarea
+                              ref={el => { if (!contRefMap.current[row._id]) contRefMap.current[row._id] = { conc: null, proc: null, act: null }; contRefMap.current[row._id].proc = el; }}
+                              defaultValue={row.proc}
+                              rows={2}
+                              className={cellCls}
+                            />
+                          </td>
+                          <td className="px-2 py-1.5 align-top">
+                            <textarea
+                              ref={el => { if (!contRefMap.current[row._id]) contRefMap.current[row._id] = { conc: null, proc: null, act: null }; contRefMap.current[row._id].act = el; }}
+                              defaultValue={row.act}
+                              rows={2}
+                              className={cellCls}
+                            />
+                          </td>
+                          <td className="px-2 py-1.5 align-middle text-center">
+                            {editContRows.length > 1 && (
+                              <button
+                                onClick={() => { delete contRefMap.current[row._id]; setEditContRows(prev => prev.filter(r => r._id !== row._id)); }}
+                                className="text-slate-300 hover:text-red-500 transition-colors text-base leading-none"
+                                title="Eliminar fila"
+                              >✕</button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    ) : contFilas.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-5 text-center text-sm text-slate-300 italic">Sin datos</td>
+                      </tr>
+                    ) : (
+                      contFilas.map((row, i) => (
+                        <tr key={i} className="border-b border-slate-100 last:border-0">
+                          <td className="px-3 py-2.5 text-sm text-slate-700 align-top whitespace-pre-wrap">{row.conceptuales || <span className="text-slate-300 italic">—</span>}</td>
+                          <td className="px-3 py-2.5 text-sm text-slate-700 align-top whitespace-pre-wrap">{row.procedimentales || <span className="text-slate-300 italic">—</span>}</td>
+                          <td className="px-3 py-2.5 text-sm text-slate-700 align-top whitespace-pre-wrap">{row.actitudinales || <span className="text-slate-300 italic">—</span>}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {editando && (
+                <button
+                  onClick={() => setEditContRows(prev => [...prev, { _id: String(gridIdCounter.current++), conc: '', proc: '', act: '' }])}
+                  className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-[#0f4c81] hover:bg-[#0f4c81]/5 px-2.5 py-1.5 rounded-lg transition-colors"
+                >
+                  <span className="text-base leading-none">+</span> Agregar fila
+                </button>
+              )}
             </div>
 
+            {/* Footer */}
+            <p className="text-[11px] text-slate-400 pt-3 border-t border-slate-100">
+              <span className="text-red-500 font-semibold">*</span> Los campos marcados con asterisco son obligatorios.
+            </p>
           </div>
         )}
 
-        {/* ── Secciones 2-6: render genérico desde programa ── */}
-        {seccionActiva !== 's1' && (
-          <div className="space-y-5">
+        {/* ── Sección 3: unidades didácticas ── */}
+        {seccion.renderTipo === 'unidades' && (
+          <div className="space-y-4">
+            <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-3">
+              Unidades didácticas
+            </p>
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-4/5">
+                      Unidad didáctica <span className="text-red-500">*</span>
+                    </th>
+                    <th className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-1/5">
+                      Horas
+                    </th>
+                    {editando && <th className="w-10" />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {editando ? (
+                    editUDRows.map(row => (
+                      <tr key={row._id} className="border-b border-slate-100 last:border-0">
+                        <td className="px-2 py-1.5 align-top">
+                          <textarea
+                            ref={el => { if (!udRefMap.current[row._id]) udRefMap.current[row._id] = { unidad: null, horas: null }; udRefMap.current[row._id].unidad = el; }}
+                            defaultValue={row.unidad}
+                            rows={2}
+                            className={cellCls}
+                          />
+                        </td>
+                        <td className="px-2 py-1.5 align-top">
+                          <input
+                            type="text"
+                            ref={el => { if (!udRefMap.current[row._id]) udRefMap.current[row._id] = { unidad: null, horas: null }; udRefMap.current[row._id].horas = el; }}
+                            defaultValue={row.horas}
+                            className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]"
+                          />
+                        </td>
+                        <td className="px-2 py-1.5 align-middle text-center">
+                          {editUDRows.length > 1 && (
+                            <button
+                              onClick={() => { delete udRefMap.current[row._id]; setEditUDRows(prev => prev.filter(r => r._id !== row._id)); }}
+                              className="text-slate-300 hover:text-red-500 transition-colors text-base leading-none"
+                              title="Eliminar fila"
+                            >✕</button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ) : udFilas.length === 0 ? (
+                    <tr>
+                      <td colSpan={2} className="px-3 py-5 text-center text-sm text-slate-300 italic">Sin datos</td>
+                    </tr>
+                  ) : (
+                    udFilas.map((row, i) => (
+                      <tr key={i} className="border-b border-slate-100 last:border-0">
+                        <td className="px-3 py-2.5 text-sm text-slate-700 align-top whitespace-pre-wrap">{row.unidad || <span className="text-slate-300 italic">—</span>}</td>
+                        <td className="px-3 py-2.5 text-sm text-slate-700 align-top">{row.horas || <span className="text-slate-300 italic">—</span>}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {editando && (
+              <button
+                onClick={() => setEditUDRows(prev => [...prev, { _id: String(gridIdCounter.current++), unidad: '', horas: '' }])}
+                className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-[#0f4c81] hover:bg-[#0f4c81]/5 px-2.5 py-1.5 rounded-lg transition-colors"
+              >
+                <span className="text-base leading-none">+</span> Agregar fila
+              </button>
+            )}
+            <p className="text-[11px] text-slate-400 pt-3 border-t border-slate-100">
+              <span className="text-red-500 font-semibold">*</span> Los campos marcados con asterisco son obligatorios.
+            </p>
+          </div>
+        )}
+
+        {/* ── Sección 4: formación práctica ── */}
+        {seccion.renderTipo === 'formacion' && (() => {
+          const selCls   = 'w-full text-sm border border-slate-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]';
+          const numCls   = 'w-full text-sm border border-slate-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] text-center';
+          // totales en modo edición (desde estado controlado)
+          const tPresEdit = editFPRows.reduce((s, r) => s + (parseFloat(r.hsPres) || 0), 0);
+          const tSincEdit = editFPRows.reduce((s, r) => s + (parseFloat(r.hsSinc) || 0), 0);
+          // totales en modo vista (desde datos guardados)
+          const tPresView = fpFilas.reduce((s, f) => s + (f.hsPres || 0), 0);
+          const tSincView = fpFilas.reduce((s, f) => s + (f.hsSinc || 0), 0);
+          const tPres = editando ? tPresEdit : tPresView;
+          const tSinc = editando ? tSincEdit : tSincView;
+          return (
+            <div className="space-y-4">
+              <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-3">
+                Actividades de formación práctica
+              </p>
+              <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-[38%]">
+                        Actividad / tipo <span className="text-red-500">*</span>
+                      </th>
+                      <th className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-[30%]">
+                        Competencia <span className="text-red-500">*</span>
+                      </th>
+                      <th className="text-center px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-[10%]">
+                        Hs pres. <span className="text-red-500">*</span>
+                      </th>
+                      <th className="text-center px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-[10%]">
+                        Hs sinc. <span className="text-red-500">*</span>
+                      </th>
+                      <th className="text-center px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-[8%]">
+                        Total
+                      </th>
+                      {editando && <th className="w-10" />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editando ? (
+                      editFPRows.map(row => {
+                        const pres  = parseFloat(row.hsPres) || 0;
+                        const sinc  = parseFloat(row.hsSinc) || 0;
+                        const total = pres + sinc;
+                        return (
+                          <tr key={row._id} className="border-b border-slate-100 last:border-0">
+                            <td className="px-2 py-1.5 align-top">
+                              <textarea
+                                ref={el => { fpActivRef.current[row._id] = el; }}
+                                defaultValue={row.actividad}
+                                rows={2}
+                                className={cellCls}
+                              />
+                            </td>
+                            <td className="px-2 py-1.5 align-top">
+                              {compFilas.length === 0 ? (
+                                <p className="text-[11px] text-slate-400 italic px-1">Sin competencias — completar sección 2</p>
+                              ) : (
+                                <select
+                                  value={row.competenciaIdx}
+                                  onChange={e => setEditFPRows(prev => prev.map(r => r._id === row._id ? { ...r, competenciaIdx: Number(e.target.value) } : r))}
+                                  className={selCls}
+                                >
+                                  <option value={-1} disabled>Seleccionar...</option>
+                                  {compFilas.map((c, i) => (
+                                    <option key={i} value={i}>{c.competencia}</option>
+                                  ))}
+                                </select>
+                              )}
+                            </td>
+                            <td className="px-2 py-1.5 align-top">
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.5}
+                                value={row.hsPres}
+                                onChange={e => setEditFPRows(prev => prev.map(r => r._id === row._id ? { ...r, hsPres: e.target.value } : r))}
+                                className={numCls}
+                              />
+                            </td>
+                            <td className="px-2 py-1.5 align-top">
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.5}
+                                value={row.hsSinc}
+                                onChange={e => setEditFPRows(prev => prev.map(r => r._id === row._id ? { ...r, hsSinc: e.target.value } : r))}
+                                className={numCls}
+                              />
+                            </td>
+                            <td className="px-2 py-1.5 align-middle text-center text-sm font-semibold text-slate-700">
+                              {total % 1 === 0 ? total : total.toFixed(1)}
+                            </td>
+                            <td className="px-2 py-1.5 align-middle text-center">
+                              {editFPRows.length > 1 && (
+                                <button
+                                  onClick={() => { delete fpActivRef.current[row._id]; setEditFPRows(prev => prev.filter(r => r._id !== row._id)); }}
+                                  className="text-slate-300 hover:text-red-500 transition-colors text-base leading-none"
+                                  title="Eliminar fila"
+                                >✕</button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : fpFilas.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-3 py-5 text-center text-sm text-slate-300 italic">Sin datos</td>
+                      </tr>
+                    ) : (
+                      fpFilas.map((row, i) => {
+                        const comp  = compFilas[row.competenciaIdx]?.competencia;
+                        const total = (row.hsPres || 0) + (row.hsSinc || 0);
+                        return (
+                          <tr key={i} className="border-b border-slate-100 last:border-0">
+                            <td className="px-3 py-2.5 text-sm text-slate-700 align-top whitespace-pre-wrap">{row.actividad || <span className="text-slate-300 italic">—</span>}</td>
+                            <td className="px-3 py-2.5 text-sm text-slate-700 align-top">{comp ?? <span className="text-slate-300 italic">—</span>}</td>
+                            <td className="px-3 py-2.5 text-sm text-slate-700 text-center">{row.hsPres ?? '—'}</td>
+                            <td className="px-3 py-2.5 text-sm text-slate-700 text-center">{row.hsSinc ?? '—'}</td>
+                            <td className="px-3 py-2.5 text-sm font-semibold text-slate-700 text-center">{total % 1 === 0 ? total : total.toFixed(1)}</td>
+                          </tr>
+                        );
+                      })
+                    )}
+                    {/* Fila de totales */}
+                    {(editando ? editFPRows.length > 0 : fpFilas.length > 0) && (
+                      <tr className="border-t-2 border-slate-200 bg-slate-50">
+                        <td colSpan={2} className="px-3 py-2 text-[11px] font-bold text-slate-600 uppercase tracking-wide text-right">Totales</td>
+                        <td className="px-3 py-2 text-sm font-bold text-slate-800 text-center">{tPres % 1 === 0 ? tPres : tPres.toFixed(1)}</td>
+                        <td className="px-3 py-2 text-sm font-bold text-slate-800 text-center">{tSinc % 1 === 0 ? tSinc : tSinc.toFixed(1)}</td>
+                        <td className="px-3 py-2 text-sm font-bold text-[#0f4c81] text-center">{(tPres + tSinc) % 1 === 0 ? tPres + tSinc : (tPres + tSinc).toFixed(1)}</td>
+                        {editando && <td />}
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {editando && (
+                <button
+                  onClick={() => setEditFPRows(prev => [...prev, { _id: String(gridIdCounter.current++), actividad: '', competenciaIdx: -1, hsPres: '', hsSinc: '' }])}
+                  className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-[#0f4c81] hover:bg-[#0f4c81]/5 px-2.5 py-1.5 rounded-lg transition-colors"
+                >
+                  <span className="text-base leading-none">+</span> Agregar fila
+                </button>
+              )}
+              <p className="text-[11px] text-slate-400 pt-3 border-t border-slate-100">
+                <span className="text-red-500 font-semibold">*</span> Los campos marcados con asterisco son obligatorios.
+              </p>
+            </div>
+          );
+        })()}
+
+        {/* ── Secciones genéricas (1, 5-6) ── */}
+        {!seccion.renderTipo && <div className="space-y-5">
             {seccion.campos.map(campo => {
               const valorActual = (programa as unknown as Record<string, unknown>)[campo.key];
               const valorStr = valorActual != null ? String(valorActual) : '';
@@ -1898,9 +2392,12 @@ function ProgramaView({
                 const edCls = 'w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] resize-y';
                 return (
                   <div key={campo.key}>
-                    <label className="flex items-center gap-0.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                    <label className="flex items-center gap-0.5 text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-0.5">
                       {labelNode}
                     </label>
+                    {campo.obligatorio && campo.tipo === 'textarea' && (
+                      <p className="text-[10px] text-slate-400 mb-1.5">Mínimo 50 caracteres para marcar como completo.</p>
+                    )}
                     {campo.tipo === 'checkboxgroup' ? (
                       <div className="space-y-2">
                         {campo.opciones?.map(opcion => (
@@ -1966,6 +2463,18 @@ function ProgramaView({
                         rows={campo.rows ?? 4}
                         className={edCls}
                       />
+                    ) : campo.tipo === 'year' ? (
+                      <select
+                        key={`${seccionActiva}-${campo.key}`}
+                        ref={el => { fieldRefs.current[campo.key] = el; }}
+                        defaultValue={String((programa as unknown as Record<string, unknown>)[campo.key] ?? '')}
+                        className={edCls}
+                      >
+                        <option value="">-- Seleccionar año --</option>
+                        {Array.from({ length: 21 }, (_, i) => new Date().getFullYear() - 10 + i).map(y => (
+                          <option key={y} value={String(y)}>{y}</option>
+                        ))}
+                      </select>
                     ) : campo.tipo === 'select' ? (
                       <select
                         key={`${seccionActiva}-${campo.key}`}
@@ -1976,7 +2485,7 @@ function ProgramaView({
                         {campo.opciones?.map(op => (
                           <option key={op} value={op}
                             disabled={op === 'APROBADO' && !permisosPrograma.aprobar}>
-                            {op === 'BORRADOR' ? 'Borrador' : op === 'EN_REVISION' ? 'En revisión' : 'Aprobado'}
+                            {op === 'EN_REVISION' ? 'En revisión' : 'Aprobado'}
                           </option>
                         ))}
                       </select>
@@ -1985,7 +2494,11 @@ function ProgramaView({
                         key={`${seccionActiva}-${campo.key}`}
                         ref={el => { fieldRefs.current[campo.key] = el; }}
                         type={campo.tipo}
-                        defaultValue={String((programa as unknown as Record<string, unknown>)[campo.key] ?? '')}
+                        defaultValue={
+                          campo.tipo === 'date'
+                            ? (valorStr ? valorStr.substring(0, 10) : '')
+                            : String((programa as unknown as Record<string, unknown>)[campo.key] ?? '')
+                        }
                         placeholder={campo.placeholder}
                         className={edCls}
                       />
@@ -1996,7 +2509,7 @@ function ProgramaView({
 
               return (
                 <div key={campo.key} className="border-b border-slate-50 pb-4 last:border-0 last:pb-0">
-                  <p className="flex items-center gap-0.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                  <p className="flex items-center gap-0.5 text-[11px] font-bold text-slate-600 uppercase tracking-wide mb-1.5">
                     {labelNode}
                   </p>
                   {valorStr ? (
@@ -2019,8 +2532,8 @@ function ProgramaView({
                       <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
                         {campo.key === 'estadoPrograma'
                           ? (ESTADO_PROG_CFG[valorStr]?.label ?? valorStr)
-                          : campo.key === 'fechaAprobacion'
-                          ? formatFecha(valorStr)
+                          : campo.tipo === 'date'
+                          ? formatFechaCorta(valorStr)
                           : valorStr}
                       </p>
                     )
@@ -2033,13 +2546,62 @@ function ProgramaView({
 
             {/* Nota de campos obligatorios */}
             {seccion.campos.some(c => c.obligatorio) && (
-              <p className="text-[11px] text-slate-400 pt-3 border-t border-slate-100">
-                <span className="text-red-500 font-semibold">*</span> Los campos marcados con asterisco son obligatorios.
-              </p>
+              <div className="pt-3 border-t border-slate-100 space-y-0.5">
+                <p className="text-[11px] text-slate-400">
+                  <span className="text-red-500 font-semibold">*</span> Los campos marcados con asterisco son obligatorios.
+                </p>
+                {seccion.campos.some(c => c.obligatorio && c.tipo === 'textarea') && (
+                  <p className="text-[11px] text-slate-400">
+                    Los campos de texto obligatorios deben contener más de 50 caracteres para ser considerados completos.
+                  </p>
+                )}
+              </div>
             )}
-          </div>
-        )}
+          </div>}
       </div>
+
+      {/* ── Modal de confirmación de aprobación ──────────────────────────── */}
+      {confirmarAprobacion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">Aprobar Programa de Asignatura</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Esta acción aprobará formalmente el programa. Quedará registrado en el historial con tu usuario y la fecha actual.
+                </p>
+              </div>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-5">
+              <p className="text-[11px] text-amber-700">
+                <strong>Importante:</strong> Si posteriormente se realizan cambios en el contenido, el programa volverá automáticamente a estado <em>En revisión</em> y requerirá una nueva aprobación.
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirmarAprobacion(false)}
+                disabled={aprobando}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={aprobarPrograma}
+                disabled={aprobando}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-60"
+              >
+                {aprobando ? <IcSpinner /> : null}
+                {aprobando ? 'Aprobando...' : 'Confirmar aprobación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

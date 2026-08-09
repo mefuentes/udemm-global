@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, IsIn } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsIn, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ActualizarPlanDto {
@@ -8,6 +8,8 @@ export class ActualizarPlanDto {
 
   @IsOptional()
   @IsInt()
+  @Min(1000)
+  @Max(9999)
   @Type(() => Number)
   anio?: number;
 
@@ -23,4 +25,18 @@ export class ActualizarPlanDto {
   @IsString()
   @IsIn(['ACTIVO', 'INACTIVO', 'EN_REVISION'])
   estado?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Type(() => Number)
+  duracionCuatrimestres?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Type(() => Number)
+  totalCreditos?: number;
+
+  @IsOptional()
+  @IsString()
+  resolucionAprobacion?: string;
 }

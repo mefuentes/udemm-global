@@ -13,6 +13,9 @@ import { ParametrosModule } from './modules/parametros/parametros.module';
 import { FacultadesModule } from './modules/facultades/facultades.module';
 import { CarrerasModule } from './modules/carreras/carreras.module';
 import { ProgramasModule } from './modules/programas/programas.module';
+import { TablasMaestrasModule } from './modules/tablas-maestras/tablas-maestras.module';
+import { VinculacionesModule } from './modules/vinculaciones/vinculaciones.module';
+import { AreasDisiplinaresModule } from './modules/areas-disciplinares/areas-disciplinares.module';
 
 @Module({
   imports: [
@@ -29,7 +32,10 @@ import { ProgramasModule } from './modules/programas/programas.module';
     ParametrosModule,
     FacultadesModule,
     CarrerasModule,
-    ProgramasModule
+    ProgramasModule,
+    TablasMaestrasModule,
+    VinculacionesModule,
+    AreasDisiplinaresModule,
   ],
   controllers: [],
   providers: []

@@ -1,21 +1,252 @@
 'use client';
 
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { getPermisosPlanEstudio } from '@/lib/permisos-plan-estudios';
+import { getPermisosPrograma } from '@/lib/permisos-plan-estudios';
+
+// ── Constantes ────────────────────────────────────────────────────────────────
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
+const TOTAL_SECCIONES = 6;
 
 const NAV_INTERNA = [
-  { label: 'Malla Curricular', href: '/plan-estudios/malla-curricular' },
-  { label: 'Ficha de Asignatura', href: '/plan-estudios/ficha-asignatura' },
-  { label: 'Programas de Asignatura', href: '/plan-estudios/programas-asignatura' },
-  { label: 'Datos del Plan', href: '/plan-estudios/datos-plan' },
+  { label: 'Carreras',                         href: '/plan-estudios/carreras' },
+  { label: 'Programas de Asignatura',          href: '/plan-estudios/programas-asignatura' },
+  { label: 'Información de Planes de Estudio', href: '/plan-estudios/informacion-planes' },
 ];
 
+// ── Tipos ─────────────────────────────────────────────────────────────────────
+
+interface Carrera { id: string; nombre: string }
+interface Plan    { id: string; nombre: string; anio?: number; version?: string; estado: string }
+
+interface MateriaResumen {
+  id: string; codigo: string; nombre: string;
+  anio?: number; cuatrimestre?: number; estado: string;
+  // Datos Generales + S1
+  bloqueConocimiento?: string | null;
+  modalidadDictado?: string | null;
+  // Carga Horaria
+  cargaHorariaSemanal?: number | null;
+  cargaHorariaTotal?: number | null;
+  creditos?: number | null;
+  regimenCursado?: string | null;
+}
+
+interface ProgramaResumen {
+  estadoS1: string; estadoS2: string; estadoS3: string;
+  estadoS4: string; estadoS5: string; estadoS6: string;
+  estadoPrograma: string;
+}
+
+const ESTADO_PROG_BADGE: Record<string, { label: string; cls: string }> = {
+  PENDIENTE:   { label: 'Pendiente',   cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+  EN_REVISION: { label: 'En revisión', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  APROBADO:    { label: 'Aprobado',    cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+};
+
+type EstadoLabel = 'Sin iniciar' | 'En proceso' | 'Completo';
+
+interface MateriaConPrograma extends MateriaResumen {
+  programa: ProgramaResumen | null;
+  avancePct: number;       // avance del Programa de Asignatura (S1–S6)
+  estadoLabel: EstadoLabel;
+  estadoPrograma: string;  // estado formal del programa (PENDIENTE / EN_REVISION / APROBADO)
+  avanceGlobal: number;    // promedio de las 4 solapas (Datos Gen. + Corr. + Carga H. + Programa)
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Calcula el avance de las 6 secciones del Programa de Asignatura usando
+// los estados almacenados en BD (estadoS1–estadoS6), que son la fuente de
+// verdad compartida con la ficha individual.
+function calcAvance(prog: ProgramaResumen | null): { pct: number; label: EstadoLabel } {
+  const estados = [
+    prog?.estadoS1 ?? 'PENDIENTE',
+    prog?.estadoS2 ?? 'PENDIENTE',
+    prog?.estadoS3 ?? 'PENDIENTE',
+    prog?.estadoS4 ?? 'PENDIENTE',
+    prog?.estadoS5 ?? 'PENDIENTE',
+    prog?.estadoS6 ?? 'PENDIENTE',
+  ];
+  const n   = estados.filter(s => s === 'COMPLETO').length;
+  const pct = Math.round((n / TOTAL_SECCIONES) * 100);
+  return { pct, label: pct === 0 ? 'Sin iniciar' : pct === 100 ? 'Completo' : 'En proceso' };
+}
+
+// Avance global de la asignatura = promedio de las 4 solapas del plan de estudios.
+//
+// Tab 1 — Datos Generales : % de 4 campos clave completados
+//           (bloqueConocimiento, modalidadDictado, anio, cuatrimestre)
+// Tab 2 — Correlatividades: 100% si tiene al menos una correlativa cargada,
+//           o si es 1° año (sin requisitos previos esperados),
+//           o si el año no está asignado (no se puede determinar).
+//           0% si es 2°+ año y aún no tiene correlativas.
+// Tab 3 — Carga Horaria  : % de 4 campos clave completados
+//           (cargaHorariaSemanal, cargaHorariaTotal, creditos, regimenCursado)
+// Tab 4 — Programa        : avance S1–S6 calculado por calcAvance()
+function calcAvanceGlobal(
+  m: MateriaResumen,
+  prog: ProgramaResumen | null,
+  correlativasCount: number,
+): number {
+  // Tab 1: Datos Generales
+  const dgPct = (
+    [m.bloqueConocimiento, m.modalidadDictado, m.anio, m.cuatrimestre]
+      .filter(v => v != null && v !== '').length / 4
+  ) * 100;
+
+  // Tab 2: Correlatividades
+  const corrPct = (correlativasCount > 0 || m.anio === 1 || m.anio == null) ? 100 : 0;
+
+  // Tab 3: Carga Horaria
+  const chPct = (
+    [
+      (m.cargaHorariaSemanal ?? 0) > 0 ? 1 : 0,
+      (m.cargaHorariaTotal   ?? 0) > 0 ? 1 : 0,
+      (m.creditos            ?? 0) > 0 ? 1 : 0,
+      m.regimenCursado               ? 1 : 0,
+    ].reduce((a, b) => a + b, 0) / 4
+  ) * 100;
+
+  // Tab 4: Programa de Asignatura
+  const { pct: progPct } = calcAvance(prog);
+
+  return Math.round((dgPct + corrPct + chPct + progPct) / 4);
+}
+
+const IcSpinner = () => (
+  <div className="w-5 h-5 rounded-full border-2 border-slate-200 border-t-[#0f4c81] animate-spin" />
+);
+
+// ── Página ────────────────────────────────────────────────────────────────────
+
 export default function ProgramasAsignaturaPage() {
-  const pathname = usePathname();
-  const { usuario } = useAuth();
-  const permisos = getPermisosPlanEstudio(usuario?.rol?.nombre ?? '');
+  const pathname  = usePathname();
+  const router    = useRouter();
+  const { usuario, token, obtenerTokenActual, logout } = useAuth();
+
+  const permisosPrograma = getPermisosPrograma(usuario?.rol?.nombre ?? '');
+  const puedeCompletar   = permisosPrograma.editar;
+
+  const [carreras,        setCarreras]        = useState<Carrera[]>([]);
+  const [planes,          setPlanes]          = useState<Plan[]>([]);
+  const [materias,        setMaterias]        = useState<MateriaConPrograma[]>([]);
+  const [carreraId,       setCarreraId]       = useState('');
+  const [planId,          setPlanId]          = useState('');
+  const [filtroCodigo,    setFiltroCodigo]    = useState('');
+  const [filtroNombre,    setFiltroNombre]    = useState('');
+  const [filtroEstado,    setFiltroEstado]    = useState<EstadoLabel | ''>('');
+  const [cargando,        setCargando]        = useState(false);
+  const [cargandoPlanes,  setCargandoPlanes]  = useState(false);
+  const [reloadKey,       setReloadKey]       = useState(0);
+  const planIdRef = useRef(planId);
+
+  // ── API helper ─────────────────────────────────────────────────────────────
+
+  async function apiFetch(url: string, opts?: RequestInit) {
+    const tok = obtenerTokenActual();
+    const res = await fetch(url, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${tok}`,
+        ...(opts?.headers ?? {}),
+      },
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) logout();
+      throw new Error(data?.message ?? 'Error en la solicitud');
+    }
+    return data;
+  }
+
+  // ── Efectos de carga ───────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!token) return;
+    apiFetch(`${API_URL}/plan-estudios/carreras`).then(setCarreras).catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
+    if (!carreraId) { setPlanes([]); setPlanId(''); setMaterias([]); return; }
+    setCargandoPlanes(true);
+    apiFetch(`${API_URL}/plan-estudios?carreraId=${carreraId}`)
+      .then(setPlanes).catch(() => {}).finally(() => setCargandoPlanes(false));
+    setPlanId('');
+    setMaterias([]);
+  }, [carreraId]);
+
+  // Mantener ref sincronizada para usarla en el handler de visibilitychange
+  useEffect(() => { planIdRef.current = planId; }, [planId]);
+
+  // Resetear filtros cuando cambia el plan (no al recargar por visibilidad)
+  useEffect(() => {
+    setFiltroCodigo('');
+    setFiltroNombre('');
+    setFiltroEstado('');
+  }, [planId]);
+
+  // Cargar datos: dispara cuando cambia el plan O cuando se solicita recarga
+  useEffect(() => {
+    if (!planId) { setMaterias([]); return; }
+    setCargando(true);
+    apiFetch(`${API_URL}/materias?planEstudioId=${planId}`)
+      .then(async (mats: MateriaResumen[]) => {
+        const [progResults, corrResults] = await Promise.all([
+          Promise.allSettled(mats.map(m => apiFetch(`${API_URL}/programas/materia/${m.id}`))),
+          Promise.allSettled(mats.map(m => apiFetch(`${API_URL}/materias/${m.id}/correlativas`))),
+        ]);
+
+        const enriched: MateriaConPrograma[] = mats.map((m, i) => {
+          const prog: ProgramaResumen | null =
+            progResults[i].status === 'fulfilled'
+              ? (progResults[i] as PromiseFulfilledResult<ProgramaResumen>).value
+              : null;
+          const corrCount: number =
+            corrResults[i].status === 'fulfilled'
+              ? ((corrResults[i] as PromiseFulfilledResult<unknown[]>).value?.length ?? 0)
+              : 0;
+          const { pct, label } = calcAvance(prog);
+          const avanceGlobal   = calcAvanceGlobal(m, prog, corrCount);
+          const estadoPrograma = prog?.estadoPrograma ?? 'PENDIENTE';
+          return { ...m, programa: prog, avancePct: pct, estadoLabel: label, estadoPrograma, avanceGlobal };
+        });
+        setMaterias(enriched);
+      })
+      .catch(() => setMaterias([]))
+      .finally(() => setCargando(false));
+  }, [planId, reloadKey]);
+
+  // Recargar cuando el documento vuelve a ser visible (volver de otra solapa/ficha)
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === 'visible' && planIdRef.current) {
+        setReloadKey(k => k + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, []);
+
+  // ── Datos derivados ────────────────────────────────────────────────────────
+
+  const filtradas = useMemo(() => {
+    const cod = filtroCodigo.trim().toLowerCase();
+    const nom = filtroNombre.trim().toLowerCase();
+    return materias.filter(m =>
+      (!cod || m.codigo.toLowerCase().includes(cod)) &&
+      (!nom || m.nombre.toLowerCase().includes(nom)) &&
+      (!filtroEstado || m.estadoLabel === filtroEstado)
+    );
+  }, [materias, filtroCodigo, filtroNombre, filtroEstado]);
+
+  const selectCls = 'w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed';
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="max-w-6xl">
@@ -36,19 +267,19 @@ export default function ProgramasAsignaturaPage() {
         </p>
         <h1 className="text-xl font-bold text-slate-800">Programas de Asignatura</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Contenidos, objetivos, bibliografía y metodología de evaluación por asignatura.
+          Estado de completitud de los programas analíticos por carrera y plan de estudio.
         </p>
       </div>
 
       {/* Navegación interna */}
       <div className="flex gap-1 mb-6 border-b border-slate-200 overflow-x-auto">
-        {NAV_INTERNA.map((item) => (
+        {NAV_INTERNA.map(item => (
           <Link
             key={item.href}
             href={item.href}
             className={`px-4 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors ${
               pathname === item.href
-                ? 'border-[#f26b22] text-[#f26b22]'
+                ? 'border-[#0f4c81] text-[#0f4c81]'
                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
             }`}
           >
@@ -57,51 +288,242 @@ export default function ProgramasAsignaturaPage() {
         ))}
       </div>
 
-      {/* Acciones */}
-      {permisos.gestionarContenido && (
-        <div className="flex items-center gap-2 mb-5">
-          <button
-            disabled
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#f26b22] text-white text-xs font-medium opacity-50 cursor-not-allowed"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            Nuevo Programa
-          </button>
-          {permisos.exportar && (
-            <button
-              disabled
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-medium opacity-50 cursor-not-allowed"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Exportar PDF
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Contenido vacío */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-        <div className="p-8 sm:p-12 flex flex-col items-center justify-center text-center">
-          <div className="w-14 h-14 rounded-2xl bg-[#f26b22]/8 flex items-center justify-center mb-4">
-            <svg className="w-7 h-7 text-[#f26b22]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
+      {/* Selectores */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1">
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
+              Carrera
+            </label>
+            <select value={carreraId} onChange={e => setCarreraId(e.target.value)} className={selectCls}>
+              <option value="">-- Seleccionar carrera --</option>
+              {carreras.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            </select>
           </div>
-          <h3 className="text-sm font-semibold text-slate-700 mb-1">Programas de Asignatura</h3>
-          <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
-            Aquí se cargarán y consultarán los programas analíticos de cada asignatura:
-            unidades temáticas, objetivos, bibliografía y metodología de evaluación.
-            Esta sección está en desarrollo.
-          </p>
-          <div className="mt-4 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200">
-            <span className="text-[11px] font-medium text-amber-700">En desarrollo · Próxima versión</span>
+          <div className="flex-1">
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
+              Plan de Estudio
+            </label>
+            <select
+              value={planId}
+              onChange={e => setPlanId(e.target.value)}
+              disabled={!carreraId || cargandoPlanes}
+              className={selectCls}
+            >
+              <option value="">-- Seleccionar plan --</option>
+              {planes.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}{p.anio ? ` (${p.anio})` : ''}{p.version ? ` v${p.version}` : ''}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
+
+      {/* Estado vacío */}
+      {!planId && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-10 text-center">
+          <div className="w-10 h-10 rounded-xl bg-[#0f4c81]/8 flex items-center justify-center mx-auto mb-3">
+            <svg className="w-5 h-5 text-[#0f4c81]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+          </div>
+          <p className="text-sm font-medium text-slate-600 mb-1">Seleccioná una carrera y un plan</p>
+          <p className="text-xs text-slate-400 max-w-xs mx-auto">
+            Para ver el estado de los programas, elegí la carrera y el plan de estudio.
+          </p>
+        </div>
+      )}
+
+      {/* Contenido principal */}
+      {planId && (
+        <>
+          {/* Filtros */}
+          <div className="flex flex-col sm:flex-row gap-2 mb-4">
+            <input
+              value={filtroCodigo}
+              onChange={e => setFiltroCodigo(e.target.value)}
+              placeholder="Filtrar por código..."
+              className="w-full sm:w-40 text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]"
+            />
+            <input
+              value={filtroNombre}
+              onChange={e => setFiltroNombre(e.target.value)}
+              placeholder="Filtrar por asignatura..."
+              className="flex-1 text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]"
+            />
+            <select
+              value={filtroEstado}
+              onChange={e => setFiltroEstado(e.target.value as EstadoLabel | '')}
+              className="w-full sm:w-40 text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]"
+            >
+              <option value="">Todos los estados</option>
+              <option value="Sin iniciar">Sin iniciar</option>
+              <option value="En proceso">En proceso</option>
+              <option value="Completo">Completo</option>
+            </select>
+            <span className="text-xs text-slate-400 self-center whitespace-nowrap">
+              {filtradas.length} resultado{filtradas.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          {/* Grilla */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            {cargando ? (
+              <div className="flex items-center justify-center gap-3 py-14">
+                <IcSpinner />
+                <span className="text-sm text-slate-500">Cargando programas...</span>
+              </div>
+            ) : filtradas.length === 0 ? (
+              <div className="p-8 text-center text-sm text-slate-400">
+                {materias.length === 0
+                  ? 'Este plan no tiene asignaturas registradas.'
+                  : 'No hay resultados para los filtros aplicados.'}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-100">
+                      <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-28">Código</th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide">Asignatura</th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-16">Año</th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-28">Completitud</th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-32">Aprobación</th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-48">Avance</th>
+                      <th className="px-4 py-3 w-44 text-right font-semibold text-slate-500 uppercase tracking-wide">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {filtradas.map(m => (
+                      <FilaPrograma
+                        key={m.id}
+                        materia={m}
+                        puedeCompletar={puedeCompletar}
+                        router={router}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+// ── Fila de la grilla ─────────────────────────────────────────────────────────
+
+function FilaPrograma({
+  materia, puedeCompletar, router,
+}: {
+  materia: MateriaConPrograma;
+  puedeCompletar: boolean;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const { avancePct, estadoLabel, estadoPrograma } = materia;
+
+  const estadoCls =
+    estadoLabel === 'Completo'  ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+    estadoLabel === 'En proceso'? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                  'bg-slate-100 text-slate-500 border-slate-200';
+
+  const aprobCfg = ESTADO_PROG_BADGE[estadoPrograma] ?? ESTADO_PROG_BADGE.PENDIENTE;
+
+  const barCls =
+    avancePct === 100 ? 'bg-emerald-500' :
+    avancePct > 0     ? 'bg-amber-400'   : 'bg-slate-200';
+
+  const pctColor =
+    avancePct === 100 ? '#10b981' :
+    avancePct > 0     ? '#f59e0b' : '#94a3b8';
+
+  const fichaUrl = `/plan-estudios/ficha-asignatura?id=${materia.id}&tab=programa`;
+
+  return (
+    <tr className="hover:bg-slate-50/50 transition-colors">
+
+      {/* Código */}
+      <td className="px-4 py-3">
+        <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10 whitespace-nowrap">
+          {materia.codigo}
+        </span>
+      </td>
+
+      {/* Asignatura */}
+      <td className="px-4 py-3">
+        <p className="text-xs font-semibold text-slate-800 leading-tight">{materia.nombre}</p>
+        {materia.cuatrimestre != null && (
+          <p className="text-[10px] text-slate-400 mt-0.5">
+            {materia.cuatrimestre === 0 ? 'Anual' : `${materia.cuatrimestre}° Cuatrimestre`}
+          </p>
+        )}
+      </td>
+
+      {/* Año */}
+      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
+        {materia.anio ? `${materia.anio}°` : '—'}
+      </td>
+
+      {/* Completitud */}
+      <td className="px-4 py-3">
+        <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${estadoCls}`}>
+          {estadoLabel}
+        </span>
+      </td>
+
+      {/* Aprobación */}
+      <td className="px-4 py-3">
+        <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${aprobCfg.cls}`}>
+          {aprobCfg.label}
+        </span>
+      </td>
+
+      {/* Avance */}
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden min-w-[5rem]">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${barCls}`}
+              style={{ width: `${avancePct}%` }}
+            />
+          </div>
+          <span
+            className="text-[11px] font-semibold tabular-nums w-9 text-right"
+            style={{ color: pctColor }}
+          >
+            {avancePct}%
+          </span>
+        </div>
+      </td>
+
+      {/* Acciones */}
+      <td className="px-4 py-3 text-right">
+        <div className="flex items-center justify-end gap-2 flex-wrap">
+          {avancePct === 100 && estadoPrograma === 'APROBADO' && (
+            <span className="inline-block text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+              ✓ Aprobado
+            </span>
+          )}
+          {puedeCompletar && !(avancePct === 100 && estadoPrograma === 'APROBADO') && (
+            <button
+              onClick={() => router.push(fichaUrl)}
+              className="text-[11px] font-semibold bg-[#0f4c81] text-white px-3 py-1 rounded-lg hover:bg-[#0d3e6b] transition-colors whitespace-nowrap"
+            >
+              Completar →
+            </button>
+          )}
+          <button
+            onClick={() => router.push(`${fichaUrl}&modo=ver`)}
+            className="text-[11px] font-semibold border border-slate-200 text-slate-600 px-3 py-1 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap"
+          >
+            Ver
+          </button>
+        </div>
+      </td>
+    </tr>
   );
 }

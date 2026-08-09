@@ -9,8 +9,11 @@ import {
   Query,
   UseGuards,
   UsePipes,
-  ValidationPipe
+  ValidationPipe,
+  StreamableFile,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -43,6 +46,14 @@ const ROLES_EDITAR = [
 
 const ROLES_ADMIN = ['ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA'] as const;
 
+const ROLES_EXPORTAR = [
+  'ADMINISTRADOR_SISTEMA',
+  'SECRETARIA_ACADEMICA',
+  'DIRECTOR_CARRERA',
+  'DECANO',
+  'RECTORADO',
+] as const;
+
 @Controller('plan-estudios')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
@@ -65,6 +76,50 @@ export class PlanesEstudioController {
   @Roles(...ROLES_VER)
   obtenerTodos(@Query('carreraId') carreraId?: string) {
     return this.planesEstudioService.obtenerTodos(carreraId);
+  }
+
+  @Get('exportar/excel')
+  @Roles(...ROLES_EXPORTAR)
+  async exportarExcel(
+    @Query('carreraId') carreraId: string,
+    @Query('planId') planId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const fecha = new Date().toISOString().split('T')[0];
+    const buffer = await this.planesEstudioService.generarExcel(
+      carreraId || undefined,
+      planId || undefined,
+    );
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="informacion_planes_estudio_${fecha}.xlsx"`,
+    });
+    return new StreamableFile(buffer);
+  }
+
+  @Get('exportar/pdf')
+  @Roles(...ROLES_EXPORTAR)
+  async exportarPdf(
+    @Query('carreraId') carreraId: string,
+    @Query('planId') planId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const fecha = new Date().toISOString().split('T')[0];
+    const buffer = await this.planesEstudioService.generarPdf(
+      carreraId || undefined,
+      planId || undefined,
+    );
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="informacion_planes_estudio_${fecha}.pdf"`,
+    });
+    return new StreamableFile(buffer);
+  }
+
+  @Get(':id/estadisticas')
+  @Roles(...ROLES_VER)
+  obtenerEstadisticas(@Param('id') id: string) {
+    return this.planesEstudioService.obtenerEstadisticas(id);
   }
 
   @Get(':id')

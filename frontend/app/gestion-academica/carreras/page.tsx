@@ -25,7 +25,7 @@ const FORM_VACIO = {
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
-interface Facultad { id: string; nombre: string; codigo?: string }
+interface Facultad { id: string; nombre: string; codigo?: string; estado?: string }
 interface Carrera {
   id: string;
   codigo?: string;
@@ -146,6 +146,11 @@ export default function CarrerasPage() {
     activas: carreras.filter(c => c.estado === 'ACTIVO').length,
     inactivas: carreras.filter(c => c.estado === 'INACTIVO').length,
   }), [carreras]);
+
+  const facultadFiltroActual = filtroFacultad
+    ? facultades.find(f => f.id === filtroFacultad)
+    : null;
+  const filtrandoFacInactiva = facultadFiltroActual?.estado === 'INACTIVO';
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   function abrirCrear() {
@@ -288,7 +293,11 @@ export default function CarrerasPage() {
         <select value={filtroFacultad} onChange={e => setFiltroFacultad(e.target.value)}
           className="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]">
           <option value="">Todas las facultades</option>
-          {facultades.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}
+          {facultades.map(f => (
+            <option key={f.id} value={f.id}>
+              {f.nombre}{f.estado === 'INACTIVO' ? ' (Inactiva)' : ''}
+            </option>
+          ))}
         </select>
         <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}
           className="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]">
@@ -297,8 +306,16 @@ export default function CarrerasPage() {
           <option value="INACTIVO">Inactivas</option>
         </select>
         {permisos.crear && (
-          <button onClick={abrirCrear}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#0f4c81] text-white text-xs font-semibold hover:bg-[#0d3e6b] transition-colors whitespace-nowrap">
+          <button
+            onClick={filtrandoFacInactiva ? undefined : abrirCrear}
+            disabled={filtrandoFacInactiva}
+            title={filtrandoFacInactiva ? 'La Facultad está inactiva. Activala para crear carreras.' : undefined}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+              filtrandoFacInactiva
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                : 'bg-[#0f4c81] text-white hover:bg-[#0d3e6b]'
+            }`}
+          >
             <IcPlus />
             Nueva Carrera
           </button>
@@ -307,6 +324,20 @@ export default function CarrerasPage() {
 
       {(buscar || filtroFacultad || filtroEstado) && (
         <p className="text-xs text-slate-400 mb-3">{filtradas.length} resultado{filtradas.length !== 1 ? 's' : ''} de {carreras.length}</p>
+      )}
+
+      {/* Aviso facultad inactiva */}
+      {filtrandoFacInactiva && (
+        <div className="mb-4 flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+          <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          <span>
+            <span className="font-semibold">La Facultad se encuentra inactiva.</span>{' '}
+            Debe activarla para cargar Carreras o Planes de Estudio.
+            Las carreras existentes pueden consultarse pero no pueden trasladarse a esta Facultad.
+          </span>
+        </div>
       )}
 
       {/* Error */}
@@ -359,8 +390,13 @@ export default function CarrerasPage() {
                       <p className="text-[11px] text-slate-400 mt-0.5">{c.tituloOtorgado}</p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-slate-500 hidden md:table-cell">
-                    {c.facultad?.nombre ?? '—'}
+                  <td className="px-4 py-3 hidden md:table-cell">
+                    <span className="text-slate-500">{c.facultad?.nombre ?? '—'}</span>
+                    {c.facultad?.estado === 'INACTIVO' && (
+                      <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200 whitespace-nowrap">
+                        Inactiva
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 hidden lg:table-cell">
                     {c.modalidad ? (
@@ -442,7 +478,7 @@ export default function CarrerasPage() {
                 <select value={form.facultadId} onChange={e => setF('facultadId', e.target.value)}
                   className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]">
                   <option value="">-- Seleccionar facultad --</option>
-                  {facultades.filter(f => (f as any).estado !== 'INACTIVO').map(f => (
+                  {facultades.filter(f => f.estado !== 'INACTIVO').map(f => (
                     <option key={f.id} value={f.id}>{f.nombre}</option>
                   ))}
                 </select>

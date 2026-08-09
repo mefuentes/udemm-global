@@ -6,10 +6,9 @@ import { useAuth } from '@/lib/auth-context';
 import { getPermisosPlanEstudio } from '@/lib/permisos-plan-estudios';
 
 const NAV_INTERNA = [
-  { label: 'Malla Curricular', href: '/plan-estudios/malla-curricular' },
-  { label: 'Ficha de Asignatura', href: '/plan-estudios/ficha-asignatura' },
-  { label: 'Programas de Asignatura', href: '/plan-estudios/programas-asignatura' },
-  { label: 'Datos del Plan', href: '/plan-estudios/datos-plan' },
+  { label: 'Carreras',                         href: '/plan-estudios/carreras' },
+  { label: 'Programas de Asignatura',          href: '/plan-estudios/programas-asignatura' },
+  { label: 'Información de Planes de Estudio', href: '/plan-estudios/informacion-planes' },
 ];
 
 const CAMPOS_PLAN = [

@@ -1,4 +1,4 @@
-import { IsDateString, IsIn, IsInt, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsInt, IsOptional, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ActualizarProgramaDto {
@@ -6,11 +6,23 @@ export class ActualizarProgramaDto {
   @IsOptional() @IsString() equipoDocente?: string;
   @IsOptional() @IsString() elaboradoPor?: string;
   @IsOptional() @IsInt() @Type(() => Number) anioVigencia?: number;
+  @IsOptional() @IsString() objetivosGenerales?: string;
+  @IsOptional() @IsString() aportesPerfilTitulo?: string;
+  @IsOptional() @IsString() recomendacionesCursado?: string;
 
   // S2
+  @IsOptional() @IsString() competenciasResultadosJson?: string;
+  @IsOptional() @IsString() contenidosGridJson?: string;
+
+  // S3
+  @IsOptional() @IsString() unidadesDidacticasJson?: string;
+
+  // S4
+  @IsOptional() @IsString() formacionPracticaJson?: string;
+
+  // S2 (legacy)
   @IsOptional() @IsString() fundamentacion?: string;
   @IsOptional() @IsString() propositos?: string;
-  @IsOptional() @IsString() objetivosGenerales?: string;
   @IsOptional() @IsString() objetivosEspecificos?: string;
 
   // S3
@@ -41,20 +53,14 @@ export class ActualizarProgramaDto {
   @IsOptional() @IsString() competenciasVinculadas?: string;
   @IsOptional() @IsString() fechaUltimaActualizacion?: string;
   @IsOptional() @IsString() observacionesGestion?: string;
-  @IsOptional() @IsIn(['BORRADOR', 'EN_REVISION', 'APROBADO']) estadoPrograma?: string;
+  // estadoPrograma es calculado automáticamente por el servicio; no se acepta desde el cliente
   @IsOptional() @IsDateString() fechaAprobacion?: string;
   @IsOptional() @IsString() resolucionAprobacion?: string;
   @IsOptional() @IsString() observacionesGenerales?: string;
   @IsOptional() @IsInt() @Type(() => Number) vigenciaDesde?: number;
   @IsOptional() @IsInt() @Type(() => Number) vigenciaHasta?: number;
 
-  // Estado de sección
-  @IsOptional() @IsIn(['PENDIENTE', 'COMPLETO']) estadoS1?: string;
-  @IsOptional() @IsIn(['PENDIENTE', 'COMPLETO']) estadoS2?: string;
-  @IsOptional() @IsIn(['PENDIENTE', 'COMPLETO']) estadoS3?: string;
-  @IsOptional() @IsIn(['PENDIENTE', 'COMPLETO']) estadoS4?: string;
-  @IsOptional() @IsIn(['PENDIENTE', 'COMPLETO']) estadoS5?: string;
-  @IsOptional() @IsIn(['PENDIENTE', 'COMPLETO']) estadoS6?: string;
+  // estadoS1–S6: calculados por el servicio desde los campos; no se aceptan del cliente
 
   // Meta (no se persiste)
   @IsOptional() @IsString() seccionModificada?: string;

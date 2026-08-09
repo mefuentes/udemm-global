@@ -94,7 +94,7 @@ export function getPermisosPlanEstudio(rolNombre: string): PermisosPlanEstudio {
       return {
         ver: true,
         crear: false,
-        editar: false,
+        editar: true,
         eliminar: false,
         exportar: false,
         gestionarContenido: false

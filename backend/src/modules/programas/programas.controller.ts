@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Patch, Body, Param, Req,
+  Controller, Get, Patch, Post, Body, Param, Req,
   UseGuards, UsePipes, ValidationPipe
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -15,6 +15,10 @@ const ROLES_VER = [
 
 const ROLES_EDITAR = [
   'ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA', 'DIRECTOR_CARRERA', 'ADMINISTRATIVO', 'DOCENTE'
+] as const;
+
+const ROLES_APROBAR = [
+  'ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA', 'DIRECTOR_CARRERA'
 ] as const;
 
 @Controller('programas')
@@ -37,5 +41,14 @@ export class ProgramasController {
     @Req() req: any
   ) {
     return this.programasService.actualizarPrograma(materiaId, dto, req.user.id);
+  }
+
+  @Post('materia/:materiaId/aprobar')
+  @Roles(...ROLES_APROBAR)
+  aprobarPrograma(
+    @Param('materiaId') materiaId: string,
+    @Req() req: any
+  ) {
+    return this.programasService.aprobarPrograma(materiaId, req.user.id);
   }
 }

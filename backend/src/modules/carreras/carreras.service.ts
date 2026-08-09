@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, UnprocessableEntityException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CrearCarreraDto } from './dto/crear-carrera.dto';
 import { ActualizarCarreraDto } from './dto/actualizar-carrera.dto';
@@ -21,7 +21,7 @@ export class CarrerasService {
         } : {})
       },
       include: {
-        facultad: { select: { id: true, nombre: true, codigo: true } },
+        facultad: { select: { id: true, nombre: true, codigo: true, estado: true } },
         _count: { select: { planes: true } }
       },
       orderBy: [{ facultad: { nombre: 'asc' } }, { nombre: 'asc' }]
@@ -34,7 +34,7 @@ export class CarrerasService {
       include: {
         facultad: {
           select: {
-            id: true, nombre: true, codigo: true,
+            id: true, nombre: true, codigo: true, estado: true,
             universidad: { select: { id: true, nombre: true } }
           }
         },
@@ -56,6 +56,9 @@ export class CarrerasService {
     }
     const facultad = await this.prisma.facultad.findUnique({ where: { id: dto.facultadId } });
     if (!facultad) throw new NotFoundException(`Facultad ${dto.facultadId} no encontrada`);
+    if (facultad.estado === 'INACTIVO') {
+      throw new UnprocessableEntityException('No se puede realizar la operación porque la Facultad se encuentra inactiva.');
+    }
 
     return this.prisma.carrera.create({
       data: {
@@ -68,7 +71,7 @@ export class CarrerasService {
         estado: dto.estado ?? 'ACTIVO'
       },
       include: {
-        facultad: { select: { id: true, nombre: true, codigo: true } },
+        facultad: { select: { id: true, nombre: true, codigo: true, estado: true } },
         _count: { select: { planes: true } }
       }
     });
@@ -85,12 +88,15 @@ export class CarrerasService {
     if (dto.facultadId) {
       const facultad = await this.prisma.facultad.findUnique({ where: { id: dto.facultadId } });
       if (!facultad) throw new NotFoundException(`Facultad ${dto.facultadId} no encontrada`);
+      if (facultad.estado === 'INACTIVO') {
+        throw new UnprocessableEntityException('No se puede realizar la operación porque la Facultad se encuentra inactiva.');
+      }
     }
     return this.prisma.carrera.update({
       where: { id },
       data: dto,
       include: {
-        facultad: { select: { id: true, nombre: true, codigo: true } },
+        facultad: { select: { id: true, nombre: true, codigo: true, estado: true } },
         _count: { select: { planes: true } }
       }
     });

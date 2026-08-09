@@ -142,9 +142,28 @@ export class MateriasService {
 
   async actualizar(id: string, dto: ActualizarMateriaDto, usuarioId: string) {
     const antes = await this.obtenerPorId(id);
+
+    // Construir objeto plano para evitar problemas con instancias de clase y Prisma
+    const data: Record<string, unknown> = {};
+    if (dto.codigo            !== undefined) data.codigo            = dto.codigo;
+    if (dto.nombre            !== undefined) data.nombre            = dto.nombre;
+    if (dto.descripcion       !== undefined) data.descripcion       = dto.descripcion;
+    if (dto.tipoAsignatura    !== undefined) data.tipoAsignatura    = dto.tipoAsignatura;
+    if (dto.modalidadDictado  !== undefined) data.modalidadDictado  = dto.modalidadDictado;
+    if (dto.bloqueConocimiento!== undefined) data.bloqueConocimiento= dto.bloqueConocimiento;
+    if (dto.regimenCursado    !== undefined) data.regimenCursado    = dto.regimenCursado;
+    if (dto.estado            !== undefined) data.estado            = dto.estado;
+    if (dto.observaciones     !== undefined) data.observaciones     = dto.observaciones;
+    if (dto.anio              !== undefined) data.anio              = dto.anio;
+    if (dto.cuatrimestre      !== undefined) data.cuatrimestre      = dto.cuatrimestre;
+    if (dto.cargaHorariaSemanal !== undefined) data.cargaHorariaSemanal = dto.cargaHorariaSemanal;
+    if (dto.cargaHorariaTotal !== undefined) data.cargaHorariaTotal = dto.cargaHorariaTotal;
+    // creditos no es nullable en el schema — nunca pasar null
+    if (dto.creditos !== undefined) data.creditos = dto.creditos ?? 0;
+
     const materia = await this.prisma.materia.update({
       where: { id },
-      data: dto
+      data
     });
     const descripcion = buildDiff(
       antes as unknown as Record<string, unknown>,

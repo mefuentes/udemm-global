@@ -18,7 +18,6 @@ Sistema de gestión integral que permite administrar la información docente, co
 | ORM | Prisma |
 | Autenticación | JWT + Refresh Token |
 | Email | Nodemailer (SMTP) |
-| Contenedores | Docker + Docker Compose |
 
 ---
 

@@ -69,6 +69,8 @@ interface FormData {
   carreraFormacionDocenteJson: string;
   areaDisciplinar: string;
   subarea: string;
+  areaDisciplinarId: string;
+  subareaId: string;
   observacionesArea: string;
   actividadesPosgradoJson: string;
   trayectoriaCargosPasadosJson: string;
@@ -340,6 +342,34 @@ interface SituacionActualForm {
   disciplinaSubdisciplina: string;
 }
 
+interface AreaDisciplinarItem {
+  id: string;
+  nombre: string;
+}
+
+interface SubareaItem {
+  id: string;
+  nombre: string;
+  areaDisciplinarId: string;
+}
+
+interface VinculacionAprobada {
+  id: string;
+  estado: string;
+  horasSemana: number | null;
+  anioInicio: number | null;
+  fechaAprobacion: string | null;
+  facultad:    { nombre: string };
+  carrera:     { nombre: string };
+  planEstudio: { nombre: string; codigo?: string };
+  materia:     { nombre: string; codigo?: string };
+  catedra:     { nombre: string };
+  cargo:       { nombre: string };
+  modalidad:   { nombre: string };
+  designacion: { nombre: string };
+  aprobador?:  { nombre: string; apellido: string } | null;
+}
+
 interface ActividadPosgradoItem {
   id: string;
   carrerasPosgrado: string;
@@ -362,7 +392,9 @@ interface TrayectoriaCargoItem {
   institucion: string;
   unidadAcademica: string;
   cargo: string;
+  cargoId?: string;
   modalidad: string;
+  modalidadId?: string;
   dedicacionSem: string;
 }
 
@@ -372,7 +404,9 @@ interface TrayectoriaCargoForm {
   institucion: string;
   unidadAcademica: string;
   cargo: string;
+  cargoId: string;
   modalidad: string;
+  modalidadId: string;
   dedicacionSem: string;
 }
 
@@ -699,14 +733,20 @@ export default function MiFichaPage() {
   const [situacionActualErrors, setSituacionActualErrors] = useState<Partial<Record<keyof SituacionActualForm, string>>>({});
   const [editandoSituacionId, setEditandoSituacionId] = useState<string | null>(null);
   const [mostrarFormSituacionActual, setMostrarFormSituacionActual] = useState(false);
+  const [vinculacionesAprobadas, setVinculacionesAprobadas] = useState<VinculacionAprobada[]>([]);
+  const [loadingVinculaciones, setLoadingVinculaciones] = useState(false);
+  const [areasDisciplinares, setAreasDisciplinares] = useState<AreaDisciplinarItem[]>([]);
+  const [subareas, setSubareas] = useState<SubareaItem[]>([]);
   const [actividadesPosgrado, setActividadesPosgrado] = useState<ActividadPosgradoItem[]>([]);
   const [actividadPosgradoForm, setActividadPosgradoForm] = useState<ActividadPosgradoForm>({ carrerasPosgrado: '', actividadCurricular: '', plan: '', anioInicio: '' });
   const [actividadPosgradoErrors, setActividadPosgradoErrors] = useState<Partial<Record<keyof ActividadPosgradoForm, string>>>({});
   const [editandoActPosgradoId, setEditandoActPosgradoId] = useState<string | null>(null);
   const [mostrarFormActPosgrado, setMostrarFormActPosgrado] = useState(false);
   const [trayectoriaCargosPasados, setTrayectoriaCargosPasados] = useState<TrayectoriaCargoItem[]>([]);
-  const [trayectoriaCargoForm, setTrayectoriaCargoForm] = useState<TrayectoriaCargoForm>({ periodoDesde: '', periodoHasta: '', institucion: '', unidadAcademica: '', cargo: '', modalidad: '', dedicacionSem: '' });
+  const [trayectoriaCargoForm, setTrayectoriaCargoForm] = useState<TrayectoriaCargoForm>({ periodoDesde: '', periodoHasta: '', institucion: '', unidadAcademica: '', cargo: '', cargoId: '', modalidad: '', modalidadId: '', dedicacionSem: '' });
   const [trayectoriaCargoErrors, setTrayectoriaCargoErrors] = useState<Partial<Record<keyof TrayectoriaCargoForm, string>>>({});
+  const [cargosOpciones, setCargosOpciones] = useState<{ id: string; nombre: string }[]>([]);
+  const [modalidadesOpciones, setModalidadesOpciones] = useState<{ id: string; nombre: string }[]>([]);
   const [editandoTrayectoriaId, setEditandoTrayectoriaId] = useState<string | null>(null);
   const [mostrarFormTrayectoria, setMostrarFormTrayectoria] = useState(false);
   const [direccionTesisSummary, setDireccionTesisSummary] = useState<DireccionTesisSummary>({ ...TESIS_DEFAULTS });
@@ -773,12 +813,55 @@ export default function MiFichaPage() {
     return valor.includes('T') ? valor.split('T')[0] : valor;
   }
 
+  function formatFechaCorta(iso: string | null | undefined) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     setDocenteIdDesdeListado(params.get('docenteId'));
     setEsNuevoDocente(params.get('modo') === 'nuevo');
     setQueryReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!queryReady || esNuevoDocente || !usuario) return;
+    const token = obtenerTokenActual();
+    if (!token) return;
+    setLoadingVinculaciones(true);
+    const qp = new URLSearchParams({ estado: 'APROBADA' });
+    if (esVistaDesdeListado && docenteIdDesdeListado) qp.set('docenteId', docenteIdDesdeListado);
+    fetch(`${API_URL}/vinculaciones-catedra?${qp}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setVinculacionesAprobadas(Array.isArray(data) ? data : []))
+      .catch(() => setVinculacionesAprobadas([]))
+      .finally(() => setLoadingVinculaciones(false));
+  }, [queryReady, esNuevoDocente, usuario, docenteIdDesdeListado, esVistaDesdeListado]);
+
+  useEffect(() => {
+    const token = obtenerTokenActual();
+    if (!token) return;
+    const hdrs = { Authorization: `Bearer ${token}` };
+    fetch(`${API_URL}/configuracion/tablas-maestras/areas-disciplinares/activos`, { headers: hdrs })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setAreasDisciplinares(Array.isArray(d) ? d : []))
+      .catch(() => {});
+    fetch(`${API_URL}/configuracion/subareas/activos`, { headers: hdrs })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setSubareas(Array.isArray(d) ? d : []))
+      .catch(() => {});
+    fetch(`${API_URL}/configuracion/tablas-maestras/cargos/activos`, { headers: hdrs })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setCargosOpciones(Array.isArray(d) ? d : []))
+      .catch(() => {});
+    fetch(`${API_URL}/configuracion/tablas-maestras/modalidades/activos`, { headers: hdrs })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setModalidadesOpciones(Array.isArray(d) ? d : []))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -823,7 +906,7 @@ export default function MiFichaPage() {
         membresiasInstituciones: '',
         sistemaPromocion: '', categoriaPromocion: '', fechaAltaPromocion: '',
         registrosPromocionJson: '',
-        areaDisciplinar: 'Ingeniería', subarea: 'Ingeniería Industrial', observacionesArea: '',
+        areaDisciplinar: '', subarea: '', areaDisciplinarId: '', subareaId: '', observacionesArea: '',
         activo: true,
       });
       setEditMode(true);
@@ -959,8 +1042,10 @@ export default function MiFichaPage() {
         estanciasCursosExterior: data.estanciasCursosExterior ?? '',
         membresiasInstituciones: data.membresiasInstituciones ?? '',
         registrosPromocionJson: data.registrosPromocionJson ?? '',
-        areaDisciplinar: data.areaDisciplinar ?? 'Ingeniería',
-        subarea: data.subarea ?? 'Ingeniería Industrial',
+        areaDisciplinar: data.areaDisciplinar ?? '',
+        subarea: data.subarea ?? '',
+        areaDisciplinarId: data.areaDisciplinarId ?? '',
+        subareaId: data.subareaId ?? '',
         observacionesArea: data.observacionesArea ?? '',
         activo: data.activo ?? false
       });
@@ -1916,7 +2001,8 @@ export default function MiFichaPage() {
   function validarTrayectoriaCargo(): boolean {
     const errors: Partial<Record<keyof TrayectoriaCargoForm, string>> = {};
     if (!trayectoriaCargoForm.institucion.trim()) errors.institucion = 'Campo requerido';
-    if (!trayectoriaCargoForm.cargo.trim()) errors.cargo = 'Campo requerido';
+    // Aceptar cargoId (seleccionado de tablas maestras) o cargo texto (registros históricos sin ID)
+    if (!trayectoriaCargoForm.cargoId && !trayectoriaCargoForm.cargo.trim()) errors.cargo = 'Campo requerido';
     setTrayectoriaCargoErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -1927,7 +2013,7 @@ export default function MiFichaPage() {
   }
 
   function limpiarTrayectoriaCargoForm() {
-    setTrayectoriaCargoForm({ periodoDesde: '', periodoHasta: '', institucion: '', unidadAcademica: '', cargo: '', modalidad: '', dedicacionSem: '' });
+    setTrayectoriaCargoForm({ periodoDesde: '', periodoHasta: '', institucion: '', unidadAcademica: '', cargo: '', cargoId: '', modalidad: '', modalidadId: '', dedicacionSem: '' });
     setTrayectoriaCargoErrors({});
     setEditandoTrayectoriaId(null);
     setMostrarFormTrayectoria(false);
@@ -1951,7 +2037,9 @@ export default function MiFichaPage() {
     setTrayectoriaCargoForm({
       periodoDesde: item.periodoDesde, periodoHasta: item.periodoHasta,
       institucion: item.institucion, unidadAcademica: item.unidadAcademica,
-      cargo: item.cargo, modalidad: item.modalidad, dedicacionSem: item.dedicacionSem
+      cargo: item.cargo, cargoId: item.cargoId ?? '',
+      modalidad: item.modalidad, modalidadId: item.modalidadId ?? '',
+      dedicacionSem: item.dedicacionSem
     });
     setEditandoTrayectoriaId(item.id);
     setMostrarFormTrayectoria(true);
@@ -2325,8 +2413,8 @@ export default function MiFichaPage() {
         carreraFormacionDocenteJson: formData.carreraFormacionDocenteJson,
       };
       case 3: return {
-        areaDisciplinar: formData.areaDisciplinar,
-        subarea: formData.subarea,
+        areaDisciplinarId: formData.areaDisciplinarId || undefined,
+        subareaId: formData.subareaId || undefined,
         observacionesArea: formData.observacionesArea,
       };
       case 4: return {
@@ -2832,18 +2920,54 @@ export default function MiFichaPage() {
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs uppercase text-slate-500">Área Disciplinar</p>
                       {editMode ? (
-                        <select value={formData.areaDisciplinar} onChange={(e) => handleFieldChange('areaDisciplinar', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
-                          <option value="Ingeniería">Ingeniería</option>
+                        <select
+                          value={formData.areaDisciplinarId}
+                          onChange={(e) => {
+                            const newAreaId = e.target.value;
+                            handleFieldChange('areaDisciplinarId', newAreaId);
+                            const subareaActual = subareas.find(s => s.id === formData.subareaId);
+                            if (subareaActual && subareaActual.areaDisciplinarId !== newAreaId) {
+                              handleFieldChange('subareaId', '');
+                            }
+                          }}
+                          className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                        >
+                          <option value="">Seleccioná un área...</option>
+                          {areasDisciplinares.map(a => (
+                            <option key={a.id} value={a.id}>{a.nombre}</option>
+                          ))}
                         </select>
-                      ) : <p className="mt-1 text-sm">{formData.areaDisciplinar || '-'}</p>}
+                      ) : (
+                        <p className="mt-1 text-sm">
+                          {formData.areaDisciplinarId
+                            ? (areasDisciplinares.find(a => a.id === formData.areaDisciplinarId)?.nombre ?? formData.areaDisciplinar || '-')
+                            : (formData.areaDisciplinar || '-')}
+                        </p>
+                      )}
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs uppercase text-slate-500">Subárea</p>
                       {editMode ? (
-                        <select value={formData.subarea} onChange={(e) => handleFieldChange('subarea', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
-                          <option value="Ingeniería Industrial">Ingeniería Industrial</option>
+                        <select
+                          value={formData.subareaId}
+                          onChange={(e) => handleFieldChange('subareaId', e.target.value)}
+                          disabled={!formData.areaDisciplinarId}
+                          className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <option value="">{formData.areaDisciplinarId ? 'Seleccioná una subárea...' : 'Primero seleccioná un área'}</option>
+                          {subareas
+                            .filter(s => s.areaDisciplinarId === formData.areaDisciplinarId)
+                            .map(s => (
+                              <option key={s.id} value={s.id}>{s.nombre}</option>
+                            ))}
                         </select>
-                      ) : <p className="mt-1 text-sm">{formData.subarea || '-'}</p>}
+                      ) : (
+                        <p className="mt-1 text-sm">
+                          {formData.subareaId
+                            ? (subareas.find(s => s.id === formData.subareaId)?.nombre ?? formData.subarea || '-')
+                            : (formData.subarea || '-')}
+                        </p>
+                      )}
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
                       <p className="text-xs uppercase text-slate-500">Observaciones</p>
@@ -2858,109 +2982,64 @@ export default function MiFichaPage() {
 
             {activeTab === 4 && (
               <div className="space-y-6">
-                {editMode && mostrarFormSituacionActual && (
-                  <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-3">
-                    <p className="text-sm font-semibold text-slate-700">{editandoSituacionId ? 'Editar registro' : 'Nuevo registro'}</p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-                        <p className="text-xs uppercase text-slate-500">Carrera *</p>
-                        <input value={situacionActualForm.carrera} onChange={(e) => actualizarCampoSituacionActual('carrera', e.target.value)} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${situacionActualErrors.carrera ? 'border-red-400' : 'border-slate-200'} bg-white`} />
-                        {situacionActualErrors.carrera && <p className="mt-1 text-xs text-red-500">{situacionActualErrors.carrera}</p>}
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-                        <p className="text-xs uppercase text-slate-500">Asignatura *</p>
-                        <input value={situacionActualForm.asignatura} onChange={(e) => actualizarCampoSituacionActual('asignatura', e.target.value)} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${situacionActualErrors.asignatura ? 'border-red-400' : 'border-slate-200'} bg-white`} />
-                        {situacionActualErrors.asignatura && <p className="mt-1 text-xs text-red-500">{situacionActualErrors.asignatura}</p>}
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-                        <p className="text-xs uppercase text-slate-500">Plan</p>
-                        <input value={situacionActualForm.plan} onChange={(e) => actualizarCampoSituacionActual('plan', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-                        <p className="text-xs uppercase text-slate-500">Cátedra</p>
-                        <input value={situacionActualForm.catedra} onChange={(e) => actualizarCampoSituacionActual('catedra', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-                        <p className="text-xs uppercase text-slate-500">Año inicio</p>
-                        <input value={situacionActualForm.anioInicio} onChange={(e) => actualizarCampoSituacionActual('anioInicio', e.target.value.replace(/\D/g, '').slice(0, 4))} maxLength={4} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-                        <p className="text-xs uppercase text-slate-500">Cargo</p>
-                        <input value={situacionActualForm.cargo} onChange={(e) => actualizarCampoSituacionActual('cargo', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-                        <p className="text-xs uppercase text-slate-500">Modalidad</p>
-                        <input value={situacionActualForm.modalidad} onChange={(e) => actualizarCampoSituacionActual('modalidad', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-                        <p className="text-xs uppercase text-slate-500">Designación</p>
-                        <input value={situacionActualForm.designacion} onChange={(e) => actualizarCampoSituacionActual('designacion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-white p-2.5 sm:col-span-2">
-                        <p className="text-xs uppercase text-slate-500">Disciplina/Subdisciplina</p>
-                        <input value={situacionActualForm.disciplinaSubdisciplina} onChange={(e) => actualizarCampoSituacionActual('disciplinaSubdisciplina', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
-                      </div>
-                    </div>
-                    <div className="mt-3 flex gap-2">
-                      <button type="button" onClick={guardarSituacionActual} className="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white">
-                        {editandoSituacionId ? 'Actualizar' : 'Agregar'}
-                      </button>
-                      <button type="button" onClick={limpiarSituacionActualForm} className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600">Cancelar</button>
-                    </div>
-                  </div>
-                )}
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 mb-1">
                     <p className="text-sm font-semibold text-slate-700">4.1 Situación actual</p>
-                    {editMode && !mostrarFormSituacionActual && (
-                      <button type="button" onClick={() => { limpiarSituacionActualForm(); setMostrarFormSituacionActual(true); }} className="rounded-md bg-sky-600 px-3 py-1 text-xs font-medium text-white">+ Agregar</button>
-                    )}
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase tracking-wide">Completado automáticamente</span>
                   </div>
-                  <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                        <tr>
-                          <th className="px-3 py-2">Carrera</th>
-                          <th className="px-3 py-2">Asignatura</th>
-                          <th className="px-3 py-2">Plan</th>
-                          <th className="px-3 py-2">Cátedra</th>
-                          <th className="px-3 py-2">Año inicio</th>
-                          <th className="px-3 py-2">Cargo</th>
-                          <th className="px-3 py-2">Modalidad</th>
-                          <th className="px-3 py-2">Designación</th>
-                          <th className="px-3 py-2">Disc./Subdisc.</th>
-                          {editMode && <th className="px-3 py-2 text-right">Acciones</th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {situacionActual.length === 0 ? (
-                          <tr><td colSpan={editMode ? 10 : 9} className="px-3 py-3 text-slate-500">Sin registros cargados.</td></tr>
-                        ) : (
-                          situacionActual.map((item) => (
-                            <tr key={item.id} className="border-t border-slate-100">
-                              <td className="px-3 py-2">{item.carrera || '-'}</td>
-                              <td className="px-3 py-2">{item.asignatura || '-'}</td>
-                              <td className="px-3 py-2">{item.plan || '-'}</td>
-                              <td className="px-3 py-2">{item.catedra || '-'}</td>
-                              <td className="px-3 py-2">{item.anioInicio || '-'}</td>
-                              <td className="px-3 py-2">{item.cargo || '-'}</td>
-                              <td className="px-3 py-2">{item.modalidad || '-'}</td>
-                              <td className="px-3 py-2">{item.designacion || '-'}</td>
-                              <td className="px-3 py-2">{item.disciplinaSubdisciplina || '-'}</td>
-                              {editMode && (
-                                <td className="px-3 py-2 text-right">
-                                  <div className="inline-flex gap-1">
-                                    <button type="button" onClick={() => editarSituacionActual(item)} className="rounded-md border border-slate-200 p-1.5 text-slate-600" aria-label="Editar" title="Editar"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path d="M13.586 3.586a2 2 0 112.828 2.828l-8.12 8.12a2 2 0 01-.878.497l-3.11.889a.75.75 0 01-.927-.927l.889-3.11a2 2 0 01.497-.878l8.12-8.12z" /></svg></button>
-                                    <button type="button" onClick={() => eliminarSituacionActual(item.id)} className="rounded-md border border-red-200 p-1.5 text-red-500 hover:bg-red-50" aria-label="Eliminar" title="Eliminar"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" /></svg></button>
-                                  </div>
-                                </td>
-                              )}
+                  <p className="text-xs text-slate-400 mb-4">
+                    Se actualiza con las vinculaciones a cátedra aprobadas en la Bandeja de Aprobaciones. No admite edición manual.
+                  </p>
+                  {loadingVinculaciones ? (
+                    <div className="py-6 text-center text-xs text-slate-400">Cargando vinculaciones…</div>
+                  ) : vinculacionesAprobadas.length === 0 ? (
+                    <div className="py-8 text-center rounded-xl border border-slate-100 bg-slate-50">
+                      <svg className="mx-auto mb-2 h-8 w-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+                      </svg>
+                      <p className="text-sm font-medium text-slate-500">No posee vinculaciones a cátedra aprobadas.</p>
+                      <p className="mt-1 text-xs text-slate-400">Las vinculaciones aprobadas en la Bandeja de Aprobaciones se mostrarán aquí.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl border border-slate-200">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                          <tr>
+                            <th className="px-3 py-2 whitespace-nowrap">Facultad</th>
+                            <th className="px-3 py-2 whitespace-nowrap">Carrera</th>
+                            <th className="px-3 py-2 whitespace-nowrap">Plan</th>
+                            <th className="px-3 py-2 whitespace-nowrap">Asignatura</th>
+                            <th className="px-3 py-2 whitespace-nowrap">Cátedra</th>
+                            <th className="px-3 py-2 whitespace-nowrap">Cargo</th>
+                            <th className="px-3 py-2 whitespace-nowrap">Modalidad</th>
+                            <th className="px-3 py-2 whitespace-nowrap">Designación</th>
+                            <th className="px-3 py-2 whitespace-nowrap">H/SEM</th>
+                            <th className="px-3 py-2 whitespace-nowrap">Año inicio</th>
+                            <th className="px-3 py-2 whitespace-nowrap">Aprobada</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {vinculacionesAprobadas.map((v) => (
+                            <tr key={v.id} className="border-t border-slate-100 hover:bg-slate-50/60 transition-colors">
+                              <td className="px-3 py-2 text-slate-600 text-xs">{v.facultad.nombre}</td>
+                              <td className="px-3 py-2 text-slate-700">{v.carrera.nombre}</td>
+                              <td className="px-3 py-2 text-slate-500 text-xs">{v.planEstudio.nombre}{v.planEstudio.codigo ? ` (${v.planEstudio.codigo})` : ''}</td>
+                              <td className="px-3 py-2 font-medium text-slate-800">{v.materia.nombre}</td>
+                              <td className="px-3 py-2 text-slate-700">{v.catedra.nombre}</td>
+                              <td className="px-3 py-2 text-slate-700">{v.cargo.nombre}</td>
+                              <td className="px-3 py-2 text-slate-700">{v.modalidad.nombre}</td>
+                              <td className="px-3 py-2 text-slate-700">{v.designacion.nombre}</td>
+                              <td className="px-3 py-2 text-slate-700">
+                                {v.horasSemana != null ? `${v.horasSemana} h/sem` : <span className="text-slate-400">—</span>}
+                              </td>
+                              <td className="px-3 py-2 text-slate-700">{v.anioInicio ?? <span className="text-slate-400">—</span>}</td>
+                              <td className="px-3 py-2 text-slate-500 text-xs whitespace-nowrap">{formatFechaCorta(v.fechaAprobacion)}</td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
                 {/* Actividades curriculares de posgrado */}
@@ -3058,17 +3137,44 @@ export default function MiFichaPage() {
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Cargo *</p>
-                        <input value={trayectoriaCargoForm.cargo} onChange={(e) => actualizarCampoTrayectoria('cargo', e.target.value)} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${trayectoriaCargoErrors.cargo ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <select
+                          value={trayectoriaCargoForm.cargoId}
+                          onChange={(e) => {
+                            const opt = cargosOpciones.find(c => c.id === e.target.value);
+                            actualizarCampoTrayectoria('cargoId', e.target.value);
+                            actualizarCampoTrayectoria('cargo', opt?.nombre ?? '');
+                          }}
+                          className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${trayectoriaCargoErrors.cargo ? 'border-red-400' : 'border-slate-200'} bg-white`}
+                        >
+                          <option value="">Seleccionar cargo...</option>
+                          {cargosOpciones.map(c => (
+                            <option key={c.id} value={c.id}>{c.nombre}</option>
+                          ))}
+                        </select>
+                        {!trayectoriaCargoForm.cargoId && trayectoriaCargoForm.cargo && (
+                          <p className="mt-1 text-xs text-amber-600">Valor histórico: <strong>{trayectoriaCargoForm.cargo}</strong>. Seleccioná del listado para actualizar.</p>
+                        )}
                         {trayectoriaCargoErrors.cargo && <p className="mt-1 text-xs text-red-500">{trayectoriaCargoErrors.cargo}</p>}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Modalidad</p>
-                        <select value={trayectoriaCargoForm.modalidad} onChange={(e) => actualizarCampoTrayectoria('modalidad', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
-                          <option value="">Seleccionar</option>
-                          <option value="Cuatrimestral">Cuatrimestral</option>
-                          <option value="Semestral">Semestral</option>
-                          <option value="Anual">Anual</option>
+                        <select
+                          value={trayectoriaCargoForm.modalidadId}
+                          onChange={(e) => {
+                            const opt = modalidadesOpciones.find(m => m.id === e.target.value);
+                            actualizarCampoTrayectoria('modalidadId', e.target.value);
+                            actualizarCampoTrayectoria('modalidad', opt?.nombre ?? '');
+                          }}
+                          className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                        >
+                          <option value="">Seleccionar modalidad...</option>
+                          {modalidadesOpciones.map(m => (
+                            <option key={m.id} value={m.id}>{m.nombre}</option>
+                          ))}
                         </select>
+                        {!trayectoriaCargoForm.modalidadId && trayectoriaCargoForm.modalidad && (
+                          <p className="mt-1 text-xs text-amber-600">Valor histórico: <strong>{trayectoriaCargoForm.modalidad}</strong>. Seleccioná del listado para actualizar.</p>
+                        )}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Dedicación sem.</p>
