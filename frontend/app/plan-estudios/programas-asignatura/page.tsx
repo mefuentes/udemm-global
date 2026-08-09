@@ -517,7 +517,7 @@ function FilaPrograma({
             </button>
           )}
           <button
-            onClick={() => router.push(`${fichaUrl}&modo=ver`)}
+            onClick={() => router.push(`/plan-estudios/ficha-asignatura?id=${materia.id}&modo=ver`)}
             className="text-[11px] font-semibold border border-slate-200 text-slate-600 px-3 py-1 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap"
           >
             Ver

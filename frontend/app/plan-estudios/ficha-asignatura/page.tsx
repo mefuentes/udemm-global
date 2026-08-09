@@ -825,23 +825,26 @@ function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, token, rou
       </div>
 
       {/* Tabs de secciones */}
-      {!modoVer && (
-        <div className="flex gap-0.5 mb-4 border-b border-slate-200">
-          {TABS_FICHA.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`px-4 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors ${
-                tab === t.id
-                  ? 'border-[#0f4c81] text-[#0f4c81]'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="flex items-center gap-0.5 mb-4 border-b border-slate-200">
+        {TABS_FICHA.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors ${
+              tab === t.id
+                ? 'border-[#0f4c81] text-[#0f4c81]'
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+        {modoVer && (
+          <span className="ml-auto mr-1 text-[10px] font-semibold px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 whitespace-nowrap">
+            Solo lectura
+          </span>
+        )}
+      </div>
 
       {/* Contenido de sección */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -963,7 +966,7 @@ function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, token, rou
                       <tr className="bg-slate-50 border-b border-slate-200">
                         <th className="text-left px-3 py-2 font-semibold text-slate-500 uppercase tracking-wide text-[10px] w-24">Código</th>
                         <th className="text-left px-3 py-2 font-semibold text-slate-500 uppercase tracking-wide text-[10px]">Nombre</th>
-                        {permisos.editar && <th className="w-10 px-3 py-2" />}
+                        {permisos.editar && !modoVer && <th className="w-10 px-3 py-2" />}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -975,7 +978,7 @@ function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, token, rou
                             </span>
                           </td>
                           <td className="px-3 py-2.5 text-slate-700">{c.correlativa.nombre}</td>
-                          {permisos.editar && (
+                          {permisos.editar && !modoVer && (
                             <td className="px-3 py-2.5 text-right">
                               <button
                                 onClick={() => quitarCorrelativa(c.correlativa.id)}
@@ -1040,7 +1043,7 @@ function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, token, rou
         )}
 
         {/* ── TAB: Programa ────────────────────────────────────────────── */}
-        {(tab === 'programa' || modoVer) && (
+        {tab === 'programa' && (
           <ProgramaView
             materiaId={ficha.id}
             ficha={ficha}
