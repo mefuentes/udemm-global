@@ -121,6 +121,11 @@ export default function VinculacionesCatedraPage() {
   const [formulario, setFormulario] = useState(false);
   const [exito, setExito]           = useState<string | null>(null);
 
+  const [pagina, setPagina] = useState(1);
+  const [paginacion, setPaginacion] = useState<{
+    total: number; pagina: number; limite: number; totalPaginas: number;
+  } | null>(null);
+
   // Ver detalle
   const [verTarget, setVerTarget] = useState<Vinculacion | null>(null);
 
@@ -176,19 +181,27 @@ export default function VinculacionesCatedraPage() {
     setLoading(true); setError(null);
     try {
       const params = new URLSearchParams();
-      if (buscar.trim())   params.set('buscar', buscar.trim());
-      if (filtroEstado)    params.set('estado', filtroEstado);
+      if (buscar.trim()) params.set('buscar', buscar.trim());
+      if (filtroEstado)  params.set('estado', filtroEstado);
+      params.set('page',  String(pagina));
+      params.set('limit', '10');
       const r = await fetch(`${API}/vinculaciones-catedra?${params}`, {
         headers: { Authorization: `Bearer ${obtenerTokenActual()}` },
       });
       if (!r.ok) throw new Error('Error al cargar las vinculaciones');
-      setItems(await r.json());
+      const resp = await r.json();
+      setItems(resp.data);
+      setPaginacion({ total: resp.total, pagina: resp.pagina, limite: resp.limite, totalPaginas: resp.totalPaginas });
+      // Si la página actual quedó vacía pero hay registros, ir a la última página válida
+      if (resp.data.length === 0 && resp.total > 0 && pagina > 1) {
+        setPagina(Math.max(1, resp.totalPaginas));
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [buscar, filtroEstado]);
+  }, [buscar, filtroEstado, pagina, obtenerTokenActual]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -236,14 +249,14 @@ export default function VinculacionesCatedraPage() {
           <span className="absolute left-3 top-1/2 -translate-y-1/2"><IcSearch /></span>
           <input
             value={buscar}
-            onChange={e => setBuscar(e.target.value)}
+            onChange={e => { setBuscar(e.target.value); setPagina(1); }}
             placeholder="Buscar por docente, asignatura o carrera…"
             className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none focus:border-[#0f4c81] focus:ring-2 focus:ring-[#0f4c81]/15 transition"
           />
         </div>
         <select
           value={filtroEstado}
-          onChange={e => setFiltroEstado(e.target.value)}
+          onChange={e => { setFiltroEstado(e.target.value); setPagina(1); }}
           className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none focus:border-[#0f4c81] focus:ring-2 focus:ring-[#0f4c81]/15 transition min-w-[180px]"
         >
           <option value="">Todos los estados</option>
@@ -356,12 +369,32 @@ export default function VinculacionesCatedraPage() {
           </table>
         </div>
 
-        {!loading && items.length > 0 && (
-          <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50">
-            <p className="text-xs text-slate-400">
-              {items.length} vinculación{items.length !== 1 ? 'es' : ''} ·{' '}
-              {items.filter(v => v.estado === 'PENDIENTE_DE_APROBACION').length} pendiente{items.filter(v => v.estado === 'PENDIENTE_DE_APROBACION').length !== 1 ? 's' : ''}
-            </p>
+        {!loading && paginacion && paginacion.total > 0 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex-wrap gap-2">
+            <span className="text-xs text-slate-400">
+              Mostrando {(paginacion.pagina - 1) * paginacion.limite + 1}–{Math.min(paginacion.pagina * paginacion.limite, paginacion.total)} de {paginacion.total} vinculación{paginacion.total !== 1 ? 'es' : ''}
+            </span>
+            {paginacion.totalPaginas > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPagina(p => Math.max(1, p - 1))}
+                  disabled={paginacion.pagina <= 1}
+                  className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  ← Anterior
+                </button>
+                <span className="text-xs text-slate-500 font-medium whitespace-nowrap px-1">
+                  Página {paginacion.pagina} de {paginacion.totalPaginas}
+                </span>
+                <button
+                  onClick={() => setPagina(p => Math.min(paginacion.totalPaginas, p + 1))}
+                  disabled={paginacion.pagina >= paginacion.totalPaginas}
+                  className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Siguiente →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -555,6 +588,7 @@ export default function VinculacionesCatedraPage() {
                   onChange={e => setFormDesvincular(f => ({ ...f, motivo: e.target.value }))}
                   rows={4}
                   maxLength={2000}
+                  data-no-uppercase="true"
                   placeholder="Describa el motivo de la finalización de la vinculación…"
                   className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white outline-none focus:border-[#0f4c81] focus:ring-2 focus:ring-[#0f4c81]/15 transition resize-none"
                 />

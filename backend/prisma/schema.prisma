@@ -16,202 +16,179 @@ model Universidad {
 
 model Facultad {
   id                 String               @id @default(uuid())
-  codigo             String?              @unique
   nombre             String
+  universidadId      String
+  codigo             String?              @unique
   descripcion        String?
   estado             String               @default("ACTIVO")
-  universidad        Universidad          @relation(fields: [universidadId], references: [id])
-  universidadId      String
-  carreras           Carrera[]
-  vinculaciones      VinculacionCatedra[]
   fechaCreacion      DateTime             @default(now())
   fechaActualizacion DateTime             @updatedAt
+  carreras           Carrera[]
+  universidad        Universidad          @relation(fields: [universidadId], references: [id])
+  vinculaciones      VinculacionCatedra[]
 }
 
 model Carrera {
   id                 String               @id @default(uuid())
-  codigo             String?              @unique
   nombre             String
-  facultad           Facultad             @relation(fields: [facultadId], references: [id])
   facultadId         String
+  codigo             String?              @unique
   tituloOtorgado     String?
   duracionAnios      Int?
   modalidad          String?
   estado             String               @default("ACTIVO")
-  planes             PlanEstudio[]
-  vinculaciones      VinculacionCatedra[]
   fechaCreacion      DateTime             @default(now())
   fechaActualizacion DateTime             @updatedAt
+  facultad           Facultad             @relation(fields: [facultadId], references: [id])
+  planes             PlanEstudio[]
+  vinculaciones      VinculacionCatedra[]
 }
 
 model PlanEstudio {
   id                    String               @id @default(uuid())
-  codigo                String?              @unique
   nombre                String
+  carreraId             String
+  codigo                String?              @unique
   descripcion           String?
+  duracionCuatrimestres Int?
+  estado                String               @default("ACTIVO")
+  fechaActualizacion    DateTime             @updatedAt
+  fechaAprobacion       DateTime?
+  fechaCreacion         DateTime             @default(now())
+  resolucionAprobacion  String?
+  totalCreditos         Int?
   version               String?
   anio                  Int?
-  estado                String               @default("ACTIVO")
-  duracionCuatrimestres Int?
-  totalCreditos         Int?
-  resolucionAprobacion  String?
-  fechaAprobacion       DateTime?
-  carrera               Carrera              @relation(fields: [carreraId], references: [id])
-  carreraId             String
   materias              Materia[]
+  carrera               Carrera              @relation(fields: [carreraId], references: [id])
   vinculaciones         VinculacionCatedra[]
-  fechaCreacion         DateTime             @default(now())
-  fechaActualizacion    DateTime             @updatedAt
 }
 
 model Materia {
-  id                   String             @id @default(uuid())
-  codigo               String             @unique
-  nombre               String
-  descripcion          String?
-  creditos             Int                @default(0)
-  cargaHorariaSemanal  Int?
-  cargaHorariaTotal    Int?
-  anio                 Int?
-  cuatrimestre         Int?
-  bloqueConocimiento   String?
-  tipoAsignatura       String             @default("OBLIGATORIA")
-  modalidadDictado     String?
-  regimenCursado       String?
-  estado               String             @default("ACTIVO")
-  observaciones        String?
-  planEstudio          PlanEstudio        @relation(fields: [planEstudioId], references: [id])
-  planEstudioId        String
-  correlativas         Correlatividad[]   @relation("MateriaPrincipal")
-  esCorrelativaDe      Correlatividad[]   @relation("MateriaCorrelativa")
-  historial            HistorialMateria[]
-  programa             ProgramaAsignatura?
-  vinculaciones        VinculacionCatedra[]
-  fechaCreacion        DateTime           @default(now())
-  fechaActualizacion   DateTime           @updatedAt
+  id                  String               @id @default(uuid())
+  codigo              String               @unique
+  nombre              String
+  creditos            Int                  @default(0)
+  planEstudioId       String
+  anio                Int?
+  cuatrimestre        Int?
+  descripcion         String?
+  estado              String               @default("ACTIVO")
+  fechaActualizacion  DateTime             @updatedAt
+  fechaCreacion       DateTime             @default(now())
+  bloqueConocimiento  String?
+  cargaHorariaSemanal Int?
+  cargaHorariaTotal   Int?
+  observaciones       String?
+  regimenCursado      String?
+  tipoAsignatura      String               @default("OBLIGATORIA")
+  modalidadDictado    String?
+  esCorrelativaDe     Correlatividad[]     @relation("MateriaCorrelativa")
+  correlativas        Correlatividad[]     @relation("MateriaPrincipal")
+  historial           HistorialMateria[]
+  planEstudio         PlanEstudio          @relation(fields: [planEstudioId], references: [id])
+  programa            ProgramaAsignatura?
+  vinculaciones       VinculacionCatedra[]
 }
 
 model ProgramaAsignatura {
-  id          String  @id @default(uuid())
-  materia     Materia @relation(fields: [materiaId], references: [id], onDelete: Cascade)
-  materiaId   String  @unique
-
-  // S1 — Identificación
-  equipoDocente   String?
-  elaboradoPor    String?
-  anioVigencia    Int?
-
-  // S1 — Objetivos y perfil
-  objetivosGenerales    String?
-  aportesPerfilTitulo   String?
-  recomendacionesCursado String?
-
-  // S2 — Competencias y contenidos (grids)
-  competenciasResultadosJson String?
-  contenidosGridJson         String?
-
-  // S3 — Unidades didácticas (grid)
-  unidadesDidacticasJson String?
-
-  // S4 — Formación práctica (grid)
-  formacionPracticaJson String?
-
-  // S2 — legacy
-  fundamentacion        String?
-  propositos            String?
-  objetivosEspecificos  String?
-
-  // S3 — Contenidos Curriculares
-  contenidosSinteticos       String?
+  id                         String              @id @default(uuid())
+  materiaId                  String              @unique
+  equipoDocente              String?
+  elaboradoPor               String?
+  anioVigencia               Int?
+  fundamentacion             String?
+  objetivosGenerales         String?
+  objetivosEspecificos       String?
   contenidosTematicos        String?
   bibliografiaBasica         String?
   bibliografiaComplementaria String?
   recursosDidacticos         String?
-
-  // S4 — Metodología y Formación Práctica
-  metodologiaEnsenanza     String?
-  tiposFormacionPractica   String?
-  porcentajeTiempoFormacion String?
-  actividadesPracticas     String?
-  cronograma               String?
-
-  // S5 — Evaluación
-  modalidadEvaluacion    String?
-  requisitosAprobacion   String?
-  criteriosEvaluacion    String?
-  instrumentosEvaluacion String?
-  condicionesAprobacion  String?
-
-  // S6 — Gestión y Vigencia
-  fechaVigenciaPrograma    Int?
-  anioAprobacionRevision   String?
-  profesorACargo           String?
-  competenciasVinculadas   String?
-  fechaUltimaActualizacion String?
-  observacionesGestion     String?
-  estadoPrograma         String    @default("PENDIENTE")
-  fechaAprobacion        DateTime?
-  resolucionAprobacion   String?
-  observacionesGenerales String?
-  vigenciaDesde          Int?
-  vigenciaHasta          Int?
-
-  // Estado por sección
-  estadoS1  String @default("PENDIENTE")
-  estadoS2  String @default("PENDIENTE")
-  estadoS3  String @default("PENDIENTE")
-  estadoS4  String @default("PENDIENTE")
-  estadoS5  String @default("PENDIENTE")
-  estadoS6  String @default("PENDIENTE")
-
-  historial          HistorialPrograma[]
-  fechaCreacion      DateTime @default(now())
-  fechaActualizacion DateTime @updatedAt
+  metodologiaEnsenanza       String?
+  actividadesPracticas       String?
+  cronograma                 String?
+  criteriosEvaluacion        String?
+  instrumentosEvaluacion     String?
+  condicionesAprobacion      String?
+  estadoPrograma             String              @default("PENDIENTE")
+  fechaAprobacion            DateTime?
+  resolucionAprobacion       String?
+  observacionesGenerales     String?
+  vigenciaDesde              Int?
+  vigenciaHasta              Int?
+  estadoS1                   String              @default("PENDIENTE")
+  estadoS2                   String              @default("PENDIENTE")
+  estadoS3                   String              @default("PENDIENTE")
+  estadoS4                   String              @default("PENDIENTE")
+  estadoS5                   String              @default("PENDIENTE")
+  estadoS6                   String              @default("PENDIENTE")
+  fechaCreacion              DateTime            @default(now())
+  fechaActualizacion         DateTime            @default(now()) @updatedAt
+  propositos                 String?
+  contenidosSinteticos       String?
+  tiposFormacionPractica     String?
+  porcentajeTiempoFormacion  String?
+  modalidadEvaluacion        String?
+  requisitosAprobacion       String?
+  fechaVigenciaPrograma      Int?
+  anioAprobacionRevision     String?
+  profesorACargo             String?
+  competenciasVinculadas     String?
+  fechaUltimaActualizacion   String?
+  observacionesGestion       String?
+  aportesPerfilTitulo        String?
+  recomendacionesCursado     String?
+  competenciasResultadosJson String?
+  contenidosGridJson         String?
+  unidadesDidacticasJson     String?
+  formacionPracticaJson      String?
+  historial                  HistorialPrograma[]
+  materia                    Materia             @relation(fields: [materiaId], references: [id], onDelete: Cascade)
 }
 
 model HistorialPrograma {
   id          String             @id @default(uuid())
-  programa    ProgramaAsignatura @relation(fields: [programaId], references: [id], onDelete: Cascade)
   programaId  String
   accion      String
   seccion     String?
   descripcion String?
-  usuario     Usuario            @relation(fields: [usuarioId], references: [id])
   usuarioId   String
   fecha       DateTime           @default(now())
+  programa    ProgramaAsignatura @relation(fields: [programaId], references: [id], onDelete: Cascade)
+  usuario     Usuario            @relation(fields: [usuarioId], references: [id])
 }
 
 model HistorialMateria {
   id          String   @id @default(uuid())
-  materia     Materia  @relation(fields: [materiaId], references: [id], onDelete: Cascade)
   materiaId   String
   accion      String
   descripcion String?
-  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
   usuarioId   String
   fecha       DateTime @default(now())
+  materia     Materia  @relation(fields: [materiaId], references: [id], onDelete: Cascade)
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
 }
 
 model Correlatividad {
-  id              String   @id @default(uuid())
-  materia         Materia  @relation("MateriaPrincipal", fields: [materiaId], references: [id], onDelete: Cascade)
-  materiaId       String
-  correlativa     Materia  @relation("MateriaCorrelativa", fields: [correlativaId], references: [id], onDelete: Restrict)
-  correlativaId   String
-  tipo            String   @default("CURSADO")
-  fechaCreacion   DateTime @default(now())
+  id            String   @id @default(uuid())
+  materiaId     String
+  correlativaId String
+  tipo          String   @default("CURSADO")
+  fechaCreacion DateTime @default(now())
+  correlativa   Materia  @relation("MateriaCorrelativa", fields: [correlativaId], references: [id])
+  materia       Materia  @relation("MateriaPrincipal", fields: [materiaId], references: [id], onDelete: Cascade)
 
   @@unique([materiaId, correlativaId])
 }
 
 model Rol {
-  id          String       @id @default(uuid())
-  nombre      String       @unique
-  descripcion String?
-  activo      Boolean      @default(true)
-  permisos    RolPermiso[]
-  usuarios    Usuario[]
-  fechaCreacion DateTime   @default(now())
+  id            String       @id @default(uuid())
+  nombre        String       @unique
+  descripcion   String?
+  fechaCreacion DateTime     @default(now())
+  activo        Boolean      @default(true)
+  permisos      RolPermiso[]
+  usuarios      Usuario[]
 }
 
 model ParametroGeneral {
@@ -223,293 +200,275 @@ model ParametroGeneral {
 }
 
 model Permiso {
-  id          String       @id @default(uuid())
-  nombre      String       @unique
-  descripcion String?
-  roles       RolPermiso[]
-  fechaCreacion DateTime   @default(now())
+  id            String       @id @default(uuid())
+  nombre        String       @unique
+  descripcion   String?
+  fechaCreacion DateTime     @default(now())
+  roles         RolPermiso[]
 }
 
 model RolPermiso {
-  id          String     @id @default(uuid())
-  rol         Rol        @relation(fields: [rolId], references: [id])
-  rolId       String
-  permiso     Permiso    @relation(fields: [permisoId], references: [id])
-  permisoId   String
+  id            String   @id @default(uuid())
+  rolId         String
+  permisoId     String
   fechaCreacion DateTime @default(now())
+  permiso       Permiso  @relation(fields: [permisoId], references: [id])
+  rol           Rol      @relation(fields: [rolId], references: [id])
 
   @@unique([rolId, permisoId])
 }
 
 model Usuario {
-  id                String         @id @default(uuid())
-  nombre            String
-  apellido          String
-  correoElectronico String         @unique
-  contrasenaHash    String
-  activo            Boolean        @default(true)
-  fechaCreacion     DateTime       @default(now())
-  fechaActualizacion DateTime      @updatedAt
-  rol               Rol            @relation(fields: [rolId], references: [id])
-  rolId             String
-  sesiones             Sesion[]
-  tokensRefresh        TokenRefresh[]
-  tokensRecuperacion   TokenRecuperacion[]
-  docente              Docente?
+  id                         String               @id @default(uuid())
+  nombre                     String
+  apellido                   String
+  correoElectronico          String               @unique
+  contrasenaHash             String
+  activo                     Boolean              @default(true)
+  fechaCreacion              DateTime             @default(now())
+  fechaActualizacion         DateTime             @updatedAt
+  rolId                      String
+  docente                    Docente?
   historialMaterias          HistorialMateria[]
   historialProgramas         HistorialPrograma[]
-  vinculacionesSolicitadas   VinculacionCatedra[] @relation("VinculacionSolicitante")
+  sesiones                   Sesion[]
+  tokensRecuperacion         TokenRecuperacion[]
+  tokensRefresh              TokenRefresh[]
+  rol                        Rol                  @relation(fields: [rolId], references: [id])
   vinculacionesAprobadas     VinculacionCatedra[] @relation("VinculacionAprobador")
   vinculacionesDesvinculadas VinculacionCatedra[] @relation("VinculacionDesvinculador")
+  vinculacionesSolicitadas   VinculacionCatedra[] @relation("VinculacionSolicitante")
 }
 
 model Sesion {
-  id              String    @id @default(uuid())
-  usuario         Usuario   @relation(fields: [usuarioId], references: [id])
-  usuarioId       String
-  ip              String?
-  userAgent       String?
-  activo          Boolean   @default(true)
-  fechaCreacion   DateTime  @default(now())
+  id                 String   @id @default(uuid())
+  usuarioId          String
+  ip                 String?
+  userAgent          String?
+  activo             Boolean  @default(true)
+  fechaCreacion      DateTime @default(now())
   fechaActualizacion DateTime @updatedAt
+  usuario            Usuario  @relation(fields: [usuarioId], references: [id])
 }
 
 model TokenRefresh {
-  id             String    @id @default(uuid())
-  token          String    @unique
-  usuario        Usuario   @relation(fields: [usuarioId], references: [id])
-  usuarioId      String
-  expiracion     DateTime
-  activo         Boolean   @default(true)
-  fechaCreacion  DateTime  @default(now())
+  id            String   @id @default(uuid())
+  token         String   @unique
+  usuarioId     String
+  expiracion    DateTime
+  activo        Boolean  @default(true)
+  fechaCreacion DateTime @default(now())
+  usuario       Usuario  @relation(fields: [usuarioId], references: [id])
 }
 
 model TokenRecuperacion {
   id         String   @id @default(uuid())
   token      String   @unique
-  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
   usuarioId  String
   expiracion DateTime
   usado      Boolean  @default(false)
   creadoEn   DateTime @default(now())
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
 }
-
-// ── Tablas maestras ────────────────────────────────────────────────────────────
 
 model Catedra {
   id                 String               @id @default(uuid())
   nombre             String               @unique
   activo             Boolean              @default(true)
-  vinculaciones      VinculacionCatedra[]
   fechaCreacion      DateTime             @default(now())
   fechaActualizacion DateTime             @updatedAt
+  vinculaciones      VinculacionCatedra[]
 }
 
 model Cargo {
   id                 String               @id @default(uuid())
   nombre             String               @unique
   activo             Boolean              @default(true)
-  vinculaciones      VinculacionCatedra[]
   fechaCreacion      DateTime             @default(now())
   fechaActualizacion DateTime             @updatedAt
+  vinculaciones      VinculacionCatedra[]
 }
 
 model Designacion {
   id                 String               @id @default(uuid())
   nombre             String               @unique
   activo             Boolean              @default(true)
-  vinculaciones      VinculacionCatedra[]
   fechaCreacion      DateTime             @default(now())
   fechaActualizacion DateTime             @updatedAt
+  vinculaciones      VinculacionCatedra[]
 }
 
 model Modalidad {
   id                 String               @id @default(uuid())
   nombre             String               @unique
   activo             Boolean              @default(true)
-  vinculaciones      VinculacionCatedra[]
   fechaCreacion      DateTime             @default(now())
   fechaActualizacion DateTime             @updatedAt
+  vinculaciones      VinculacionCatedra[]
 }
 
 model AreaDisciplinar {
   id                 String    @id @default(uuid())
   nombre             String    @unique
   activo             Boolean   @default(true)
-  subareas           Subarea[]
-  docentes           Docente[]
   fechaCreacion      DateTime  @default(now())
   fechaActualizacion DateTime  @updatedAt
+  docentes           Docente[]
+  subareas           Subarea[]
 }
 
 model Subarea {
   id                 String          @id @default(uuid())
   nombre             String
   areaDisciplinarId  String
-  areaDisciplinar    AreaDisciplinar @relation(fields: [areaDisciplinarId], references: [id])
   activo             Boolean         @default(true)
-  docentes           Docente[]
   fechaCreacion      DateTime        @default(now())
   fechaActualizacion DateTime        @updatedAt
+  docentes           Docente[]
+  areaDisciplinar    AreaDisciplinar @relation(fields: [areaDisciplinarId], references: [id])
 
   @@unique([nombre, areaDisciplinarId])
 }
 
 model Docente {
-  id                    String    @id @default(uuid())
-  nombre                String
-  apellido              String
-  tipoDocumento         String
-  numeroDocumento       String    @unique
-  correoElectronico     String    @unique
-  sexo                  String?
-  fechaNacimiento       DateTime?
-  cuit                  String?
-  telefono              String?
-  calle                 String?
-  numero                String?
-  pisoDepto             String?
-  residencia            String?
-  provincia             String?
-  localidad             String?
-  codigoPostal          String?
-  domicilio             String?
-  tituloGrado           String?
-  tituloPosgrado        String?
-  cargoDeclarado        String?
-  dedicacion            String?
-  unidadAcademica       String?
-  categoriaDocente      String?
-  dedicacionDeclaradaSemanal String?
-  tiempoDocencia        String?
-  tiempoInvestigacion   String?
-  tiempoExtension       String?
-  tiempoGestionAcademica String?
-  fechaInicioCargo      String?
-  fechaFinCargo         String?
-  designacion           String?
-  disciplinaCargo       String?
-  justificacionPertinencia String?
-  actividadesProfesionales String?
-  antecedentesAcademicos String?
-  otrosTitulos                  String?
-  carreraFormacionDocenteJson   String?
-  areaDisciplinar               String?
-  subarea                       String?
-  areaDisciplinarId             String?
-  areaDisciplinarRel            AreaDisciplinar? @relation(fields: [areaDisciplinarId], references: [id])
-  subareaId                     String?
-  subareaRel                    Subarea?         @relation(fields: [subareaId], references: [id])
-  observacionesArea             String?
-  asignaturasVinculadas         String?
-  actividadesPosgradoJson       String?
-  trayectoriaCargosPasadosJson  String?
-  direccionTesisJson            String?
-  experienciaDistancia          String?
-  // Cargos académicos (gestión)
-  funcionGestion                         String?
-  unidadAcademicaGestion                 String?
-  tiempoDedicacionGestionSemanal         String?
-  fechaInicioGestion                     String?
-  fechaFinGestion                        String?
-  carreraAsociadaGestion                 String?
-  normativaDesignacionGestion            String?
-  cargosAcademicosJson                   String?
-  otrasDedicacionesJson                  String?
-  desempenoActualJson                    String?
-  desempenoPasadoJson                    String?
-  // Investigación
-  tituloProyectoInvestigacion                      String?
-  institucionProyectoInvestigacion                 String?
-  institucionEvaluadoraProyectoInvestigacion       String?
-  institucionFinanciadoraProyectoInvestigacion     String?
-  fechaInicioProyectoInvestigacion                 String?
-  fechaFinProyectoInvestigacion                    String?
-  vinculadoCarreraProyectoInvestigacion            String?
-  disciplinasVinculadasProyectoInvestigacion       String?
-  proyectosInvestigacionJson                       String?
-  sistemasPromocionInvestigacionJson               String?
-  participacionVinculacionJson                     String?
-  produccionCientificaJson                         String?
-  // Extensión
-  tituloActividadExtension               String?
-  rolActividadExtension                  String?
-  institucionDestinoActividadExtension   String?
-  fechaInicioActividadExtension          String?
-  finEstadoActividadExtension            String?
-  vinculadaActividadExtension            String?
-  actividadesExtensionJson               String?
-  reunionesCientificasJson               String?
-  comitesJuradosJson                     String?
-  // Otra Información (Tab 10)
-  carreraDocentePosgrado                 String?
-  actividadesTransferenciaExtension      String?
-  premiosDistinciones                    String?
-  estanciasCursosExterior                String?
-  membresiasInstituciones                String?
-  // Promoción
-  sistemaPromocion      String?
-  categoriaPromocion    String?
-  fechaAltaPromocion    String?
-  registrosPromocionJson String?
-  vinculaciones          VinculacionCatedra[]
-  notificaciones         Notificacion[]
-  activo                Boolean   @default(true)
-  fechaCreacion         DateTime  @default(now())
-  fechaActualizacion    DateTime  @updatedAt
-  usuario               Usuario?  @relation(fields: [usuarioId], references: [id])
-  usuarioId             String?   @unique
+  id                                           String               @id @default(uuid())
+  nombre                                       String
+  apellido                                     String
+  tipoDocumento                                String
+  numeroDocumento                              String               @unique
+  correoElectronico                            String               @unique
+  telefono                                     String?
+  domicilio                                    String?
+  tituloGrado                                  String?
+  tituloPosgrado                               String?
+  cargoDeclarado                               String?
+  justificacionPertinencia                     String?
+  actividadesProfesionales                     String?
+  antecedentesAcademicos                       String?
+  activo                                       Boolean              @default(true)
+  fechaCreacion                                DateTime             @default(now())
+  fechaActualizacion                           DateTime             @updatedAt
+  usuarioId                                    String?              @unique
+  calle                                        String?
+  codigoPostal                                 String?
+  cuit                                         String?
+  fechaNacimiento                              DateTime?
+  localidad                                    String?
+  numero                                       String?
+  pisoDepto                                    String?
+  provincia                                    String?
+  residencia                                   String?
+  sexo                                         String?
+  dedicacion                                   String?
+  categoriaDocente                             String?
+  dedicacionDeclaradaSemanal                   String?
+  designacion                                  String?
+  disciplinaCargo                              String?
+  fechaFinCargo                                String?
+  fechaInicioCargo                             String?
+  tiempoDocencia                               String?
+  tiempoExtension                              String?
+  tiempoGestionAcademica                       String?
+  tiempoInvestigacion                          String?
+  unidadAcademica                              String?
+  actividadesExtensionJson                     String?
+  asignaturasVinculadas                        String?
+  cargosAcademicosJson                         String?
+  carreraAsociadaGestion                       String?
+  categoriaPromocion                           String?
+  disciplinasVinculadasProyectoInvestigacion   String?
+  fechaAltaPromocion                           String?
+  fechaFinGestion                              String?
+  fechaFinProyectoInvestigacion                String?
+  fechaInicioActividadExtension                String?
+  fechaInicioGestion                           String?
+  fechaInicioProyectoInvestigacion             String?
+  finEstadoActividadExtension                  String?
+  funcionGestion                               String?
+  institucionDestinoActividadExtension         String?
+  institucionEvaluadoraProyectoInvestigacion   String?
+  institucionFinanciadoraProyectoInvestigacion String?
+  institucionProyectoInvestigacion             String?
+  normativaDesignacionGestion                  String?
+  otrosTitulos                                 String?
+  proyectosInvestigacionJson                   String?
+  registrosPromocionJson                       String?
+  rolActividadExtension                        String?
+  sistemaPromocion                             String?
+  tiempoDedicacionGestionSemanal               String?
+  tituloActividadExtension                     String?
+  tituloProyectoInvestigacion                  String?
+  unidadAcademicaGestion                       String?
+  vinculadaActividadExtension                  String?
+  vinculadoCarreraProyectoInvestigacion        String?
+  carreraFormacionDocenteJson                  String?
+  areaDisciplinar                              String?
+  observacionesArea                            String?
+  subarea                                      String?
+  actividadesPosgradoJson                      String?
+  direccionTesisJson                           String?
+  experienciaDistancia                         String?
+  trayectoriaCargosPasadosJson                 String?
+  otrasDedicacionesJson                        String?
+  desempenoActualJson                          String?
+  desempenoPasadoJson                          String?
+  participacionVinculacionJson                 String?
+  produccionCientificaJson                     String?
+  sistemasPromocionInvestigacionJson           String?
+  reunionesCientificasJson                     String?
+  comitesJuradosJson                           String?
+  actividadesTransferenciaExtension            String?
+  carreraDocentePosgrado                       String?
+  estanciasCursosExterior                      String?
+  membresiasInstituciones                      String?
+  premiosDistinciones                          String?
+  areaDisciplinarId                            String?
+  subareaId                                    String?
+  areaDisciplinarRel                           AreaDisciplinar?     @relation(fields: [areaDisciplinarId], references: [id])
+  subareaRel                                   Subarea?             @relation(fields: [subareaId], references: [id])
+  usuario                                      Usuario?             @relation(fields: [usuarioId], references: [id])
+  notificaciones                               Notificacion[]
+  vinculaciones                                VinculacionCatedra[]
 }
 
-// ── Vinculación Docente-Cátedra ────────────────────────────────────────────────
-
 model VinculacionCatedra {
-  id                   String      @id @default(uuid())
-
-  facultad             Facultad    @relation(fields: [facultadId], references: [id])
-  facultadId           String
-  carrera              Carrera     @relation(fields: [carreraId], references: [id])
-  carreraId            String
-  planEstudio          PlanEstudio @relation(fields: [planEstudioId], references: [id])
-  planEstudioId        String
-  materia              Materia     @relation(fields: [materiaId], references: [id])
-  materiaId            String
-  docente              Docente     @relation(fields: [docenteId], references: [id])
-  docenteId            String
-  catedra              Catedra     @relation(fields: [catedraId], references: [id])
-  catedraId            String
-  cargo                Cargo       @relation(fields: [cargoId], references: [id])
-  cargoId              String
-  modalidad            Modalidad   @relation(fields: [modalidadId], references: [id])
-  modalidadId          String
-  designacion          Designacion @relation(fields: [designacionId], references: [id])
-  designacionId        String
-
-  horasSemana          Int?
-  anioInicio           Int?
-
-  estado               String      @default("PENDIENTE_DE_APROBACION")
-  observaciones        String?
-
-  usuarioSolicitante   Usuario     @relation("VinculacionSolicitante", fields: [usuarioSolicitanteId], references: [id])
-  usuarioSolicitanteId String
-
-  aprobador            Usuario?    @relation("VinculacionAprobador", fields: [aprobadorId], references: [id])
-  aprobadorId          String?
-  fechaAprobacion      DateTime?
-  motivoRechazo        String?
-
-  desvinculador               Usuario?    @relation("VinculacionDesvinculador", fields: [desvinculadorId], references: [id])
+  id                          String      @id @default(uuid())
+  facultadId                  String
+  carreraId                   String
+  planEstudioId               String
+  materiaId                   String
+  docenteId                   String
+  catedraId                   String
+  cargoId                     String
+  modalidadId                 String
+  designacionId               String
+  estado                      String      @default("PENDIENTE_DE_APROBACION")
+  observaciones               String?
+  usuarioSolicitanteId        String
+  fechaCreacion               DateTime    @default(now())
+  fechaActualizacion          DateTime    @updatedAt
+  aprobadorId                 String?
+  fechaAprobacion             DateTime?
+  motivoRechazo               String?
+  horasSemana                 Int?
+  anioInicio                  Int?
   desvinculadorId             String?
   fechaDesvinculacion         DateTime?
   motivoDesvinculacion        String?
   fechaRegistroDesvinculacion DateTime?
-
-  fechaCreacion        DateTime    @default(now())
-  fechaActualizacion   DateTime    @updatedAt
+  aprobador                   Usuario?    @relation("VinculacionAprobador", fields: [aprobadorId], references: [id])
+  cargo                       Cargo       @relation(fields: [cargoId], references: [id])
+  carrera                     Carrera     @relation(fields: [carreraId], references: [id])
+  catedra                     Catedra     @relation(fields: [catedraId], references: [id])
+  designacion                 Designacion @relation(fields: [designacionId], references: [id])
+  desvinculador               Usuario?    @relation("VinculacionDesvinculador", fields: [desvinculadorId], references: [id])
+  docente                     Docente     @relation(fields: [docenteId], references: [id])
+  facultad                    Facultad    @relation(fields: [facultadId], references: [id])
+  materia                     Materia     @relation(fields: [materiaId], references: [id])
+  modalidad                   Modalidad   @relation(fields: [modalidadId], references: [id])
+  planEstudio                 PlanEstudio @relation(fields: [planEstudioId], references: [id])
+  usuarioSolicitante          Usuario     @relation("VinculacionSolicitante", fields: [usuarioSolicitanteId], references: [id])
 }
-
-// ── Notificaciones ─────────────────────────────────────────────────────────────
 
 model Notificacion {
   id                 String    @id @default(uuid())
@@ -518,9 +477,9 @@ model Notificacion {
   cuerpo             String
   leida              Boolean   @default(false)
   fechaLectura       DateTime?
-  docente            Docente   @relation(fields: [docenteId], references: [id])
   docenteId          String
   vinculacionId      String?
   fechaCreacion      DateTime  @default(now())
   fechaActualizacion DateTime  @updatedAt
+  docente            Docente   @relation(fields: [docenteId], references: [id])
 }

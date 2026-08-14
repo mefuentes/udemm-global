@@ -43,7 +43,12 @@ export class VinculacionesService {
 
     if (rolNombre === 'DOCENTE') {
       const docente = await this.getDocenteByUsuarioId(usuarioId);
-      if (!docente) return [];
+      if (!docente) {
+        if (filtros.page !== undefined) {
+          return { data: [], total: 0, pagina: 1, limite: filtros.limit ?? 10, totalPaginas: 1 };
+        }
+        return [];
+      }
       where.docenteId = docente.id;
     } else {
       if (filtros.facultadId)    where.facultadId    = filtros.facultadId;
@@ -65,6 +70,30 @@ export class VinculacionesService {
       ];
     }
 
+    // Modo paginado (cuando se envía el parámetro page)
+    if (filtros.page !== undefined) {
+      const pagina = filtros.page;
+      const limite = filtros.limit ?? 10;
+      const [total, data] = await this.prisma.$transaction([
+        this.prisma.vinculacionCatedra.count({ where }),
+        this.prisma.vinculacionCatedra.findMany({
+          where,
+          include:  INCLUDE_COMPLETO,
+          orderBy:  { fechaCreacion: 'desc' },
+          take:     limite,
+          skip:     (pagina - 1) * limite,
+        }),
+      ]);
+      return {
+        data,
+        total,
+        pagina,
+        limite,
+        totalPaginas: Math.max(1, Math.ceil(total / limite)),
+      };
+    }
+
+    // Modo legado: array plano para consumidores que no envían page
     return this.prisma.vinculacionCatedra.findMany({
       where,
       include:  INCLUDE_COMPLETO,
@@ -125,19 +154,14 @@ export class VinculacionesService {
 
     const duplicado = await this.prisma.vinculacionCatedra.findFirst({
       where: {
-        planEstudioId:  dto.planEstudioId,
-        materiaId:      dto.materiaId,
-        docenteId:      dto.docenteId,
-        catedraId:      dto.catedraId,
-        cargoId:        dto.cargoId,
-        modalidadId:    dto.modalidadId,
-        designacionId:  dto.designacionId,
-        estado:         { in: ['PENDIENTE_DE_APROBACION', 'APROBADA'] },
+        docenteId: dto.docenteId,
+        materiaId: dto.materiaId,
+        estado:    { in: ['PENDIENTE_DE_APROBACION', 'APROBADA'] },
       },
     });
     if (duplicado) {
       throw new ConflictException(
-        'Ya existe una vinculación pendiente o aprobada con la misma combinación de Asignatura, Docente, Cátedra, Cargo, Modalidad y Designación.',
+        'El docente seleccionado ya se encuentra vinculado a esta asignatura.',
       );
     }
 
@@ -165,7 +189,19 @@ export class VinculacionesService {
   // ── Aprobar ────────────────────────────────────────────────────────────────
 
   async aprobar(id: string, usuarioId: string, rolNombre: string) {
-    const vc = await this.prisma.vinculacionCatedra.findUnique({ where: { id } });
+    const vc = await this.prisma.vinculacionCatedra.findUnique({
+      where: { id },
+      include: {
+        facultad:    { select: { nombre: true } },
+        carrera:     { select: { nombre: true } },
+        planEstudio: { select: { nombre: true } },
+        materia:     { select: { nombre: true } },
+        catedra:     { select: { nombre: true } },
+        cargo:       { select: { nombre: true } },
+        modalidad:   { select: { nombre: true } },
+        designacion: { select: { nombre: true } },
+      },
+    });
     if (!vc) throw new NotFoundException('Vinculación no encontrada');
 
     if (rolNombre === 'DOCENTE') {
@@ -179,21 +215,58 @@ export class VinculacionesService {
       throw new BadRequestException(`No se puede aprobar una vinculación en estado "${vc.estado}"`);
     }
 
-    return this.prisma.vinculacionCatedra.update({
-      where: { id },
-      data: {
-        estado:          'APROBADA',
-        aprobadorId:     usuarioId,
-        fechaAprobacion: new Date(),
-      },
-      include: INCLUDE_COMPLETO,
+    const fechaAprobacion = new Date();
+
+    return this.prisma.$transaction(async (tx) => {
+      const actualizada = await tx.vinculacionCatedra.update({
+        where: { id },
+        data: { estado: 'APROBADA', aprobadorId: usuarioId, fechaAprobacion },
+        include: INCLUDE_COMPLETO,
+      });
+
+      await (tx as any).notificacion.create({
+        data: {
+          tipo:      'APROBACION',
+          titulo:    `Tu vinculación con la asignatura ${vc.materia.nombre} fue aprobada`,
+          cuerpo:    JSON.stringify({
+            resultado:       'VINCULACIÓN APROBADA',
+            facultad:        vc.facultad.nombre,
+            carrera:         vc.carrera.nombre,
+            plan:            vc.planEstudio.nombre,
+            asignatura:      vc.materia.nombre,
+            catedra:         vc.catedra.nombre,
+            cargo:           vc.cargo.nombre,
+            modalidad:       vc.modalidad.nombre,
+            designacion:     vc.designacion.nombre,
+            horasSemana:     vc.horasSemana,
+            anioInicio:      vc.anioInicio,
+            fechaAprobacion: fechaAprobacion.toISOString(),
+          }),
+          docenteId:     vc.docenteId,
+          vinculacionId: id,
+        },
+      });
+
+      return actualizada;
     });
   }
 
   // ── Rechazar ───────────────────────────────────────────────────────────────
 
   async rechazar(id: string, dto: RechazarVinculacionDto, usuarioId: string, rolNombre: string) {
-    const vc = await this.prisma.vinculacionCatedra.findUnique({ where: { id } });
+    const vc = await this.prisma.vinculacionCatedra.findUnique({
+      where: { id },
+      include: {
+        facultad:    { select: { nombre: true } },
+        carrera:     { select: { nombre: true } },
+        planEstudio: { select: { nombre: true } },
+        materia:     { select: { nombre: true } },
+        catedra:     { select: { nombre: true } },
+        cargo:       { select: { nombre: true } },
+        modalidad:   { select: { nombre: true } },
+        designacion: { select: { nombre: true } },
+      },
+    });
     if (!vc) throw new NotFoundException('Vinculación no encontrada');
 
     if (rolNombre === 'DOCENTE') {
@@ -207,15 +280,43 @@ export class VinculacionesService {
       throw new BadRequestException(`No se puede rechazar una vinculación en estado "${vc.estado}"`);
     }
 
-    return this.prisma.vinculacionCatedra.update({
-      where: { id },
-      data: {
-        estado:          'RECHAZADA',
-        aprobadorId:     usuarioId,
-        fechaAprobacion: new Date(),
-        motivoRechazo:   dto.motivo,
-      },
-      include: INCLUDE_COMPLETO,
+    const fechaRechazo = new Date();
+
+    return this.prisma.$transaction(async (tx) => {
+      const actualizada = await tx.vinculacionCatedra.update({
+        where: { id },
+        data: {
+          estado:          'RECHAZADA',
+          aprobadorId:     usuarioId,
+          fechaAprobacion: fechaRechazo,
+          motivoRechazo:   dto.motivo,
+        },
+        include: INCLUDE_COMPLETO,
+      });
+
+      await (tx as any).notificacion.create({
+        data: {
+          tipo:   'RECHAZO',
+          titulo: `Tu vinculación con la asignatura ${vc.materia.nombre} fue rechazada`,
+          cuerpo: JSON.stringify({
+            resultado:    'VINCULACIÓN RECHAZADA',
+            facultad:     vc.facultad.nombre,
+            carrera:      vc.carrera.nombre,
+            plan:         vc.planEstudio.nombre,
+            asignatura:   vc.materia.nombre,
+            catedra:      vc.catedra.nombre,
+            cargo:        vc.cargo.nombre,
+            modalidad:    vc.modalidad.nombre,
+            designacion:  vc.designacion.nombre,
+            fechaRechazo: fechaRechazo.toISOString(),
+            motivo:       dto.motivo,
+          }),
+          docenteId:     vc.docenteId,
+          vinculacionId: id,
+        },
+      });
+
+      return actualizada;
     });
   }
 

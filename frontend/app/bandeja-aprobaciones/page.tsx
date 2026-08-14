@@ -41,12 +41,20 @@ interface Notificacion {
   fechaCreacion: string;
 }
 
-interface DatosDesvinculacion {
+interface DatosNotificacion {
+  resultado?: string;
+  facultad?: string;
   carrera?: string;
   plan?: string;
   asignatura?: string;
   catedra?: string;
   cargo?: string;
+  modalidad?: string;
+  designacion?: string;
+  horasSemana?: number | null;
+  anioInicio?: number | null;
+  fechaAprobacion?: string;
+  fechaRechazo?: string;
   fechaDesvinculacion?: string;
   motivo?: string;
 }
@@ -73,13 +81,14 @@ function formatFecha(iso?: string | null) {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-function formatFechaHora(iso: string) {
+function formatFechaHora(iso?: string | null) {
+  if (!iso) return '—';
   return new Date(iso).toLocaleString('es-AR', {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   });
 }
 
-function parsarDatos(cuerpo: string): DatosDesvinculacion {
+function parsarDatos(cuerpo: string): DatosNotificacion {
   try { return JSON.parse(cuerpo); } catch { return {}; }
 }
 
@@ -147,6 +156,7 @@ export default function BandejaAprobacionesPage() {
   const [notificaciones, setNotificaciones]   = useState<Notificacion[]>([]);
   const [verNotif, setVerNotif]               = useState<Notificacion | null>(null);
   const [marcandoNotifId, setMarcandoNotifId] = useState<string | null>(null);
+  const [paginaNotif, setPaginaNotif]         = useState(1);
 
   // ── Estado ADMIN ───────────────────────────────────────────────────────────
   const [buscar, setBuscar]   = useState('');
@@ -218,7 +228,7 @@ export default function BandejaAprobacionesPage() {
         throw new Error(err.message ?? `Error ${res.status}`);
       }
       mostrarToast('Vinculación aprobada correctamente.');
-      await cargar();
+      await Promise.all([cargar(), cargarNotificaciones()]);
       await recargarContador();
     } catch (e) {
       mostrarToast((e as Error).message, false);
@@ -240,7 +250,7 @@ export default function BandejaAprobacionesPage() {
     }
     setRechazarTarget(null);
     mostrarToast('Vinculación rechazada.');
-    await cargar();
+    await Promise.all([cargar(), cargarNotificaciones()]);
     await recargarContador();
   }
 
@@ -283,6 +293,10 @@ export default function BandejaAprobacionesPage() {
   const pendientes    = vinculaciones.filter(v => v.estado === 'PENDIENTE_DE_APROBACION');
   const noLeidas      = notificaciones.filter(n => !n.leida).length;
   const totalNovedades = pendientes.length + noLeidas;
+
+  const NOTIF_POR_PAG     = 10;
+  const totalPaginasNotif = Math.ceil(notificaciones.length / NOTIF_POR_PAG);
+  const notifsPagina      = notificaciones.slice((paginaNotif - 1) * NOTIF_POR_PAG, paginaNotif * NOTIF_POR_PAG);
 
   // ══════════════════════════════════════════════════════════════════════════
   // VISTA DOCENTE
@@ -382,12 +396,12 @@ export default function BandejaAprobacionesPage() {
               )}
             </section>
 
-            {/* ── SECCIÓN 2: Informativas ── */}
+            {/* ── SECCIÓN 2: Notificaciones ── */}
             <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50/60">
                 <div className="flex items-center gap-2">
                   <IcBell />
-                  <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Informativas</span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Notificaciones</span>
                   {noLeidas > 0 && (
                     <span className="text-[9px] font-bold bg-[#0f4c81] text-white px-1.5 py-0.5 rounded-full">
                       {noLeidas} sin leer
@@ -399,47 +413,72 @@ export default function BandejaAprobacionesPage() {
               {notificaciones.length === 0 ? (
                 <div className="flex items-center gap-3 px-5 py-6 text-slate-400">
                   <IcBell />
-                  <span className="text-sm">Sin novedades informativas.</span>
+                  <span className="text-sm">Sin notificaciones.</span>
                 </div>
               ) : (
-                <div className="divide-y divide-slate-50">
-                  {notificaciones.map(n => (
-                    <div
-                      key={n.id}
-                      className={`flex items-center justify-between gap-3 px-5 py-4 transition-colors ${
-                        !n.leida ? 'bg-blue-50/30 hover:bg-blue-50/50' : 'hover:bg-slate-50/60'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3 min-w-0">
-                        <div className="flex-shrink-0 mt-1.5">
-                          {!n.leida
-                            ? <span className="block w-2 h-2 rounded-full bg-[#0f4c81]" />
-                            : <span className="block w-2 h-2 rounded-full bg-slate-200" />
-                          }
+                <>
+                  <div className="divide-y divide-slate-50">
+                    {notifsPagina.map(n => (
+                      <div
+                        key={n.id}
+                        className={`flex items-center justify-between gap-3 px-5 py-3 transition-colors ${
+                          !n.leida ? 'bg-blue-50/30 hover:bg-blue-50/50' : 'hover:bg-slate-50/60'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className="flex-shrink-0 mt-1">
+                            {!n.leida
+                              ? <span className="block w-2 h-2 rounded-full bg-[#0f4c81]" />
+                              : <span className="block w-2 h-2 rounded-full bg-slate-200" />
+                            }
+                          </div>
+                          <div className="min-w-0">
+                            <p className={`text-sm leading-snug ${!n.leida ? 'font-semibold text-slate-800' : 'text-slate-600'}`}>
+                              {n.titulo}
+                            </p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{formatFechaHora(n.fechaCreacion)}</p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <p className={`text-sm leading-snug ${!n.leida ? 'font-semibold text-slate-800' : 'text-slate-600'}`}>
-                            {n.titulo}
-                          </p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">{formatFechaHora(n.fechaCreacion)}</p>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {!n.leida
+                            ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#0f4c81]/10 text-[#0f4c81] border border-[#0f4c81]/20 whitespace-nowrap">No leída</span>
+                            : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 border border-slate-200 whitespace-nowrap">Leída</span>
+                          }
+                          <button
+                            onClick={() => abrirNotificacion(n)}
+                            disabled={marcandoNotifId === n.id}
+                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-50"
+                          >
+                            <IcEye /><span className="hidden sm:inline">Ver</span>
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {!n.leida
-                          ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#0f4c81]/10 text-[#0f4c81] border border-[#0f4c81]/20 whitespace-nowrap">No leída</span>
-                          : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 border border-slate-200 whitespace-nowrap">Leída</span>
-                        }
+                    ))}
+                  </div>
+                  {totalPaginasNotif > 1 && (
+                    <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/50">
+                      <span className="text-xs text-slate-400">
+                        Página {paginaNotif} de {totalPaginasNotif} · {notificaciones.length} registros
+                      </span>
+                      <div className="flex items-center gap-1.5">
                         <button
-                          onClick={() => abrirNotificacion(n)}
-                          disabled={marcandoNotifId === n.id}
-                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-50"
+                          onClick={() => setPaginaNotif(p => Math.max(1, p - 1))}
+                          disabled={paginaNotif === 1}
+                          className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                          <IcEye /><span className="hidden sm:inline">Ver</span>
+                          ← Anterior
+                        </button>
+                        <button
+                          onClick={() => setPaginaNotif(p => Math.min(totalPaginasNotif, p + 1))}
+                          disabled={paginaNotif === totalPaginasNotif}
+                          className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Siguiente →
                         </button>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
             </section>
 
@@ -459,9 +498,19 @@ export default function BandejaAprobacionesPage() {
           />
         )}
 
-        {/* Modal informativa (desvinculación) */}
+        {/* Modal notificación (aprobación / rechazo / desvinculación) */}
         {verNotif && (() => {
           const datos = parsarDatos(verNotif.cuerpo);
+          const tipo  = verNotif.tipo;
+
+          const badgeCfg: Record<string, { label: string; cls: string }> = {
+            APROBACION:    { label: 'Aprobación',    cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
+            RECHAZO:       { label: 'Rechazo',       cls: 'text-red-700 bg-red-50 border-red-200' },
+            DESVINCULACION:{ label: 'Desvinculación', cls: 'text-[#0f4c81] bg-[#0f4c81]/10 border-[#0f4c81]/20' },
+          };
+          const { label: tipoLabel, cls: tipoCls } =
+            badgeCfg[tipo] ?? { label: tipo, cls: 'text-slate-600 bg-slate-100 border-slate-200' };
+
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
@@ -469,8 +518,8 @@ export default function BandejaAprobacionesPage() {
                 <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-slate-100 flex-shrink-0">
                   <div className="min-w-0 pr-3">
                     <div className="flex items-center gap-2 mb-1.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wide text-[#0f4c81] bg-[#0f4c81]/10 px-2 py-0.5 rounded-full">
-                        Informativa
+                      <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border ${tipoCls}`}>
+                        {tipoLabel}
                       </span>
                       <span className="text-[10px] text-slate-400">{formatFechaHora(verNotif.fechaCreacion)}</span>
                     </div>
@@ -486,13 +535,57 @@ export default function BandejaAprobacionesPage() {
 
                 <div className="overflow-y-auto px-6 py-5 flex-1">
                   <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+
+                    {/* Resultado — siempre al tope cuando existe */}
+                    {datos.resultado && (
+                      <div className="sm:col-span-2">
+                        <span className={`inline-flex text-[11px] font-bold px-3 py-1 rounded-full border ${
+                          datos.resultado.includes('APROBADA')  ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                          datos.resultado.includes('RECHAZADA') ? 'bg-red-50 text-red-700 border-red-200' :
+                          'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}>
+                          {datos.resultado}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Campos académicos comunes */}
+                    {(tipo === 'APROBACION' || tipo === 'RECHAZO') && (
+                      <Campo label="Facultad" valor={datos.facultad} />
+                    )}
                     <Campo label="Carrera"    valor={datos.carrera} />
                     <Campo label="Plan"       valor={datos.plan} />
                     <Campo label="Asignatura" valor={datos.asignatura} />
                     <Campo label="Cátedra"    valor={datos.catedra} />
                     <Campo label="Cargo"      valor={datos.cargo} />
-                    <Campo label="Fecha de desvinculación" valor={formatFecha(datos.fechaDesvinculacion)} />
-                    {datos.motivo && (
+                    {(tipo === 'APROBACION' || tipo === 'RECHAZO') && (
+                      <>
+                        <Campo label="Modalidad"   valor={datos.modalidad} />
+                        <Campo label="Designación" valor={datos.designacion} />
+                      </>
+                    )}
+
+                    {/* Campos exclusivos de APROBACION */}
+                    {tipo === 'APROBACION' && (
+                      <>
+                        <Campo label="Horas semanales" valor={datos.horasSemana != null ? `${datos.horasSemana} h/sem` : undefined} />
+                        <Campo label="Año de inicio"   valor={datos.anioInicio   != null ? String(datos.anioInicio)    : undefined} />
+                        <Campo label="Fecha y hora de aprobación" valor={formatFechaHora(datos.fechaAprobacion)} />
+                      </>
+                    )}
+
+                    {/* Campos exclusivos de RECHAZO */}
+                    {tipo === 'RECHAZO' && (
+                      <Campo label="Fecha y hora del rechazo" valor={formatFechaHora(datos.fechaRechazo)} />
+                    )}
+
+                    {/* Campos exclusivos de DESVINCULACION */}
+                    {tipo === 'DESVINCULACION' && (
+                      <Campo label="Fecha de desvinculación" valor={formatFecha(datos.fechaDesvinculacion)} />
+                    )}
+
+                    {/* Motivo — RECHAZO y DESVINCULACION (sin truncar) */}
+                    {(tipo === 'RECHAZO' || tipo === 'DESVINCULACION') && datos.motivo && (
                       <div className="sm:col-span-2">
                         <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">Motivo</dt>
                         <dd className="text-sm text-slate-800 whitespace-pre-wrap break-words leading-relaxed bg-slate-50 rounded-xl px-4 py-3 border border-slate-100">

@@ -78,6 +78,7 @@ export function ModalRechazar({ asignatura, docente, onConfirmar, onCerrar }: Pr
               onChange={e => setMotivo(e.target.value)}
               rows={4}
               maxLength={1000}
+              data-no-uppercase="true"
               placeholder="Describí el motivo por el cual se rechaza esta vinculación (mínimo 10 caracteres)…"
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-400/15 transition resize-none"
             />
