@@ -82,6 +82,12 @@ const IcBell = () => (
   </svg>
 );
 
+const IcNormativas = () => (
+  <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
+  </svg>
+);
+
 const IcMenuOpen = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
@@ -139,6 +145,12 @@ export function Sidebar() {
       ],
     };
 
+    const ITEM_REPOSITORIO: MenuItemType = {
+      label: 'Repositorio de Normativas',
+      icon: <IcNormativas />,
+      href: '/repositorio-normativas',
+    };
+
     if (usuario.rol?.nombre === 'DOCENTE') {
       return [
         { label: 'Inicio', icon: <IcHome />, href: '/' },
@@ -150,6 +162,7 @@ export function Sidebar() {
           badge: contadorNovedades > 0 ? contadorNovedades : undefined,
         },
         SUBMENU_PLAN_ESTUDIOS,
+        ITEM_REPOSITORIO,
       ];
     }
 
@@ -168,6 +181,7 @@ export function Sidebar() {
           submenu: [{ label: 'Listado de Docentes', href: '/docentes' }],
         },
         SUBMENU_PLAN_ESTUDIOS,
+        ITEM_REPOSITORIO,
         SUBMENU_GESTION_ACADEMICA,
         ITEM_VINCULACION,
         { label: 'Bandeja de Aprobaciones', icon: <IcInbox />, href: '/bandeja-aprobaciones' },
@@ -193,6 +207,7 @@ export function Sidebar() {
           submenu: [{ label: 'Listado de Docentes', href: '/docentes' }],
         },
         SUBMENU_PLAN_ESTUDIOS,
+        ITEM_REPOSITORIO,
         SUBMENU_GESTION_ACADEMICA,
         ITEM_VINCULACION,
         {
@@ -212,6 +227,7 @@ export function Sidebar() {
           submenu: [{ label: 'Listado de Docentes', href: '/docentes' }],
         },
         SUBMENU_PLAN_ESTUDIOS,
+        ITEM_REPOSITORIO,
         SUBMENU_GESTION_ACADEMICA,
         {
           label: 'Configuración',
@@ -230,6 +246,7 @@ export function Sidebar() {
           submenu: [{ label: 'Listado de Docentes', href: '/docentes' }],
         },
         SUBMENU_PLAN_ESTUDIOS,
+        ITEM_REPOSITORIO,
         SUBMENU_GESTION_ACADEMICA,
         ITEM_VINCULACION,
       ];
@@ -256,6 +273,7 @@ export function Sidebar() {
     }
 
     base.push(SUBMENU_PLAN_ESTUDIOS);
+    base.push(ITEM_REPOSITORIO);
     base.push(SUBMENU_GESTION_ACADEMICA);
 
     return base;
@@ -273,7 +291,7 @@ export function Sidebar() {
     submenu?.some(item => pathname.startsWith(item.href)) ?? false;
 
   return (
-    <aside className={`${isOpen ? 'w-60' : 'w-14'} bg-[#0d2244] border-r border-white/5 shadow-xl transition-all duration-200 flex flex-col h-screen fixed left-0 top-0 z-40`}>
+    <aside className={`${isOpen ? 'w-64' : 'w-14'} bg-[#0d2244] border-r border-white/5 shadow-xl transition-all duration-200 flex flex-col h-screen fixed left-0 top-0 z-40`}>
 
       {/* Cabecera */}
       <div className="flex items-center justify-between px-3 py-3 border-b border-white/5">
@@ -305,7 +323,7 @@ export function Sidebar() {
               <Link
                 href={item.href}
                 title={!isOpen ? item.label : undefined}
-                className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-colors ${
+                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-colors ${
                   isActive(item.href)
                     ? 'bg-[#1a5ea8] text-white font-medium'
                     : 'text-blue-100/60 hover:bg-white/5 hover:text-white'
@@ -317,7 +335,14 @@ export function Sidebar() {
                     <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border border-[#0d2244]" />
                   )}
                 </span>
-                {isOpen && <span className="truncate flex-1">{item.label}</span>}
+                {isOpen && (
+                  <span
+                    className="flex-1 min-w-0"
+                    style={{ whiteSpace: 'normal', overflowWrap: 'break-word', wordBreak: 'break-word' }}
+                  >
+                    {item.label}
+                  </span>
+                )}
                 {isOpen && item.badge != null && item.badge > 0 && (
                   <span className="flex-shrink-0 text-[9px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none">
                     {item.badge > 99 ? '99+' : item.badge}
@@ -338,7 +363,7 @@ export function Sidebar() {
                   {item.icon}
                   {isOpen && (
                     <>
-                      <span className="flex-1 text-left truncate">{item.label}</span>
+                      <span className="flex-1 min-w-0 text-left whitespace-normal break-words">{item.label}</span>
                       <IcChevron down={expandedMenu === item.label} />
                     </>
                   )}
@@ -357,7 +382,7 @@ export function Sidebar() {
                         }`}
                       >
                         <span className="w-1 h-1 rounded-full bg-current flex-shrink-0 opacity-50" />
-                        <span className="truncate">{sub.label}</span>
+                        <span className="flex-1 min-w-0 whitespace-normal break-words leading-snug">{sub.label}</span>
                       </Link>
                     ))}
                   </div>

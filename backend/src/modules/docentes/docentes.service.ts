@@ -302,7 +302,30 @@ export class DocentesService {
     }
   }
 
+  private normalizarTexto(dto: ActualizarDocenteDto): void {
+    const camposTexto: (keyof ActualizarDocenteDto)[] = [
+      'nombre', 'apellido', 'residencia', 'provincia', 'localidad', 'calle', 'pisoDepto',
+      'unidadAcademica', 'categoriaDocente', 'cargoDeclarado', 'designacion', 'disciplinaCargo',
+      'justificacionPertinencia', 'actividadesProfesionales', 'antecedentesAcademicos',
+      'funcionGestion', 'unidadAcademicaGestion', 'carreraAsociadaGestion', 'normativaDesignacionGestion',
+      'areaDisciplinar', 'subarea', 'observacionesArea',
+      'experienciaDistancia',
+      'tituloActividadExtension', 'rolActividadExtension', 'institucionDestinoActividadExtension',
+      'vinculadoCarreraProyectoInvestigacion', 'disciplinasVinculadasProyectoInvestigacion',
+      'tituloProyectoInvestigacion', 'institucionProyectoInvestigacion',
+      'institucionEvaluadoraProyectoInvestigacion', 'institucionFinanciadoraProyectoInvestigacion',
+      'carreraDocentePosgrado', 'actividadesTransferenciaExtension',
+      'premiosDistinciones', 'estanciasCursosExterior', 'membresiasInstituciones',
+    ];
+    for (const campo of camposTexto) {
+      if (dto[campo] && typeof dto[campo] === 'string') {
+        (dto as any)[campo] = (dto[campo] as string).toUpperCase();
+      }
+    }
+  }
+
   async actualizarDocente(id: string, data: ActualizarDocenteDto) {
+    this.normalizarTexto(data);
     const docenteExistente = await this.obtenerDocentePorId(id);
 
     if (data.correoElectronico || data.numeroDocumento) {

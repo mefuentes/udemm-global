@@ -17,6 +17,7 @@ import { TablasMaestrasModule } from './modules/tablas-maestras/tablas-maestras.
 import { VinculacionesModule } from './modules/vinculaciones/vinculaciones.module';
 import { NotificacionesModule } from './modules/notificaciones/notificaciones.module';
 import { AreasDisiplinaresModule } from './modules/areas-disciplinares/areas-disciplinares.module';
+import { NormativasModule } from './modules/normativas/normativas.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { AreasDisiplinaresModule } from './modules/areas-disciplinares/areas-dis
     VinculacionesModule,
     NotificacionesModule,
     AreasDisiplinaresModule,
+    NormativasModule,
   ],
   controllers: [],
   providers: []

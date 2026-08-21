@@ -1,0 +1,513 @@
+'use client';
+
+import { useAuth } from '@/lib/auth-context';
+import Link from 'next/link';
+import { useParams, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
+
+const ROLES_GESTION = ['SECRETARIA_ACADEMICA', 'DECANO', 'RECTORADO', 'ADMINISTRADOR_SISTEMA'];
+
+// ── Tipos ─────────────────────────────────────────────────────────────────────
+
+interface NormativaItem {
+  id: string;
+  titulo: string;
+  areaEmisora: string;
+  numeroNorma: string;
+  anio: number;
+  fechaEmision: string;
+  vigencia: string;
+  tipoNormativa: { id: string; nombre: string };
+}
+
+interface ListadoResponse {
+  data: NormativaItem[];
+  total: number;
+  paginaActual: number;
+  limite: number;
+  totalPaginas: number;
+}
+
+interface KpiData {
+  vigentes: number;
+  derogadas: number;
+  suspendidas: number;
+  total: number;
+}
+
+interface Filtros {
+  busqueda: string;
+  areaEmisora: string;
+  vigencia: string;
+  fechaDesde: string;
+  fechaHasta: string;
+}
+
+const FILTROS_VACIOS: Filtros = {
+  busqueda: '', areaEmisora: '', vigencia: '', fechaDesde: '', fechaHasta: '',
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function vigenciaBadge(v: string) {
+  switch (v) {
+    case 'VIGENTE':     return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+    case 'DEROGADA':    return 'bg-red-50 text-red-700 border border-red-200';
+    case 'SUSPENDIDA':  return 'bg-amber-50 text-amber-700 border border-amber-200';
+    case 'REEMPLAZADA': return 'bg-slate-100 text-slate-600 border border-slate-200';
+    default:            return 'bg-slate-100 text-slate-600 border border-slate-200';
+  }
+}
+
+function formatFecha(iso: string) {
+  try {
+    return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  } catch { return iso; }
+}
+
+// ── Iconos ────────────────────────────────────────────────────────────────────
+
+const IcFilter = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+  </svg>
+);
+
+const IcEye = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+  </svg>
+);
+
+// ── Página ────────────────────────────────────────────────────────────────────
+
+export default function CategoriaDetallePage() {
+  const { usuario, obtenerTokenActual } = useAuth();
+  const params = useParams();
+  const searchParams = useSearchParams();
+
+  const categoriaId = params?.categoriaId as string;
+  const categoriaNombre = searchParams?.get('nombre') ?? 'Categoría';
+
+  const rol = usuario?.rol?.nombre ?? '';
+  const esDocente = rol === 'DOCENTE';
+  const puedeGestionar = ROLES_GESTION.includes(rol);
+
+  // ── Estado ──────────────────────────────────────────────────────────────────
+  const [normativas, setNormativas] = useState<NormativaItem[]>([]);
+  const [kpi, setKpi] = useState<KpiData>({ vigentes: 0, derogadas: 0, suspendidas: 0, total: 0 });
+  const [cargando, setCargando] = useState(true);
+  const [cargandoKpi, setCargandoKpi] = useState(true);
+  const [error, setError] = useState('');
+  const [pagina, setPagina] = useState(1);
+  const [totalRegistros, setTotalRegistros] = useState(0);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [limite, setLimite] = useState(10);
+
+  const [form, setForm] = useState<Filtros>(FILTROS_VACIOS);
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [errorFiltros, setErrorFiltros] = useState('');
+
+  const hdrs = useCallback(() => ({
+    Authorization: `Bearer ${obtenerTokenActual()}`,
+  }), [obtenerTokenActual]);
+
+  // ── KPIs ────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!categoriaId) return;
+    setCargandoKpi(true);
+    const h = hdrs();
+    const base = `${API}/normativas?tipoId=${categoriaId}&limit=1`;
+
+    if (esDocente) {
+      fetch(`${base}&vigencia=VIGENTE`, { headers: h })
+        .then(r => r.ok ? r.json() : { total: 0 })
+        .then(d => setKpi({ vigentes: d.total ?? 0, derogadas: 0, suspendidas: 0, total: d.total ?? 0 }))
+        .catch(() => {})
+        .finally(() => setCargandoKpi(false));
+    } else {
+      Promise.all([
+        fetch(`${base}&vigencia=VIGENTE`,    { headers: h }).then(r => r.ok ? r.json() : { total: 0 }),
+        fetch(`${base}&vigencia=DEROGADA`,   { headers: h }).then(r => r.ok ? r.json() : { total: 0 }),
+        fetch(`${base}&vigencia=SUSPENDIDA`, { headers: h }).then(r => r.ok ? r.json() : { total: 0 }),
+        fetch(`${API}/normativas?tipoId=${categoriaId}&limit=1`, { headers: h }).then(r => r.ok ? r.json() : { total: 0 }),
+      ])
+        .then(([v, d, s, t]) => setKpi({
+          vigentes: v.total ?? 0, derogadas: d.total ?? 0,
+          suspendidas: s.total ?? 0, total: t.total ?? 0,
+        }))
+        .catch(() => {})
+        .finally(() => setCargandoKpi(false));
+    }
+  }, [categoriaId, hdrs, esDocente]);
+
+  // ── Listado ─────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!categoriaId) return;
+    setCargando(true);
+    setError('');
+
+    const url = new URL(`${API}/normativas`);
+    url.searchParams.set('tipoId', categoriaId);
+    url.searchParams.set('page', String(pagina));
+    url.searchParams.set('limit', '10');
+    if (filtros.busqueda)    url.searchParams.set('busqueda',    filtros.busqueda);
+    if (filtros.areaEmisora) url.searchParams.set('areaEmisora', filtros.areaEmisora);
+    if (filtros.vigencia)    url.searchParams.set('vigencia',    filtros.vigencia);
+    if (filtros.fechaDesde)  url.searchParams.set('fechaDesde',  filtros.fechaDesde);
+    if (filtros.fechaHasta)  url.searchParams.set('fechaHasta',  filtros.fechaHasta);
+
+    fetch(url.toString(), { headers: hdrs() })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((d: ListadoResponse) => {
+        setNormativas(Array.isArray(d.data) ? d.data : []);
+        setTotalRegistros(d.total ?? 0);
+        setTotalPaginas(d.totalPaginas ?? 1);
+        setLimite(d.limite ?? 10);
+      })
+      .catch(() => setError('No se pudieron cargar las normativas.'))
+      .finally(() => setCargando(false));
+  }, [categoriaId, pagina, filtros, hdrs]);
+
+  // ── Handlers filtros ────────────────────────────────────────────────────────
+  function handleBuscar() {
+    if (form.fechaDesde && form.fechaHasta && form.fechaDesde > form.fechaHasta) {
+      setErrorFiltros('LOS FILTROS APLICADOS NO SON VÁLIDOS. La fecha desde no puede ser posterior a la fecha hasta.');
+      return;
+    }
+    setErrorFiltros('');
+    setFiltros({ ...form });
+    setPagina(1);
+  }
+
+  function handleLimpiar() {
+    setForm(FILTROS_VACIOS);
+    setFiltros(FILTROS_VACIOS);
+    setPagina(1);
+    setErrorFiltros('');
+  }
+
+  const hayFiltrosActivos = Object.values(filtros).some(v => v !== '');
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+  return (
+    <div className="max-w-6xl mx-auto space-y-5">
+
+      {/* ── Encabezado ──────────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1.5">
+            <Link href="/repositorio-normativas" className="text-xs text-[#0f4c81] hover:underline font-medium flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Repositorio de Normativas
+            </Link>
+            <span className="text-slate-300 text-xs">/</span>
+            <span className="text-xs text-slate-500 truncate">{categoriaNombre}</span>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">{categoriaNombre}</h1>
+          <p className="mt-1 text-sm text-slate-500 font-medium tracking-wide">REPOSITORIO DE NORMATIVAS</p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {puedeGestionar && (
+            <Link
+              href={`/repositorio-normativas/nueva?tipoId=${categoriaId}&nombre=${encodeURIComponent(categoriaNombre)}`}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0f4c81] hover:bg-[#0d3f6d] text-white text-sm font-bold tracking-wide transition-all shadow-sm"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              CARGAR NORMATIVA
+            </Link>
+          )}
+          <Link
+            href="/repositorio-normativas"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            Volver a categorías
+          </Link>
+        </div>
+      </div>
+
+      {/* ── KPI Cards ────────────────────────────────────────────────────────── */}
+      <div className={`grid gap-3 ${esDocente ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
+        {[
+          { label: 'VIGENTES',    valor: kpi.vigentes,    color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-100', mostrar: true     },
+          { label: 'DEROGADAS',   valor: kpi.derogadas,   color: 'text-red-600',     bg: 'bg-red-50',     border: 'border-red-100',     mostrar: !esDocente },
+          { label: 'SUSPENDIDAS', valor: kpi.suspendidas, color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-100',   mostrar: !esDocente },
+          { label: 'TOTAL',       valor: kpi.total,       color: 'text-[#0f4c81]',   bg: 'bg-blue-50',    border: 'border-blue-100',    mostrar: true     },
+        ].filter(k => k.mostrar).map(({ label, valor, color, bg, border }) => (
+          <div key={label} className={`rounded-xl ${bg} border ${border} px-4 py-3`}>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{label}</p>
+            {cargandoKpi
+              ? <div className="mt-1.5 h-7 w-10 bg-slate-200 rounded animate-pulse" />
+              : <p className={`mt-1 text-2xl font-bold ${color} tabular-nums`}>{valor}</p>
+            }
+          </div>
+        ))}
+      </div>
+
+      {/* ── Filtros ──────────────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2">
+          <IcFilter />
+          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-600">FILTROS</h3>
+          {hayFiltrosActivos && (
+            <span className="ml-auto text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[#0f4c81]/10 text-[#0f4c81]">
+              Filtros activos
+            </span>
+          )}
+        </div>
+        <div className="p-5">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Búsqueda general */}
+            <div className="sm:col-span-2">
+              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">Buscar</label>
+              <input
+                type="text"
+                value={form.busqueda}
+                onChange={e => setForm(prev => ({ ...prev, busqueda: e.target.value }))}
+                onKeyDown={e => e.key === 'Enter' && handleBuscar()}
+                placeholder="Busque por título, palabras clave o área emisora..."
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-[#0f4c81] focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/20 transition-colors"
+                data-no-uppercase="true"
+              />
+            </div>
+
+            {/* Área emisora */}
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">Área emisora</label>
+              <input
+                type="text"
+                value={form.areaEmisora}
+                onChange={e => setForm(prev => ({ ...prev, areaEmisora: e.target.value }))}
+                onKeyDown={e => e.key === 'Enter' && handleBuscar()}
+                placeholder="Área..."
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-[#0f4c81] focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/20 transition-colors"
+                data-no-uppercase="true"
+              />
+            </div>
+
+            {/* Vigencia — oculto para DOCENTE */}
+            {!esDocente && (
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">Vigencia</label>
+                <select
+                  value={form.vigencia}
+                  onChange={e => setForm(prev => ({ ...prev, vigencia: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#0f4c81] focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/20 transition-colors"
+                >
+                  <option value="">Todas</option>
+                  <option value="VIGENTE">VIGENTE</option>
+                  <option value="DEROGADA">DEROGADA</option>
+                  <option value="SUSPENDIDA">SUSPENDIDA</option>
+                  <option value="REEMPLAZADA">REEMPLAZADA</option>
+                </select>
+              </div>
+            )}
+
+            {/* Fecha desde */}
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">Fecha desde</label>
+              <input
+                type="date"
+                value={form.fechaDesde}
+                onChange={e => setForm(prev => ({ ...prev, fechaDesde: e.target.value }))}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#0f4c81] focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/20 transition-colors"
+              />
+            </div>
+
+            {/* Fecha hasta */}
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">Fecha hasta</label>
+              <input
+                type="date"
+                value={form.fechaHasta}
+                onChange={e => setForm(prev => ({ ...prev, fechaHasta: e.target.value }))}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#0f4c81] focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/20 transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* Error de validación de fechas */}
+          {errorFiltros && (
+            <p className="mt-3 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {errorFiltros}
+            </p>
+          )}
+
+          {/* Botones */}
+          <div className="mt-4 flex items-center gap-2 justify-end">
+            <button
+              onClick={handleLimpiar}
+              className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all"
+            >
+              LIMPIAR
+            </button>
+            <button
+              onClick={handleBuscar}
+              className="px-5 py-2 rounded-lg bg-[#0f4c81] text-white text-sm font-semibold hover:bg-[#0d3f6e] transition-colors shadow-sm"
+            >
+              BUSCAR
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Grilla de normativas ──────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-slate-800">NORMATIVAS</h2>
+            {!cargando && !error && (
+              <p className="text-xs text-slate-400 mt-0.5">
+                {totalRegistros === 0
+                  ? 'Sin resultados'
+                  : `${totalRegistros} ${totalRegistros === 1 ? 'normativa encontrada' : 'normativas encontradas'}`}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="px-5 py-4">
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">{error}</div>
+          </div>
+        )}
+
+        {/* Skeleton */}
+        {cargando && !error && (
+          <div className="divide-y divide-slate-50">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="px-5 py-3.5 flex gap-4 animate-pulse">
+                <div className="flex-1 h-3 bg-slate-100 rounded" />
+                <div className="w-28 h-3 bg-slate-100 rounded" />
+                <div className="w-20 h-3 bg-slate-100 rounded" />
+                <div className="w-24 h-3 bg-slate-100 rounded" />
+                <div className="w-16 h-3 bg-slate-100 rounded" />
+                <div className="w-10 h-3 bg-slate-100 rounded" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Vacío */}
+        {!cargando && !error && normativas.length === 0 && (
+          <div className="text-center py-14 px-6">
+            <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
+              <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold text-slate-600">
+              {hayFiltrosActivos
+                ? 'NO SE ENCONTRARON RESULTADOS PARA LOS FILTROS APLICADOS.'
+                : 'NO SE ENCONTRARON NORMATIVAS REGISTRADAS PARA ESTA CATEGORÍA.'}
+            </p>
+            {hayFiltrosActivos && (
+              <button onClick={handleLimpiar} className="mt-3 text-xs text-[#0f4c81] hover:underline font-medium">
+                Limpiar filtros y ver todas
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Tabla */}
+        {!cargando && !error && normativas.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="px-5 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Título</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Área emisora</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">N.° / Año</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">Fecha emisión</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Vigencia</th>
+                  <th className="px-4 py-3 text-center text-[11px] font-bold uppercase tracking-wide text-slate-500">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {normativas.map(n => (
+                  <tr key={n.id} className="hover:bg-slate-50/60 transition-colors group">
+                    <td className="px-5 py-3.5">
+                      <span className="font-medium text-slate-800 leading-snug line-clamp-2">{n.titulo}</span>
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap">{n.areaEmisora}</td>
+                    <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap tabular-nums">
+                      {n.numeroNorma} / {n.anio}
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap">{formatFecha(n.fechaEmision)}</td>
+                    <td className="px-4 py-3.5">
+                      <span className={`inline-flex items-center text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${vigenciaBadge(n.vigencia)}`}>
+                        {n.vigencia}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      <Link
+                        href={`/repositorio-normativas/${categoriaId}/${n.id}?nombre=${encodeURIComponent(categoriaNombre)}`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#0f4c81]/20 bg-[#0f4c81]/5 text-[#0f4c81] text-xs font-semibold hover:bg-[#0f4c81] hover:text-white hover:border-[#0f4c81] transition-all"
+                        title="Ver detalle"
+                      >
+                        <IcEye />
+                        VER
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Paginación */}
+        {!cargando && !error && totalRegistros > 0 && (
+          <div className="px-5 py-3.5 border-t border-slate-100 flex items-center justify-between gap-4">
+            <p className="text-xs text-slate-500">
+              {totalRegistros === 0 ? 'Sin resultados' : (
+                <>
+                  Mostrando{' '}
+                  <span className="font-semibold text-slate-700">
+                    {((pagina - 1) * limite) + 1}–{Math.min(pagina * limite, totalRegistros)}
+                  </span>
+                  {' '}de{' '}
+                  <span className="font-semibold text-slate-700">{totalRegistros}</span>
+                  {' '}normativas
+                </>
+              )}
+            </p>
+            {totalPaginas > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={pagina === 1}
+                  onClick={() => setPagina(p => p - 1)}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Anterior
+                </button>
+                <span className="text-xs text-slate-500 whitespace-nowrap">
+                  Página <span className="font-semibold text-slate-700">{pagina}</span> de{' '}
+                  <span className="font-semibold text-slate-700">{totalPaginas}</span>
+                </span>
+                <button
+                  disabled={pagina === totalPaginas}
+                  onClick={() => setPagina(p => p + 1)}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Siguiente
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

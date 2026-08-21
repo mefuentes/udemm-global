@@ -11,7 +11,8 @@ type CategoriaId =
   | 'designaciones'
   | 'modalidades'
   | 'areas-disciplinares'
-  | 'subareas';
+  | 'subareas'
+  | 'tipos-posgrado';
 
 type SortCol = 'nombre' | 'estado' | 'fecha';
 
@@ -49,8 +50,9 @@ const CATEGORIAS: {
   { id: 'cargos',              label: 'Cargos',              descripcion: 'Tipos de cargo docente (Titular, Adjunto, JTP, Ayudante, etc.).',           esSubarea: false },
   { id: 'designaciones',       label: 'Designaciones',       descripcion: 'Tipos de designación (Regular rentado, Interino, Contratado, etc.).',       esSubarea: false },
   { id: 'modalidades',         label: 'Modalidades',         descripcion: 'Modalidades de cursado (Cuatrimestral, Semestral, Anual, etc.).',           esSubarea: false },
-  { id: 'areas-disciplinares', label: 'Áreas Disciplinares', descripcion: 'Áreas de clasificación disciplinar de docentes por campo de conocimiento.', esSubarea: false },
-  { id: 'subareas',            label: 'Subáreas',            descripcion: 'Subáreas disciplinares vinculadas a un Área Disciplinar.',                  esSubarea: true  },
+  { id: 'areas-disciplinares', label: 'Áreas Disciplinares',              descripcion: 'Áreas de clasificación disciplinar de docentes por campo de conocimiento.', esSubarea: false },
+  { id: 'subareas',            label: 'Subáreas',                         descripcion: 'Subáreas disciplinares vinculadas a un Área Disciplinar.',                  esSubarea: true  },
+  { id: 'tipos-posgrado',      label: 'Tipos de Posgrado',                descripcion: 'Tipos de títulos de posgrado (Especialización, Maestría, Doctorado, etc.).', esSubarea: false },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -68,6 +70,7 @@ const IcDesig      = () => <svg className="w-4 h-4 flex-shrink-0" fill="none" vi
 const IcMod        = () => <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>;
 const IcAreas      = () => <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>;
 const IcSubareas   = () => <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/></svg>;
+const IcPosgrado   = () => <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5z"/><path strokeLinecap="round" strokeLinejoin="round" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/></svg>;
 const IcPlus       = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>;
 const IcEdit       = () => <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>;
 const IcTrash      = () => <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>;
@@ -81,12 +84,13 @@ const IcDesactivar = () => <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0
 const IcEmpty      = () => <svg className="w-10 h-10 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}><path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>;
 
 const CAT_ICONS: Record<CategoriaId, React.ReactNode> = {
-  catedras:            <IcCatedras />,
-  cargos:              <IcCargos />,
-  designaciones:       <IcDesig />,
-  modalidades:         <IcMod />,
+  catedras:              <IcCatedras />,
+  cargos:                <IcCargos />,
+  designaciones:         <IcDesig />,
+  modalidades:           <IcMod />,
   'areas-disciplinares': <IcAreas />,
-  subareas:            <IcSubareas />,
+  subareas:              <IcSubareas />,
+  'tipos-posgrado':      <IcPosgrado />,
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────

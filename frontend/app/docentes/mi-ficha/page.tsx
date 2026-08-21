@@ -115,6 +115,7 @@ interface TituloPosgradoItem {
   id: string;
   denominacion: string;
   tipo: string;
+  tipoId: string;
   anio: string;
   institucion: string;
 }
@@ -122,6 +123,7 @@ interface TituloPosgradoItem {
 interface TituloPosgradoForm {
   denominacion: string;
   tipo: string;
+  tipoId: string;
   anio: string;
   institucion: string;
 }
@@ -129,14 +131,12 @@ interface TituloPosgradoForm {
 interface OtroTituloItem {
   id: string;
   denominacion: string;
-  tipo: string;
   anio: string;
   institucion: string;
 }
 
 interface OtroTituloForm {
   denominacion: string;
-  tipo: string;
   anio: string;
   institucion: string;
 }
@@ -432,8 +432,8 @@ const TAB_TITLES = [
   { numero: '9', texto: 'Comités y Jurados' },
   { numero: '10', texto: 'Otra Información' },
 ];
-const SOLO_CARACTERES_REGEX = /^[A-Za-z\s' -]+$/;
-const SOLO_ALFANUMERICO_REGEX = /^[A-Za-z0-9\s'.,-]+$/;
+const SOLO_CARACTERES_REGEX = /^[\p{L}\s'\-]+$/u;
+const SOLO_ALFANUMERICO_REGEX = /^[\p{L}\p{N}\s'.,\-()\/:;°+&#º]+$/u;
 const SOLO_NUMEROS_REGEX = /^\d+$/;
 const ANIO_REGEX = /^\d{4}$/;
 
@@ -466,7 +466,8 @@ function parseTitulosPosgrado(rawValue: unknown): TituloPosgradoItem[] {
       .map((item: any, index: number) => ({
         id: typeof item.id === 'string' && item.id ? item.id : `posgrado-${Date.now()}-${index}`,
         denominacion: String(item.denominacion ?? ''),
-        tipo: String(item.tipo ?? ''),
+        tipo: String(item.tipo ?? '').toUpperCase(),
+        tipoId: String(item.tipoId ?? ''),
         anio: String(item.anio ?? ''),
         institucion: String(item.institucion ?? '')
       }));
@@ -485,7 +486,6 @@ function parseOtrosTitulos(rawValue: unknown): OtroTituloItem[] {
       .map((item: any, index: number) => ({
         id: typeof item.id === 'string' && item.id ? item.id : `otro-titulo-${Date.now()}-${index}`,
         denominacion: String(item.denominacion ?? ''),
-        tipo: String(item.tipo ?? ''),
         anio: String(item.anio ?? ''),
         institucion: String(item.institucion ?? '')
       }));
@@ -570,7 +570,9 @@ function parseTrayectoriaCargosPasados(rawValue: unknown): TrayectoriaCargoItem[
         institucion: String(item.institucion ?? ''),
         unidadAcademica: String(item.unidadAcademica ?? ''),
         cargo: String(item.cargo ?? ''),
+        cargoId: typeof item.cargoId === 'string' ? item.cargoId : undefined,
         modalidad: String(item.modalidad ?? ''),
+        modalidadId: typeof item.modalidadId === 'string' ? item.modalidadId : undefined,
         dedicacionSem: String(item.dedicacionSem ?? '')
       }));
   } catch {
@@ -714,12 +716,13 @@ export default function MiFichaPage() {
   const [editandoTituloId, setEditandoTituloId] = useState<string | null>(null);
   const [mostrarFormGrado, setMostrarFormGrado] = useState(false);
   const [titulosPosgrado, setTitulosPosgrado] = useState<TituloPosgradoItem[]>([]);
-  const [posgradoForm, setPosgradoForm] = useState<TituloPosgradoForm>({ denominacion: '', tipo: '', anio: '', institucion: '' });
+  const [tiposPosgrado, setTiposPosgrado] = useState<{ id: string; nombre: string }[]>([]);
+  const [posgradoForm, setPosgradoForm] = useState<TituloPosgradoForm>({ denominacion: '', tipo: '', tipoId: '', anio: '', institucion: '' });
   const [posgradoErrors, setPosgradoErrors] = useState<Partial<Record<keyof TituloPosgradoForm, string>>>({});
   const [editandoPosgradoId, setEditandoPosgradoId] = useState<string | null>(null);
   const [mostrarFormPosgrado, setMostrarFormPosgrado] = useState(false);
   const [otrosTitulos, setOtrosTitulos] = useState<OtroTituloItem[]>([]);
-  const [otroTituloForm, setOtroTituloForm] = useState<OtroTituloForm>({ denominacion: '', tipo: '', anio: '', institucion: '' });
+  const [otroTituloForm, setOtroTituloForm] = useState<OtroTituloForm>({ denominacion: '', anio: '', institucion: '' });
   const [otroTituloErrors, setOtroTituloErrors] = useState<Partial<Record<keyof OtroTituloForm, string>>>({});
   const [editandoOtroTituloId, setEditandoOtroTituloId] = useState<string | null>(null);
   const [mostrarFormOtroTitulo, setMostrarFormOtroTitulo] = useState(false);
@@ -861,6 +864,10 @@ export default function MiFichaPage() {
     fetch(`${API_URL}/configuracion/tablas-maestras/modalidades/activos`, { headers: hdrs })
       .then(r => r.ok ? r.json() : [])
       .then(d => setModalidadesOpciones(Array.isArray(d) ? d : []))
+      .catch(() => {});
+    fetch(`${API_URL}/configuracion/tablas-maestras/tipos-posgrado/activos`, { headers: hdrs })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setTiposPosgrado(Array.isArray(d) ? d : []))
       .catch(() => {});
   }, []);
 
@@ -1100,7 +1107,7 @@ export default function MiFichaPage() {
     let nextValue = value;
 
     if (['apellido', 'nombre', 'residencia', 'provincia', 'localidad'].includes(field)) {
-      nextValue = value.replace(/[^A-Za-z\s' -]/g, '');
+      nextValue = value.replace(/[^\p{L}\s'\-]/gu, '');
     }
 
     if (field === 'numeroDocumento' || field === 'telefono' || field === 'numero') {
@@ -1123,14 +1130,14 @@ export default function MiFichaPage() {
     }
 
     if (field === 'calle' || field === 'pisoDepto') {
-      nextValue = value.replace(/[^A-Za-z0-9\s'.,-]/g, '');
+      nextValue = value.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, '');
     }
 
     if (field === 'unidadAcademica') {
-      nextValue = value.replace(/[^A-Za-z0-9\s'.,-]/g, '');
+      nextValue = value.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, '');
     }
     if (field === 'unidadAcademicaGestion' || field === 'carreraAsociadaGestion') {
-      nextValue = value.replace(/[^A-Za-z0-9\s'.,-]/g, '');
+      nextValue = value.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, '');
     }
 
     handleFieldChange(field, nextValue);
@@ -1226,7 +1233,6 @@ export default function MiFichaPage() {
     else if (!SOLO_CARACTERES_REGEX.test(form.denominacion.trim())) errors.denominacion = 'Solo acepta caracteres';
 
     if (!form.tipo.trim()) errors.tipo = 'Campo obligatorio';
-    else if (!SOLO_CARACTERES_REGEX.test(form.tipo.trim())) errors.tipo = 'Solo acepta caracteres';
 
     if (!form.anio.trim()) errors.anio = 'Campo obligatorio';
     else if (!ANIO_REGEX.test(form.anio.trim())) errors.anio = 'Debe tener 4 valores numericos';
@@ -1249,7 +1255,7 @@ export default function MiFichaPage() {
   }
 
   function limpiarPosgradoForm() {
-    setPosgradoForm({ denominacion: '', tipo: '', anio: '', institucion: '' });
+    setPosgradoForm({ denominacion: '', tipo: '', tipoId: '', anio: '', institucion: '' });
     setPosgradoErrors({});
     setEditandoPosgradoId(null);
   }
@@ -1258,9 +1264,6 @@ export default function MiFichaPage() {
     const errors: Partial<Record<keyof OtroTituloForm, string>> = {};
     if (!form.denominacion.trim()) errors.denominacion = 'Campo obligatorio';
     else if (!SOLO_CARACTERES_REGEX.test(form.denominacion.trim())) errors.denominacion = 'Solo acepta caracteres';
-
-    if (!form.tipo.trim()) errors.tipo = 'Campo obligatorio';
-    else if (!SOLO_CARACTERES_REGEX.test(form.tipo.trim())) errors.tipo = 'Solo acepta caracteres';
 
     if (!form.anio.trim()) errors.anio = 'Campo obligatorio';
     else if (!ANIO_REGEX.test(form.anio.trim())) errors.anio = 'Debe tener 4 valores numericos';
@@ -1283,7 +1286,7 @@ export default function MiFichaPage() {
   }
 
   function limpiarOtroTituloForm() {
-    setOtroTituloForm({ denominacion: '', tipo: '', anio: '', institucion: '' });
+    setOtroTituloForm({ denominacion: '', anio: '', institucion: '' });
     setOtroTituloErrors({});
     setEditandoOtroTituloId(null);
   }
@@ -1293,7 +1296,6 @@ export default function MiFichaPage() {
     const nuevo: OtroTituloItem = {
       id: editandoOtroTituloId ?? `otro-titulo-${Date.now()}`,
       denominacion: otroTituloForm.denominacion.trim(),
-      tipo: otroTituloForm.tipo.trim(),
       anio: otroTituloForm.anio.trim(),
       institucion: otroTituloForm.institucion.trim()
     };
@@ -1309,7 +1311,7 @@ export default function MiFichaPage() {
   }
 
   function editarOtroTitulo(item: OtroTituloItem) {
-    setOtroTituloForm({ denominacion: item.denominacion, tipo: item.tipo, anio: item.anio, institucion: item.institucion });
+    setOtroTituloForm({ denominacion: item.denominacion, anio: item.anio, institucion: item.institucion });
     setEditandoOtroTituloId(item.id);
     setOtroTituloErrors({});
     setMostrarFormOtroTitulo(true);
@@ -1390,6 +1392,7 @@ export default function MiFichaPage() {
       id: editandoPosgradoId ?? `posgrado-${Date.now()}`,
       denominacion: posgradoForm.denominacion.trim(),
       tipo: posgradoForm.tipo.trim(),
+      tipoId: posgradoForm.tipoId,
       anio: posgradoForm.anio.trim(),
       institucion: posgradoForm.institucion.trim()
     };
@@ -1405,7 +1408,9 @@ export default function MiFichaPage() {
   }
 
   function editarPosgrado(item: TituloPosgradoItem) {
-    setPosgradoForm({ denominacion: item.denominacion, tipo: item.tipo, anio: item.anio, institucion: item.institucion });
+    const tipo = item.tipo.toUpperCase();
+    const tipoId = item.tipoId || (tiposPosgrado.find(t => t.nombre === tipo)?.id ?? '');
+    setPosgradoForm({ denominacion: item.denominacion, tipo, tipoId, anio: item.anio, institucion: item.institucion });
     setEditandoPosgradoId(item.id);
     setPosgradoErrors({});
     setMostrarFormPosgrado(true);
@@ -2124,30 +2129,59 @@ export default function MiFichaPage() {
       }
     };
 
-    // Key-value section
+    // ── Shared PDF constants ──────────────────────────────────────────────────
+    const LH_FACTOR = 1.4;
+    const PAGE_BOTTOM = 800;
+
+    // Key-value section — dynamic row height, full text wrap, per-row page break
     const drawSection = (tabName: string, subtitle: string | null, rows: Array<[string, string]>) => {
-      const rowH = 20;
-      checkPage(24 + (subtitle ? 18 : 0) + rows.length * rowH + 16);
-      drawHeader(tabName, subtitle ?? undefined);
-      doc.setTextColor(30, 41, 59);
-      rows.forEach(([label, rawValue], idx) => {
+      const fontSize = 9;
+      const lineH = fontSize * LH_FACTOR;
+      const padTop = 5;
+      const padBot = 4;
+      const minRowH = 20;
+
+      doc.setFontSize(fontSize);
+
+      const rowData = rows.map(([label, rawValue]) => {
         const value = rawValue && rawValue.trim() ? rawValue : '-';
+        doc.setFont('helvetica', 'bold');
+        const lblLines = doc.splitTextToSize(label, labelColW - 12) as string[];
+        doc.setFont('helvetica', 'normal');
+        const valLines = doc.splitTextToSize(value, valueColW - 12) as string[];
+        const rowH = Math.max(minRowH, padTop + Math.max(lblLines.length, valLines.length) * lineH + padBot);
+        return { lblLines, valLines, rowH };
+      });
+
+      // Keep section header + first row together on the same page
+      const sectionHdrH = 24 + (subtitle ? 18 : 0);
+      const firstH = rowData.length > 0 ? rowData[0].rowH : minRowH;
+      checkPage(sectionHdrH + firstH);
+      drawHeader(tabName, subtitle ?? undefined);
+
+      doc.setTextColor(30, 41, 59);
+      rowData.forEach(({ lblLines, valLines, rowH }, idx) => {
+        if (y + rowH > PAGE_BOTTOM) { doc.addPage(); y = 50; }
+
         doc.setFillColor(idx % 2 === 0 ? 248 : 255, idx % 2 === 0 ? 250 : 255, idx % 2 === 0 ? 252 : 255);
         doc.rect(marginX, y, tableWidth, rowH, 'F');
         doc.setDrawColor(226, 232, 240);
         doc.rect(marginX, y, tableWidth, rowH);
         doc.line(marginX + labelColW, y, marginX + labelColW, y + rowH);
+
+        const textY = y + padTop + fontSize;
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
-        doc.text(label, marginX + 6, y + 14);
+        doc.setFontSize(fontSize);
+        doc.text(lblLines, marginX + 6, textY, { lineHeightFactor: LH_FACTOR });
         doc.setFont('helvetica', 'normal');
-        doc.text((doc.splitTextToSize(value, valueColW - 10) as string[])[0] ?? '-', marginX + labelColW + 6, y + 14);
+        doc.text(valLines, marginX + labelColW + 6, textY, { lineHeightFactor: LH_FACTOR });
+
         y += rowH;
       });
       y += 12;
     };
 
-    // List table section
+    // Table section — dynamic row heights, full cell wrap, per-row page break with header re-draw
     const drawTableSection = (
       tabName: string,
       subtitle: string | null,
@@ -2156,79 +2190,94 @@ export default function MiFichaPage() {
       colFractions: number[],
       summaryLines?: string[]
     ) => {
-      const hdrH = 18;
-      const rowH = 18;
       const colWidths = colFractions.map(f => f * tableWidth);
-      checkPage(24 + (subtitle ? 18 : 0) + hdrH + Math.max(rows.length, 1) * rowH + 16);
+      const colHdrH = 18;
+      const fontSize = 8;
+      const lineH = fontSize * LH_FACTOR;
+      const padTop = 4;
+      const padBot = 3;
+      const minRowH = 18;
 
-      // Tab name + subtitle
+      // Pre-compute all cell lines and row heights at fontSize=8
+      doc.setFontSize(fontSize);
+      const rowData = rows.map(row => {
+        const cells = row.map((cell, i) =>
+          doc.splitTextToSize(cell || '-', colWidths[i] - 8) as string[]
+        );
+        const maxLines = Math.max(...cells.map(c => c.length), 1);
+        const rowH = Math.max(minRowH, padTop + maxLines * lineH + padBot);
+        return { cells, rowH };
+      });
+
+      // Keep section header + column header + first row together
+      const sectionHdrH = 24 + (subtitle ? 18 : 0);
+      const firstDataH = rowData.length > 0 ? rowData[0].rowH : minRowH;
+      checkPage(sectionHdrH + colHdrH + firstDataH);
       drawHeader(tabName, subtitle ?? undefined);
 
-      // Column headers
-      doc.setFillColor(226, 232, 240);
-      doc.rect(marginX, y, tableWidth, hdrH, 'F');
-      doc.setDrawColor(226, 232, 240);
-      doc.rect(marginX, y, tableWidth, hdrH);
-      doc.setTextColor(71, 85, 105);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
-      let cx = marginX;
-      headers.forEach((h, i) => {
-        if (i > 0) doc.line(cx, y, cx, y + hdrH);
-        doc.text(h.toUpperCase(), cx + 4, y + 12);
-        cx += colWidths[i];
-      });
-      y += hdrH;
+      // Column headers — extracted as function so page breaks can re-draw them
+      const drawColHeaders = () => {
+        doc.setFillColor(226, 232, 240);
+        doc.rect(marginX, y, tableWidth, colHdrH, 'F');
+        doc.setDrawColor(226, 232, 240);
+        doc.rect(marginX, y, tableWidth, colHdrH);
+        doc.setTextColor(71, 85, 105);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        let cx = marginX;
+        headers.forEach((h, i) => {
+          if (i > 0) doc.line(cx, y, cx, y + colHdrH);
+          doc.text(h.toUpperCase(), cx + 4, y + 12);
+          cx += colWidths[i];
+        });
+        y += colHdrH;
+      };
+
+      drawColHeaders();
 
       if (rows.length === 0) {
         doc.setFillColor(248, 250, 252);
-        doc.rect(marginX, y, tableWidth, rowH, 'F');
+        doc.rect(marginX, y, tableWidth, minRowH, 'F');
         doc.setDrawColor(226, 232, 240);
-        doc.rect(marginX, y, tableWidth, rowH);
+        doc.rect(marginX, y, tableWidth, minRowH);
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8.5);
         doc.setTextColor(148, 163, 184);
         doc.text('Sin registros', marginX + 6, y + 12);
-        y += rowH;
+        y += minRowH;
       } else {
-        rows.forEach((row, idx) => {
-          if (y + rowH > 800) {
-            doc.addPage(); y = 50;
-            doc.setFillColor(226, 232, 240);
-            doc.rect(marginX, y, tableWidth, hdrH, 'F');
-            doc.setDrawColor(226, 232, 240);
-            doc.rect(marginX, y, tableWidth, hdrH);
-            doc.setTextColor(71, 85, 105);
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(7.5);
-            let cxr = marginX;
-            headers.forEach((h, i) => {
-              if (i > 0) doc.line(cxr, y, cxr, y + hdrH);
-              doc.text(h.toUpperCase(), cxr + 4, y + 12);
-              cxr += colWidths[i];
-            });
-            y += hdrH;
+        rowData.forEach(({ cells, rowH }, idx) => {
+          // Page break — re-draw column headers on the new page
+          if (y + rowH > PAGE_BOTTOM) {
+            doc.addPage();
+            y = 50;
+            drawColHeaders();
           }
+
           doc.setFillColor(idx % 2 === 0 ? 248 : 255, idx % 2 === 0 ? 250 : 255, idx % 2 === 0 ? 252 : 255);
           doc.rect(marginX, y, tableWidth, rowH, 'F');
           doc.setDrawColor(226, 232, 240);
           doc.rect(marginX, y, tableWidth, rowH);
+
           doc.setFont('helvetica', 'normal');
-          doc.setFontSize(8);
+          doc.setFontSize(fontSize);
           doc.setTextColor(30, 41, 59);
+
+          const textY = y + padTop + fontSize;
           let colX = marginX;
-          row.forEach((cell, i) => {
+          cells.forEach((lines, i) => {
             if (i > 0) doc.line(colX, y, colX, y + rowH);
-            const txt = (doc.splitTextToSize(cell || '-', colWidths[i] - 8) as string[])[0] ?? '-';
-            doc.text(txt, colX + 4, y + 12);
+            doc.text(lines, colX + 4, textY, { lineHeightFactor: LH_FACTOR });
             colX += colWidths[i];
           });
+
           y += rowH;
         });
       }
 
       if (summaryLines && summaryLines.length > 0) {
         const sumH = summaryLines.length * 16;
+        checkPage(sumH);
         doc.setFillColor(241, 245, 249);
         doc.rect(marginX, y, tableWidth, sumH, 'F');
         doc.setDrawColor(226, 232, 240);
@@ -2284,9 +2333,9 @@ export default function MiFichaPage() {
     );
     drawTableSection(
       '', '2.3 Otros títulos de nivel superior (terciario/técnico)',
-      ['Título', 'Tipo', 'Año', 'Institución'],
-      otrosTitulos.map(t => [t.denominacion, t.tipo, t.anio, t.institucion]),
-      [0.38, 0.18, 0.10, 0.34]
+      ['Título', 'Año', 'Institución'],
+      otrosTitulos.map(t => [t.denominacion, t.anio, t.institucion]),
+      [0.46, 0.10, 0.44]
     );
     drawTableSection(
       '', '2.4 Carrera de formación docente',
@@ -2296,19 +2345,63 @@ export default function MiFichaPage() {
     );
 
     // ── 3. Área de desempeño ──────────────────────────────────
-    drawSection('Área de desempeño', '3.1 Disciplina y área', [
-      ['Área disciplinar', formData.areaDisciplinar],
-      ['Subárea', formData.subarea],
-      ['Observaciones', formData.observacionesArea],
-    ]);
+    const areaEncontrada = areasDisciplinares.find(
+  a => a.id === formData.areaDisciplinarId
+);
 
+const subareaEncontrada = subareas.find(
+  s => s.id === formData.subareaId
+);
+
+const pdfAreaNombre =
+  areaEncontrada?.nombre ||
+  formData.areaDisciplinar ||
+  'Sin información registrada';
+
+const pdfSubareaNombre =
+  subareaEncontrada?.nombre ||
+  formData.subarea ||
+  'Sin información registrada';
+
+drawSection('Área de desempeño', '3.1 Disciplina y área', [
+  ['Área disciplinar', pdfAreaNombre],
+  ['Subárea', pdfSubareaNombre],
+  ['Observaciones', formData.observacionesArea || 'Sin información registrada'],
+]);
     // ── 4. Docencia universitaria ─────────────────────────────
     drawTableSection(
       'Docencia universitaria', '4.1 Situación actual',
-      ['Carrera', 'Asignatura', 'Plan', 'Cátedra', 'Año inicio', 'Cargo', 'Modalidad', 'Designación', 'Disc./Subdisc.'],
-      situacionActual.map(a => [a.carrera, a.asignatura, a.plan, a.catedra, a.anioInicio, a.cargo, a.modalidad, a.designacion, a.disciplinaSubdisciplina]),
-      [0.14, 0.14, 0.08, 0.10, 0.08, 0.10, 0.10, 0.10, 0.16]
+      ['Carrera', 'Asignatura', 'Plan', 'Cátedra', 'Año inicio', 'Cargo', 'Modalidad', 'Designación'],
+      vinculacionesAprobadas.map(a => [
+        a.carrera.nombre, a.materia.nombre, a.planEstudio.nombre, a.catedra.nombre,
+        a.anioInicio != null ? String(a.anioInicio) : '',
+        a.cargo.nombre, a.modalidad.nombre, a.designacion.nombre,
+      ]),
+      [0.16, 0.16, 0.12, 0.10, 0.08, 0.12, 0.12, 0.14]
     );
+    drawTableSection(
+      '', '4.2 Actividades curriculares de posgrado',
+      ['Carrera / Posgrado', 'Actividad curricular', 'Plan', 'Año inicio'],
+      actividadesPosgrado.map(a => [a.carrerasPosgrado, a.actividadCurricular, a.plan, a.anioInicio]),
+      [0.32, 0.36, 0.20, 0.12]
+    );
+    drawTableSection(
+      '', '4.3 Trayectoria — cargos pasados',
+      ['Período desde', 'Período hasta', 'Institución', 'Unidad Académica', 'Cargo', 'Modalidad', 'Ded. sem. (hs)'],
+      trayectoriaCargosPasados.map(t => [t.periodoDesde, t.periodoHasta, t.institucion, t.unidadAcademica, t.cargo, t.modalidad, t.dedicacionSem]),
+      [0.10, 0.10, 0.20, 0.18, 0.15, 0.15, 0.12]
+    );
+    drawSection('', 'Dirección de tesis, tesinas y trabajos finales', [
+      ['Tesis doctorales concluidas',  direccionTesisSummary.tesisDoctoralesConcluidas],
+      ['Tesis doctorales en curso',    direccionTesisSummary.tesisDoctoralesActuales],
+      ['Tesis de maestría concluidas', direccionTesisSummary.tesisMaestriaConcluidas],
+      ['Tesis de maestría en curso',   direccionTesisSummary.tesisMaestriaActuales],
+      ['Trabajos finales concluidos',  direccionTesisSummary.trabajosFinalesConcluidos],
+      ['Trabajos finales en curso',    direccionTesisSummary.trabajosFinalesActuales],
+    ]);
+    drawSection('', '4.4 Experiencia en educación a distancia', [
+      ['Descripción', formData.experienciaDistancia],
+    ]);
 
     // ── 5. Gestión Académica ──────────────────────────────────
     drawTableSection(
@@ -2839,7 +2932,7 @@ export default function MiFichaPage() {
                     <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div><label className="text-xs uppercase text-slate-500">Titulo *</label><input value={posgradoForm.denominacion} onChange={(e) => actualizarCampoPosgrado('denominacion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{posgradoErrors.denominacion ? <p className="mt-1 text-xs text-red-600">{posgradoErrors.denominacion}</p> : null}</div>
-                        <div><label className="text-xs uppercase text-slate-500">Tipo *</label><select value={posgradoForm.tipo} onChange={(e) => actualizarCampoPosgrado('tipo', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">Seleccionar</option><option value="Especialización">Especialización</option><option value="Maestría">Maestría</option><option value="Doctorado">Doctorado</option></select>{posgradoErrors.tipo ? <p className="mt-1 text-xs text-red-600">{posgradoErrors.tipo}</p> : null}</div>
+                        <div><label className="text-xs uppercase text-slate-500">Tipo *</label><select value={posgradoForm.tipoId} onChange={(e) => { const sel = tiposPosgrado.find(t => t.id === e.target.value); setPosgradoForm(prev => ({ ...prev, tipoId: e.target.value, tipo: sel?.nombre ?? '' })); setPosgradoErrors(prev => { const n = { ...prev }; delete n.tipo; return n; }); }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">Seleccionar</option>{tiposPosgrado.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}</select>{posgradoErrors.tipo ? <p className="mt-1 text-xs text-red-600">{posgradoErrors.tipo}</p> : null}</div>
                         <div><label className="text-xs uppercase text-slate-500">Año *</label><input value={posgradoForm.anio} onChange={(e) => actualizarCampoPosgrado('anio', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{posgradoErrors.anio ? <p className="mt-1 text-xs text-red-600">{posgradoErrors.anio}</p> : null}</div>
                         <div><label className="text-xs uppercase text-slate-500">Institucion *</label><input value={posgradoForm.institucion} onChange={(e) => actualizarCampoPosgrado('institucion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{posgradoErrors.institucion ? <p className="mt-1 text-xs text-red-600">{posgradoErrors.institucion}</p> : null}</div>
                       </div>
@@ -2866,9 +2959,8 @@ export default function MiFichaPage() {
                     <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div><label className="text-xs uppercase text-slate-500">Titulo *</label><input value={otroTituloForm.denominacion} onChange={(e) => actualizarCampoOtroTitulo('denominacion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{otroTituloErrors.denominacion ? <p className="mt-1 text-xs text-red-600">{otroTituloErrors.denominacion}</p> : null}</div>
-                        <div><label className="text-xs uppercase text-slate-500">Tipo *</label><input value={otroTituloForm.tipo} onChange={(e) => actualizarCampoOtroTitulo('tipo', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{otroTituloErrors.tipo ? <p className="mt-1 text-xs text-red-600">{otroTituloErrors.tipo}</p> : null}</div>
                         <div><label className="text-xs uppercase text-slate-500">Año *</label><input value={otroTituloForm.anio} onChange={(e) => actualizarCampoOtroTitulo('anio', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{otroTituloErrors.anio ? <p className="mt-1 text-xs text-red-600">{otroTituloErrors.anio}</p> : null}</div>
-                        <div><label className="text-xs uppercase text-slate-500">Institucion *</label><input value={otroTituloForm.institucion} onChange={(e) => actualizarCampoOtroTitulo('institucion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{otroTituloErrors.institucion ? <p className="mt-1 text-xs text-red-600">{otroTituloErrors.institucion}</p> : null}</div>
+                        <div className="sm:col-span-2"><label className="text-xs uppercase text-slate-500">Institucion *</label><input value={otroTituloForm.institucion} onChange={(e) => actualizarCampoOtroTitulo('institucion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{otroTituloErrors.institucion ? <p className="mt-1 text-xs text-red-600">{otroTituloErrors.institucion}</p> : null}</div>
                       </div>
                       <div className="mt-4 flex justify-end gap-2">
                         <button type="button" onClick={guardarOtroTitulo} className="rounded-md bg-[#0f4c81] px-3 py-1.5 text-xs font-medium text-white">Guardar</button>
@@ -2878,8 +2970,8 @@ export default function MiFichaPage() {
                   ) : null}
                   <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
                     <table className="min-w-full text-sm">
-                      <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">Titulo</th><th className="px-3 py-2">Tipo</th><th className="px-3 py-2">Año</th><th className="px-3 py-2">Institucion</th><th className="px-3 py-2 text-right">Accion</th></tr></thead>
-                      <tbody>{otrosTitulos.length === 0 ? <tr><td colSpan={5} className="px-3 py-3 text-slate-500">Sin registros cargados.</td></tr> : otrosTitulos.map((item) => <tr key={item.id} className="border-t border-slate-100"><td className="px-3 py-2">{item.denominacion}</td><td className="px-3 py-2">{item.tipo}</td><td className="px-3 py-2">{item.anio}</td><td className="px-3 py-2">{item.institucion}</td><td className="px-3 py-2 text-right">{editMode ? <div className="inline-flex gap-1"><button type="button" onClick={() => editarOtroTitulo(item)} className="rounded-md border border-slate-200 p-1.5 text-slate-600" aria-label="Editar otro titulo" title="Editar otro titulo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path d="M13.586 3.586a2 2 0 112.828 2.828l-8.12 8.12a2 2 0 01-.878.497l-3.11.889a.75.75 0 01-.927-.927l.889-3.11a2 2 0 01.497-.878l8.12-8.12z" /></svg></button><button type="button" onClick={() => eliminarOtroTitulo(item.id)} className="rounded-md border border-red-200 p-1.5 text-red-500 hover:bg-red-50" aria-label="Eliminar otro titulo" title="Eliminar otro titulo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" /></svg></button></div> : null}</td></tr>)}</tbody>
+                      <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">Titulo</th><th className="px-3 py-2">Año</th><th className="px-3 py-2">Institucion</th><th className="px-3 py-2 text-right">Accion</th></tr></thead>
+                      <tbody>{otrosTitulos.length === 0 ? <tr><td colSpan={4} className="px-3 py-3 text-slate-500">Sin registros cargados.</td></tr> : otrosTitulos.map((item) => <tr key={item.id} className="border-t border-slate-100"><td className="px-3 py-2">{item.denominacion}</td><td className="px-3 py-2">{item.anio}</td><td className="px-3 py-2">{item.institucion}</td><td className="px-3 py-2 text-right">{editMode ? <div className="inline-flex gap-1"><button type="button" onClick={() => editarOtroTitulo(item)} className="rounded-md border border-slate-200 p-1.5 text-slate-600" aria-label="Editar otro titulo" title="Editar otro titulo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path d="M13.586 3.586a2 2 0 112.828 2.828l-8.12 8.12a2 2 0 01-.878.497l-3.11.889a.75.75 0 01-.927-.927l.889-3.11a2 2 0 01.497-.878l8.12-8.12z" /></svg></button><button type="button" onClick={() => eliminarOtroTitulo(item.id)} className="rounded-md border border-red-200 p-1.5 text-red-500 hover:bg-red-50" aria-label="Eliminar otro titulo" title="Eliminar otro titulo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" /></svg></button></div> : null}</td></tr>)}</tbody>
                     </table>
                   </div>
                 </div>
@@ -2972,8 +3064,8 @@ export default function MiFichaPage() {
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
                       <p className="text-xs uppercase text-slate-500">Observaciones</p>
                       {editMode ? (
-                        <textarea value={formData.observacionesArea} onChange={(e) => handleFieldChange('observacionesArea', e.target.value)} rows={4} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm resize-none" />
-                      ) : <p className="mt-1 whitespace-pre-wrap text-sm">{formData.observacionesArea || '-'}</p>}
+                        <textarea value={formData.observacionesArea} onChange={(e) => handleFieldChange('observacionesArea', e.target.value)} rows={6} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm resize-y" />
+                      ) : <p className="mt-1 whitespace-pre-wrap break-words text-sm">{formData.observacionesArea || '-'}</p>}
                     </div>
                   </div>
                 </div>
@@ -3049,16 +3141,16 @@ export default function MiFichaPage() {
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5 sm:col-span-2">
                         <p className="text-xs uppercase text-slate-500">Carreras de posgrado *</p>
-                        <input value={actividadPosgradoForm.carrerasPosgrado} onChange={(e) => actualizarCampoActPosgrado('carrerasPosgrado', e.target.value)} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${actividadPosgradoErrors.carrerasPosgrado ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <input data-no-uppercase="true" value={actividadPosgradoForm.carrerasPosgrado} onChange={(e) => actualizarCampoActPosgrado('carrerasPosgrado', e.target.value)} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${actividadPosgradoErrors.carrerasPosgrado ? 'border-red-400' : 'border-slate-200'} bg-white`} />
                         {actividadPosgradoErrors.carrerasPosgrado && <p className="mt-1 text-xs text-red-500">{actividadPosgradoErrors.carrerasPosgrado}</p>}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Actividad curricular</p>
-                        <input value={actividadPosgradoForm.actividadCurricular} onChange={(e) => actualizarCampoActPosgrado('actividadCurricular', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
+                        <input data-no-uppercase="true" value={actividadPosgradoForm.actividadCurricular} onChange={(e) => actualizarCampoActPosgrado('actividadCurricular', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Plan</p>
-                        <input value={actividadPosgradoForm.plan} onChange={(e) => actualizarCampoActPosgrado('plan', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
+                        <input data-no-uppercase="true" value={actividadPosgradoForm.plan} onChange={(e) => actualizarCampoActPosgrado('plan', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Año inicio</p>
@@ -3128,12 +3220,12 @@ export default function MiFichaPage() {
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Institución *</p>
-                        <input value={trayectoriaCargoForm.institucion} onChange={(e) => actualizarCampoTrayectoria('institucion', e.target.value)} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${trayectoriaCargoErrors.institucion ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <input data-no-uppercase="true" value={trayectoriaCargoForm.institucion} onChange={(e) => actualizarCampoTrayectoria('institucion', e.target.value)} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${trayectoriaCargoErrors.institucion ? 'border-red-400' : 'border-slate-200'} bg-white`} />
                         {trayectoriaCargoErrors.institucion && <p className="mt-1 text-xs text-red-500">{trayectoriaCargoErrors.institucion}</p>}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Unidad académica</p>
-                        <input value={trayectoriaCargoForm.unidadAcademica} onChange={(e) => actualizarCampoTrayectoria('unidadAcademica', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
+                        <input data-no-uppercase="true" value={trayectoriaCargoForm.unidadAcademica} onChange={(e) => actualizarCampoTrayectoria('unidadAcademica', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Cargo *</p>
@@ -3270,6 +3362,7 @@ export default function MiFichaPage() {
                   <div className="mt-3">
                     {editMode ? (
                       <textarea
+                        data-no-uppercase="true"
                         value={formData.experienciaDistancia}
                         onChange={(e) => handleFieldChange('experienciaDistancia', e.target.value)}
                         rows={5}

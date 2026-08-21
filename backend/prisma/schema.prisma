@@ -470,6 +470,55 @@ model VinculacionCatedra {
   usuarioSolicitante          Usuario     @relation("VinculacionSolicitante", fields: [usuarioSolicitanteId], references: [id])
 }
 
+model TipoPosgrado {
+  id                 String   @id @default(uuid())
+  nombre             String   @unique
+  activo             Boolean  @default(true)
+  fechaCreacion      DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+}
+
+model TipoNormativa {
+  id                 String      @id @default(uuid())
+  nombre             String      @unique
+  activo             Boolean     @default(true)
+  fechaCreacion      DateTime    @default(now())
+  fechaActualizacion DateTime    @updatedAt
+  normativas         Normativa[]
+}
+
+model TipoAreaEmisora {
+  id                 String   @id @default(uuid())
+  nombre             String   @unique
+  activo             Boolean  @default(true)
+  fechaCreacion      DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+}
+
+model Normativa {
+  id                    String        @id @default(uuid())
+  titulo                String
+  fechaEmision          DateTime
+  areaEmisora           String
+  vigencia              String        @default("VIGENTE")
+  numeroNorma           String
+  anio                  Int
+  palabrasClave         String?
+  tipoNormativaId       String
+  rutaArchivoOriginal   String?
+  rutaArchivoCuarentena String?
+  nombreArchivoOriginal String?
+  nombreArchivoFisico   String?
+  tamanioArchivo        Int?
+  mimeType              String?
+  eliminado             Boolean       @default(false)
+  fechaCreacion         DateTime      @default(now())
+  fechaActualizacion    DateTime      @updatedAt
+  tipoNormativa         TipoNormativa @relation(fields: [tipoNormativaId], references: [id])
+
+  @@unique([numeroNorma, anio])
+}
+
 model Notificacion {
   id                 String    @id @default(uuid())
   tipo               String

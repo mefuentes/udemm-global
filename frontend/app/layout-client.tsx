@@ -15,7 +15,7 @@ export function LayoutClient({ children }: { children: ReactNode }) {
       <Sidebar />
       <main
         className={`flex-1 transition-all duration-200 min-h-screen ${
-          sinSidebar ? '' : (isOpen ? 'ml-60' : 'ml-14')
+          sinSidebar ? '' : (isOpen ? 'ml-64' : 'ml-14')
         }`}
       >
         {children}

@@ -5,7 +5,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
-    "start:dev": "ts-node-dev --respawn --transpile-only src/main.ts",
+    "start:dev": "node scripts/check-port.js && ts-node-dev --respawn --transpile-only src/main.ts",
+    "port:free": "node scripts/free-port.js",
     "prisma:generate": "prisma generate",
     "prisma:seed": "prisma db seed",
     "prisma:seed:local": "ts-node --transpile-only prisma/seed.ts"
@@ -33,6 +34,7 @@
   "devDependencies": {
     "@nestjs/cli": "^10.2.5",
     "@types/bcrypt": "^5.0.0",
+    "@types/multer": "^2.2.0",
     "@types/node": "^20.14.2",
     "@types/passport-jwt": "^3.0.8",
     "@types/pdfkit": "^0.17.6",

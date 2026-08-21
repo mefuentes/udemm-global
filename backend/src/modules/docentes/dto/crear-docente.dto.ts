@@ -9,7 +9,7 @@
   Matches
 } from 'class-validator';
 
-const SOLO_CARACTERES_REGEX = /^[A-Za-z\s' -]+$/;
+const SOLO_CARACTERES_REGEX = /^[\p{L}\s'\-]+$/u;
 const SOLO_NUMEROS_REGEX = /^\d+$/;
 const FECHA_YYYY_MM_DD_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const DOCUMENTO_REGEX = /^\d+$|^[A-Za-z0-9-]+$/;

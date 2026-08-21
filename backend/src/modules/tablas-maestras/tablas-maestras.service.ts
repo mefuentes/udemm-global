@@ -9,16 +9,19 @@ import { CrearTablaMaestraDto } from './dto/crear-tabla-maestra.dto';
 import { ActualizarTablaMaestraDto } from './dto/actualizar-tabla-maestra.dto';
 
 // Nombres de modelos Prisma válidos para las tablas maestras
-const TIPOS_VALIDOS = ['catedras', 'cargos', 'designaciones', 'modalidades', 'areas-disciplinares'] as const;
+const TIPOS_VALIDOS = ['catedras', 'cargos', 'designaciones', 'modalidades', 'areas-disciplinares', 'tipos-posgrado', 'tipos-normativa', 'tipos-area-emisora'] as const;
 type TipoTabla = typeof TIPOS_VALIDOS[number];
 
 // Mapeo plural (ruta API) → nombre del modelo Prisma (singular, camelCase)
 const MODELO: Record<TipoTabla, string> = {
-  catedras:            'catedra',
-  cargos:              'cargo',
-  designaciones:       'designacion',
-  modalidades:         'modalidad',
+  catedras:              'catedra',
+  cargos:                'cargo',
+  designaciones:         'designacion',
+  modalidades:           'modalidad',
   'areas-disciplinares': 'areaDisciplinar',
+  'tipos-posgrado':      'tipoPosgrado',
+  'tipos-normativa':     'tipoNormativa',
+  'tipos-area-emisora':  'tipoAreaEmisora',
 };
 
 @Injectable()
