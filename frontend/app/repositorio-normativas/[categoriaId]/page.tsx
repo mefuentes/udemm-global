@@ -4,12 +4,16 @@ import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { CambiarEstadoModal } from '../_components/CambiarEstadoModal';
+import { EliminarNormativaModal } from '../_components/EliminarNormativaModal';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
 const ROLES_GESTION = ['SECRETARIA_ACADEMICA', 'DECANO', 'RECTORADO', 'ADMINISTRADOR_SISTEMA'];
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
+
+type EstadoRegistro = 'ACTIVAS' | 'ELIMINADAS' | 'TODAS';
 
 interface NormativaItem {
   id: string;
@@ -20,6 +24,11 @@ interface NormativaItem {
   fechaEmision: string;
   vigencia: string;
   tipoNormativa: { id: string; nombre: string };
+  // Campos de baja lógica (presentes cuando estadoRegistro ≠ ACTIVAS)
+  eliminado?: boolean;
+  motivoEliminacion?: string | null;
+  fechaEliminacion?: string | null;
+  eliminadoPorNombre?: string | null;
 }
 
 interface ListadoResponse {
@@ -82,6 +91,24 @@ const IcEye = () => (
   </svg>
 );
 
+const IcEdit = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+  </svg>
+);
+
+const IcState = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+  </svg>
+);
+
+const IcTrash = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </svg>
+);
+
 // ── Página ────────────────────────────────────────────────────────────────────
 
 export default function CategoriaDetallePage() {
@@ -111,6 +138,14 @@ export default function CategoriaDetallePage() {
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS);
   const [errorFiltros, setErrorFiltros] = useState('');
 
+  const [estadoRegistro, setEstadoRegistro] = useState<EstadoRegistro>('ACTIVAS');
+  const [totalEliminadas, setTotalEliminadas] = useState(0);
+
+  const [triggerRefresh, setTriggerRefresh] = useState(0);
+  const [normativaParaCambiarEstado, setNormativaParaCambiarEstado] = useState<NormativaItem | null>(null);
+  const [normativaParaEliminar, setNormativaParaEliminar] = useState<NormativaItem | null>(null);
+  const [mensajeExito, setMensajeExito] = useState('');
+
   const hdrs = useCallback(() => ({
     Authorization: `Bearer ${obtenerTokenActual()}`,
   }), [obtenerTokenActual]);
@@ -129,20 +164,31 @@ export default function CategoriaDetallePage() {
         .catch(() => {})
         .finally(() => setCargandoKpi(false));
     } else {
-      Promise.all([
+      const kpiPromises: Promise<{ total: number }>[] = [
         fetch(`${base}&vigencia=VIGENTE`,    { headers: h }).then(r => r.ok ? r.json() : { total: 0 }),
         fetch(`${base}&vigencia=DEROGADA`,   { headers: h }).then(r => r.ok ? r.json() : { total: 0 }),
         fetch(`${base}&vigencia=SUSPENDIDA`, { headers: h }).then(r => r.ok ? r.json() : { total: 0 }),
         fetch(`${API}/normativas?tipoId=${categoriaId}&limit=1`, { headers: h }).then(r => r.ok ? r.json() : { total: 0 }),
-      ])
-        .then(([v, d, s, t]) => setKpi({
-          vigentes: v.total ?? 0, derogadas: d.total ?? 0,
-          suspendidas: s.total ?? 0, total: t.total ?? 0,
-        }))
+      ];
+      if (puedeGestionar) {
+        kpiPromises.push(
+          fetch(`${API}/normativas?tipoId=${categoriaId}&estadoRegistro=ELIMINADAS&limit=1`, { headers: h }).then(r => r.ok ? r.json() : { total: 0 }),
+        );
+      }
+      Promise.all(kpiPromises)
+        .then(results => {
+          setKpi({
+            vigentes:    results[0].total ?? 0,
+            derogadas:   results[1].total ?? 0,
+            suspendidas: results[2].total ?? 0,
+            total:       results[3].total ?? 0,
+          });
+          if (puedeGestionar && results[4]) setTotalEliminadas(results[4].total ?? 0);
+        })
         .catch(() => {})
         .finally(() => setCargandoKpi(false));
     }
-  }, [categoriaId, hdrs, esDocente]);
+  }, [categoriaId, hdrs, esDocente, puedeGestionar, triggerRefresh]);
 
   // ── Listado ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -159,6 +205,10 @@ export default function CategoriaDetallePage() {
     if (filtros.vigencia)    url.searchParams.set('vigencia',    filtros.vigencia);
     if (filtros.fechaDesde)  url.searchParams.set('fechaDesde',  filtros.fechaDesde);
     if (filtros.fechaHasta)  url.searchParams.set('fechaHasta',  filtros.fechaHasta);
+    // El backend solo aplica estadoRegistro si el rol lo permite
+    if (puedeGestionar && estadoRegistro !== 'ACTIVAS') {
+      url.searchParams.set('estadoRegistro', estadoRegistro);
+    }
 
     fetch(url.toString(), { headers: hdrs() })
       .then(r => r.ok ? r.json() : Promise.reject())
@@ -170,7 +220,7 @@ export default function CategoriaDetallePage() {
       })
       .catch(() => setError('No se pudieron cargar las normativas.'))
       .finally(() => setCargando(false));
-  }, [categoriaId, pagina, filtros, hdrs]);
+  }, [categoriaId, pagina, filtros, hdrs, estadoRegistro, puedeGestionar, triggerRefresh]);
 
   // ── Handlers filtros ────────────────────────────────────────────────────────
   function handleBuscar() {
@@ -190,7 +240,32 @@ export default function CategoriaDetallePage() {
     setErrorFiltros('');
   }
 
+  function handleEstadoRegistroChange(nuevo: EstadoRegistro) {
+    setEstadoRegistro(nuevo);
+    setPagina(1);
+    // Vigencia no aplica sobre eliminadas — limpiar para evitar filtros contradictorios
+    if (nuevo === 'ELIMINADAS') {
+      setForm(prev => ({ ...prev, vigencia: '' }));
+      setFiltros(prev => ({ ...prev, vigencia: '' }));
+    }
+  }
+
   const hayFiltrosActivos = Object.values(filtros).some(v => v !== '');
+
+  // ── Handlers cambio de estado ───────────────────────────────────────────────
+  function handleEstadoConfirmado() {
+    setNormativaParaCambiarEstado(null);
+    setTriggerRefresh(n => n + 1);
+    setMensajeExito('ESTADO ACTUALIZADO CORRECTAMENTE.');
+    setTimeout(() => setMensajeExito(''), 5000);
+  }
+
+  function handleEliminacionConfirmada() {
+    setNormativaParaEliminar(null);
+    setTriggerRefresh(n => n + 1);
+    setMensajeExito('LA NORMATIVA FUE DADA DE BAJA CORRECTAMENTE.');
+    setTimeout(() => setMensajeExito(''), 6000);
+  }
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -236,23 +311,62 @@ export default function CategoriaDetallePage() {
         </div>
       </div>
 
+      {/* ── Banner éxito ─────────────────────────────────────────────────────── */}
+      {mensajeExito && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-semibold">
+          <svg className="w-4 h-4 flex-shrink-0 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          {mensajeExito}
+        </div>
+      )}
+
       {/* ── KPI Cards ────────────────────────────────────────────────────────── */}
-      <div className={`grid gap-3 ${esDocente ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
-        {[
-          { label: 'VIGENTES',    valor: kpi.vigentes,    color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-100', mostrar: true     },
-          { label: 'DEROGADAS',   valor: kpi.derogadas,   color: 'text-red-600',     bg: 'bg-red-50',     border: 'border-red-100',     mostrar: !esDocente },
-          { label: 'SUSPENDIDAS', valor: kpi.suspendidas, color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-100',   mostrar: !esDocente },
-          { label: 'TOTAL',       valor: kpi.total,       color: 'text-[#0f4c81]',   bg: 'bg-blue-50',    border: 'border-blue-100',    mostrar: true     },
-        ].filter(k => k.mostrar).map(({ label, valor, color, bg, border }) => (
-          <div key={label} className={`rounded-xl ${bg} border ${border} px-4 py-3`}>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{label}</p>
+      {estadoRegistro === 'ELIMINADAS' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">TOTAL ELIMINADAS</p>
             {cargandoKpi
               ? <div className="mt-1.5 h-7 w-10 bg-slate-200 rounded animate-pulse" />
-              : <p className={`mt-1 text-2xl font-bold ${color} tabular-nums`}>{valor}</p>
+              : <p className="mt-1 text-2xl font-bold text-slate-600 tabular-nums">{totalEliminadas}</p>
             }
           </div>
-        ))}
-      </div>
+          <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 flex items-start gap-2.5">
+            <svg className="w-4 h-4 flex-shrink-0 mt-0.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-xs text-red-700 font-medium leading-relaxed">
+              Vista administrativa de bajas lógicas. Los registros no están disponibles operativamente.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className={`grid gap-3 ${estadoRegistro === 'TODAS' ? 'grid-cols-2 sm:grid-cols-5' : (esDocente ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4')}`}>
+          {[
+            { label: 'VIGENTES',    valor: kpi.vigentes,    color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-100', mostrar: true      },
+            { label: 'DEROGADAS',   valor: kpi.derogadas,   color: 'text-red-600',     bg: 'bg-red-50',     border: 'border-red-100',     mostrar: !esDocente },
+            { label: 'SUSPENDIDAS', valor: kpi.suspendidas, color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-100',   mostrar: !esDocente },
+            { label: 'TOTAL',       valor: kpi.total,       color: 'text-[#0f4c81]',   bg: 'bg-blue-50',    border: 'border-blue-100',    mostrar: true      },
+          ].filter(k => k.mostrar).map(({ label, valor, color, bg, border }) => (
+            <div key={label} className={`rounded-xl ${bg} border ${border} px-4 py-3`}>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{label}</p>
+              {cargandoKpi
+                ? <div className="mt-1.5 h-7 w-10 bg-slate-200 rounded animate-pulse" />
+                : <p className={`mt-1 text-2xl font-bold ${color} tabular-nums`}>{valor}</p>
+              }
+            </div>
+          ))}
+          {estadoRegistro === 'TODAS' && (
+            <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">ELIMINADAS</p>
+              {cargandoKpi
+                ? <div className="mt-1.5 h-7 w-10 bg-slate-200 rounded animate-pulse" />
+                : <p className="mt-1 text-2xl font-bold text-slate-600 tabular-nums">{totalEliminadas}</p>
+              }
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Filtros ──────────────────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
@@ -266,6 +380,42 @@ export default function CategoriaDetallePage() {
           )}
         </div>
         <div className="p-5">
+
+          {/* ESTADO DEL REGISTRO — solo para roles de gestión */}
+          {puedeGestionar && (
+            <div className="mb-4 pb-3 border-b border-slate-100">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-2">Estado del registro</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {(['ACTIVAS', 'ELIMINADAS', 'TODAS'] as EstadoRegistro[]).map(opcion => (
+                  <button
+                    key={opcion}
+                    type="button"
+                    onClick={() => handleEstadoRegistroChange(opcion)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all ${
+                      estadoRegistro === opcion
+                        ? opcion === 'ELIMINADAS'
+                          ? 'bg-red-600 text-white shadow-sm'
+                          : 'bg-[#0f4c81] text-white shadow-sm'
+                        : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {opcion === 'ELIMINADAS' ? 'ELIMINADAS (BAJAS LÓGICAS)' : opcion}
+                  </button>
+                ))}
+              </div>
+              {estadoRegistro === 'ELIMINADAS' && (
+                <p className="mt-1.5 text-[10px] text-red-600 font-medium">
+                  Mostrando exclusivamente registros dados de baja. No disponibles para usuarios operativos.
+                </p>
+              )}
+              {estadoRegistro === 'TODAS' && (
+                <p className="mt-1.5 text-[10px] text-slate-400 font-medium">
+                  Mostrando normativas activas y dadas de baja.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {/* Búsqueda general */}
             <div className="sm:col-span-2">
@@ -295,8 +445,8 @@ export default function CategoriaDetallePage() {
               />
             </div>
 
-            {/* Vigencia — oculto para DOCENTE */}
-            {!esDocente && (
+            {/* Vigencia — oculto para DOCENTE y en modo ELIMINADAS */}
+            {!esDocente && estadoRegistro !== 'ELIMINADAS' && (
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">Vigencia</label>
                 <select
@@ -365,7 +515,11 @@ export default function CategoriaDetallePage() {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-bold text-slate-800">NORMATIVAS</h2>
+            <h2 className="text-sm font-bold text-slate-800">
+              {estadoRegistro === 'ELIMINADAS' ? 'NORMATIVAS DADAS DE BAJA'
+                : estadoRegistro === 'TODAS'   ? 'NORMATIVAS (ACTIVAS Y DADAS DE BAJA)'
+                : 'NORMATIVAS'}
+            </h2>
             {!cargando && !error && (
               <p className="text-xs text-slate-400 mt-0.5">
                 {totalRegistros === 0
@@ -410,7 +564,9 @@ export default function CategoriaDetallePage() {
             <p className="text-sm font-semibold text-slate-600">
               {hayFiltrosActivos
                 ? 'NO SE ENCONTRARON RESULTADOS PARA LOS FILTROS APLICADOS.'
-                : 'NO SE ENCONTRARON NORMATIVAS REGISTRADAS PARA ESTA CATEGORÍA.'}
+                : estadoRegistro === 'ELIMINADAS'
+                  ? 'NO SE ENCONTRARON NORMATIVAS DADAS DE BAJA EN ESTA CATEGORÍA.'
+                  : 'NO SE ENCONTRARON NORMATIVAS REGISTRADAS PARA ESTA CATEGORÍA.'}
             </p>
             {hayFiltrosActivos && (
               <button onClick={handleLimpiar} className="mt-3 text-xs text-[#0f4c81] hover:underline font-medium">
@@ -423,47 +579,139 @@ export default function CategoriaDetallePage() {
         {/* Tabla */}
         {!cargando && !error && normativas.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="px-5 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Título</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Área emisora</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">N.° / Año</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">Fecha emisión</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Vigencia</th>
-                  <th className="px-4 py-3 text-center text-[11px] font-bold uppercase tracking-wide text-slate-500">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {normativas.map(n => (
-                  <tr key={n.id} className="hover:bg-slate-50/60 transition-colors group">
-                    <td className="px-5 py-3.5">
-                      <span className="font-medium text-slate-800 leading-snug line-clamp-2">{n.titulo}</span>
-                    </td>
-                    <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap">{n.areaEmisora}</td>
-                    <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap tabular-nums">
-                      {n.numeroNorma} / {n.anio}
-                    </td>
-                    <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap">{formatFecha(n.fechaEmision)}</td>
-                    <td className="px-4 py-3.5">
-                      <span className={`inline-flex items-center text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${vigenciaBadge(n.vigencia)}`}>
-                        {n.vigencia}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-center">
-                      <Link
-                        href={`/repositorio-normativas/${categoriaId}/${n.id}?nombre=${encodeURIComponent(categoriaNombre)}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#0f4c81]/20 bg-[#0f4c81]/5 text-[#0f4c81] text-xs font-semibold hover:bg-[#0f4c81] hover:text-white hover:border-[#0f4c81] transition-all"
-                        title="Ver detalle"
-                      >
-                        <IcEye />
-                        VER
-                      </Link>
-                    </td>
+            {estadoRegistro === 'ELIMINADAS' ? (
+              /* ── Tabla para registros dados de baja ────────────────────── */
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-red-50/60 border-b border-red-100">
+                    <th className="px-5 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Título</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Tipo</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Área emisora</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">N.° / Año</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Vigencia</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">Fecha de baja</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">Dado de baja por</th>
+                    <th className="px-4 py-3 text-center text-[11px] font-bold uppercase tracking-wide text-slate-500">Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {normativas.map(n => (
+                    <tr key={n.id} className="hover:bg-red-50/30 transition-colors bg-slate-50/20">
+                      <td className="px-5 py-3.5">
+                        <span className="font-medium text-slate-500 leading-snug line-clamp-2">{n.titulo}</span>
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap text-xs">{n.tipoNormativa?.nombre}</td>
+                      <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap">{n.areaEmisora}</td>
+                      <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap tabular-nums">
+                        {n.numeroNorma} / {n.anio}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className={`inline-flex items-center text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full opacity-70 ${vigenciaBadge(n.vigencia)}`}>
+                          {n.vigencia}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap">
+                        {n.fechaEliminacion ? formatFecha(n.fechaEliminacion) : '—'}
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-500 text-xs">
+                        {n.eliminadoPorNombre ?? '—'}
+                      </td>
+                      <td className="px-4 py-3.5 text-center">
+                        <Link
+                          href={`/repositorio-normativas/${categoriaId}/${n.id}?nombre=${encodeURIComponent(categoriaNombre)}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-50 hover:border-slate-300 transition-all"
+                          title="Ver detalle de la baja"
+                        >
+                          <IcEye />
+                          VER
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              /* ── Tabla normal (ACTIVAS / TODAS) ─────────────────────────── */
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="px-5 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Título</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Área emisora</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">N.° / Año</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">Fecha emisión</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Vigencia</th>
+                    <th className="px-4 py-3 text-center text-[11px] font-bold uppercase tracking-wide text-slate-500">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {normativas.map(n => {
+                    const esEliminada = n.eliminado === true;
+                    return (
+                      <tr key={n.id} className={`hover:bg-slate-50/60 transition-colors group ${esEliminada ? 'opacity-60 bg-slate-50/40' : ''}`}>
+                        <td className="px-5 py-3.5">
+                          <span className="font-medium text-slate-800 leading-snug line-clamp-2">{n.titulo}</span>
+                          {esEliminada && (
+                            <span className="ml-2 inline-flex items-center text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 border border-red-200">BAJA</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap">{n.areaEmisora}</td>
+                        <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap tabular-nums">
+                          {n.numeroNorma} / {n.anio}
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap">{formatFecha(n.fechaEmision)}</td>
+                        <td className="px-4 py-3.5">
+                          <span className={`inline-flex items-center text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${vigenciaBadge(n.vigencia)}`}>
+                            {n.vigencia}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                          <div className="inline-flex items-center gap-2">
+                            <Link
+                              href={`/repositorio-normativas/${categoriaId}/${n.id}?nombre=${encodeURIComponent(categoriaNombre)}`}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#0f4c81]/20 bg-[#0f4c81]/5 text-[#0f4c81] text-xs font-semibold hover:bg-[#0f4c81] hover:text-white hover:border-[#0f4c81] transition-all"
+                              title="Ver detalle"
+                            >
+                              <IcEye />
+                              VER
+                            </Link>
+                            {puedeGestionar && !esEliminada && (
+                              <>
+                                <Link
+                                  href={`/repositorio-normativas/editar/${n.id}?tipoNombre=${encodeURIComponent(categoriaNombre)}`}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-100 hover:border-slate-300 transition-all"
+                                  title="Editar normativa"
+                                >
+                                  <IcEdit />
+                                  EDITAR
+                                </Link>
+                                <button
+                                  type="button"
+                                  onClick={() => setNormativaParaCambiarEstado(n)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-100 hover:border-slate-300 transition-all"
+                                  title="Cambiar estado"
+                                >
+                                  <IcState />
+                                  ESTADO
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setNormativaParaEliminar(n)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 bg-white text-red-600 text-xs font-semibold hover:bg-red-50 hover:border-red-300 transition-all"
+                                  title="Dar de baja"
+                                >
+                                  <IcTrash />
+                                  ELIMINAR
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
 
@@ -508,6 +756,29 @@ export default function CategoriaDetallePage() {
           </div>
         )}
       </div>
+
+      {/* ── Modal cambio de estado ────────────────────────────────────────────── */}
+      {normativaParaCambiarEstado && (
+        <CambiarEstadoModal
+          normativa={normativaParaCambiarEstado}
+          obtenerToken={obtenerTokenActual}
+          onConfirmado={handleEstadoConfirmado}
+          onCancelar={() => setNormativaParaCambiarEstado(null)}
+        />
+      )}
+
+      {/* ── Modal eliminación lógica ──────────────────────────────────────────── */}
+      {normativaParaEliminar && (
+        <EliminarNormativaModal
+          normativa={{
+            ...normativaParaEliminar,
+            tipoNormativa: normativaParaEliminar.tipoNormativa,
+          }}
+          obtenerToken={obtenerTokenActual}
+          onConfirmado={handleEliminacionConfirmada}
+          onCancelar={() => setNormativaParaEliminar(null)}
+        />
+      )}
     </div>
   );
 }

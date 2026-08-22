@@ -1,14 +1,21 @@
 /**
- * Libera el puerto del backend finalizando el proceso que lo ocupa.
- * Acción EXPLÍCITA del desarrollador — no se ejecuta automáticamente.
- * Compatible con Windows/PowerShell. Usa netstat y taskkill (herramientas nativas de Windows).
+ * Detecta si el puerto del backend está en uso (LISTENING).
+ * Si lo está, finaliza ÚNICAMENTE ese PID — nunca taskkill /IM node.exe.
+ * Verifica que el puerto quede libre antes de continuar.
+ *
+ * Uso:
+ *   - Automático: se ejecuta como prestart:dev antes de iniciar NestJS
+ *   - Manual:     npm run port:free
  */
 
 'use strict';
 
 const { execSync } = require('child_process');
+const net  = require('net');
 const fs   = require('fs');
 const path = require('path');
+
+// ── Leer puerto desde .env ─────────────────────────────────────────────────
 
 function leerPuerto() {
   try {
@@ -20,58 +27,106 @@ function leerPuerto() {
   return 5000;
 }
 
-const puerto = leerPuerto();
+// ── Encontrar PID en estado LISTENING para el puerto exacto ───────────────
+//
+// Patrón `:PUERTO\s` evita falsos positivos como `:50001`
+// porque en la salida de netstat el puerto siempre va seguido
+// de espacios o fin de campo antes del estado.
 
-console.log(`\nBuscando proceso en el puerto ${puerto}...`);
+function encontrarPid(puerto) {
+  let salida;
+  try {
+    salida = execSync('netstat -ano', { encoding: 'utf8', timeout: 10000 });
+  } catch (e) {
+    console.error(`[port] No se pudo ejecutar netstat: ${e.message}`);
+    return null;
+  }
 
-let salidaNetstat;
-try {
-  salidaNetstat = execSync('netstat -ano', { encoding: 'utf8' });
-} catch (e) {
-  console.error(`No se pudo ejecutar netstat: ${e.message}`);
-  process.exit(1);
-}
-
-// Filtra líneas en LISTENING para el puerto exacto.
-// El patrón `:PUERTO\s` evita falsos positivos como :50001 o :50002
-// (en netstat el puerto siempre va seguido de espacios entre columnas).
-const lineas = salidaNetstat
-  .split('\n')
-  .filter(linea => {
+  const patron = new RegExp(`:${puerto}\\s`);
+  const lineas = salida.split('\n').filter(linea => {
     const t = linea.trim();
-    return t.includes('LISTENING') && new RegExp(`:${puerto}\\s`).test(t);
+    return t.includes('LISTENING') && patron.test(t);
   });
 
-if (lineas.length === 0) {
-  console.log(`El puerto ${puerto} no está en uso. No hay nada que liberar.\n`);
-  process.exit(0);
+  if (lineas.length === 0) return null;
+
+  const pids = [...new Set(
+    lineas
+      .map(linea => {
+        const partes = linea.trim().split(/\s+/);
+        return partes[partes.length - 1];
+      })
+      .filter(pid => /^\d+$/.test(pid) && pid !== '0'),
+  )];
+
+  return pids.length > 0 ? pids[0] : null;
 }
 
-// Extrae PIDs únicos (última columna de cada línea)
-const pids = [...new Set(
-  lineas
-    .map(linea => {
-      const partes = linea.trim().split(/\s+/);
-      return partes[partes.length - 1];
-    })
-    .filter(pid => /^\d+$/.test(pid) && pid !== '0'),
-)];
+// ── Verificar si el puerto está libre intentando hacer listen ─────────────
 
-if (pids.length === 0) {
-  console.error(`Se encontraron líneas pero no se pudo extraer un PID válido. Intentá manualmente:\n  netstat -ano | findstr :${puerto}\n`);
-  process.exit(1);
+function puertoEstaLibre(puerto) {
+  return new Promise(resolve => {
+    const servidor = net.createServer();
+    servidor.once('error', () => resolve(false));
+    servidor.once('listening', () => servidor.close(() => resolve(true)));
+    servidor.listen(puerto, '0.0.0.0');
+  });
 }
 
-let liberado = false;
-for (const pid of pids) {
+async function esperarPuertoLibre(puerto, intentos, delayMs) {
+  for (let i = 0; i < intentos; i++) {
+    if (await puertoEstaLibre(puerto)) return true;
+    await new Promise(r => setTimeout(r, delayMs));
+  }
+  return false;
+}
+
+// ── Main ───────────────────────────────────────────────────────────────────
+
+async function main() {
+  const puerto = leerPuerto();
+  console.log('\n[port] Comprobando puerto ' + puerto + '...');
+
+  const pid = encontrarPid(puerto);
+
+  if (!pid) {
+    console.log('[port] Puerto ' + puerto + ' libre.\n');
+    process.exit(0);
+  }
+
+  console.log('[port] Instancia anterior detectada (PID ' + pid + '). Liberando puerto ' + puerto + '...');
+
   try {
-    execSync(`taskkill /PID ${pid} /F`, { encoding: 'utf8' });
-    console.log(`Proceso PID ${pid} finalizado — puerto ${puerto} liberado.\n`);
-    liberado = true;
+    // /F = forzar; stdout e stderr capturados para no ensuciar la consola
+    execSync('taskkill /PID ' + pid + ' /F', {
+      encoding: 'utf8',
+      timeout: 5000,
+      stdio: 'pipe',
+    });
+    console.log('[port] PID ' + pid + ' finalizado.');
   } catch (e) {
-    console.error(`No se pudo finalizar el proceso PID ${pid}. Puede requerir permisos de administrador.`);
-    console.error(`Intentá manualmente: taskkill /PID ${pid} /F\n`);
+    const msg = (e.stderr || e.message || '').toString().trim();
+    console.error('[port] No se pudo finalizar PID ' + pid + ': ' + msg);
+    console.error('[port] Intentá manualmente: taskkill /PID ' + pid + ' /F\n');
+    process.exit(1);
+  }
+
+  console.log('[port] Verificando que el puerto ' + puerto + ' quedó libre...');
+
+  // Hasta 10 intentos con 300 ms de espera entre ellos (3 segundos máx.)
+  const libre = await esperarPuertoLibre(puerto, 10, 300);
+
+  if (libre) {
+    console.log('[port] Puerto ' + puerto + ' disponible. Iniciando backend...\n');
+    process.exit(0);
+  } else {
+    console.error('[port] El puerto ' + puerto + ' sigue ocupado después de finalizar PID ' + pid + '.');
+    console.error('[port] Verificá con: netstat -ano | findstr :' + puerto + '\n');
+    process.exit(1);
   }
 }
 
-process.exit(liberado ? 0 : 1);
+main().catch(function(e) {
+  console.error('[port] Error inesperado: ' + e.message);
+  process.exit(1);
+});

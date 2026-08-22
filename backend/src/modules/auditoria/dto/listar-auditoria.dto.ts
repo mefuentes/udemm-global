@@ -3,22 +3,19 @@ import { Type } from 'class-transformer';
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-export class ListarNormativasDto {
+const ACCIONES_VALIDAS = [
+  'CARGA', 'EDICION', 'CAMBIO_ESTADO', 'ELIMINACION_LOGICA',
+  'VER_DOCUMENTO', 'DESCARGA_PDF', 'ACCESO_DENEGADO',
+] as const;
+
+export class ListarAuditoriaDto {
+  @IsIn(ACCIONES_VALIDAS)
+  @IsOptional()
+  accion?: string;
+
   @IsString()
   @IsOptional()
   busqueda?: string;
-
-  @IsString()
-  @IsOptional()
-  areaEmisora?: string;
-
-  @IsString()
-  @IsOptional()
-  tipoId?: string;
-
-  @IsString()
-  @IsOptional()
-  vigencia?: string;
 
   @Matches(FECHA_RE, { message: 'fechaDesde debe tener formato YYYY-MM-DD' })
   @IsOptional()
@@ -27,10 +24,6 @@ export class ListarNormativasDto {
   @Matches(FECHA_RE, { message: 'fechaHasta debe tener formato YYYY-MM-DD' })
   @IsOptional()
   fechaHasta?: string;
-
-  @IsIn(['ACTIVAS', 'ELIMINADAS', 'TODAS'])
-  @IsOptional()
-  estadoRegistro?: string;
 
   @IsInt()
   @Min(1)

@@ -5,7 +5,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
-    "start:dev": "node scripts/check-port.js && ts-node-dev --respawn --transpile-only src/main.ts",
+    "prestart:dev": "node scripts/free-port.js",
+    "start:dev": "ts-node-dev --respawn --transpile-only src/main.ts",
     "port:free": "node scripts/free-port.js",
     "prisma:generate": "prisma generate",
     "prisma:seed": "prisma db seed",

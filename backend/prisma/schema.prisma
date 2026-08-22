@@ -512,11 +512,30 @@ model Normativa {
   tamanioArchivo        Int?
   mimeType              String?
   eliminado             Boolean       @default(false)
+  fechaEliminacion      DateTime?
+  eliminadoPorUsuarioId String?
+  motivoEliminacion     String?
   fechaCreacion         DateTime      @default(now())
   fechaActualizacion    DateTime      @updatedAt
-  tipoNormativa         TipoNormativa @relation(fields: [tipoNormativaId], references: [id])
+  normativaSucesoraId   String?
+  tipoNormativa         TipoNormativa  @relation(fields: [tipoNormativaId], references: [id])
+  normativaSucesora     Normativa?     @relation("NormativaSucesora", fields: [normativaSucesoraId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  normativasReemplazadas Normativa[]   @relation("NormativaSucesora")
+  historialEstados      HistorialEstadoNormativa[]
 
   @@unique([numeroNorma, anio])
+}
+
+model HistorialEstadoNormativa {
+  id                  String   @id @default(uuid())
+  normativaId         String
+  estadoAnterior      String
+  estadoNuevo         String
+  motivo              String
+  normativaSucesoraId String?
+  usuarioId           String?
+  fechaCambio         DateTime @default(now())
+  normativa           Normativa @relation(fields: [normativaId], references: [id])
 }
 
 model Notificacion {
@@ -531,4 +550,23 @@ model Notificacion {
   fechaCreacion      DateTime  @default(now())
   fechaActualizacion DateTime  @updatedAt
   docente            Docente   @relation(fields: [docenteId], references: [id])
+}
+
+model AuditLogNormativa {
+  id               String   @id @default(uuid())
+  fecha            DateTime @default(now())
+  usuarioId        String?
+  usuarioNombre    String?
+  accion           String
+  normativaId      String?
+  normativaTitulo  String?
+  normativaNumero  String?
+  normativaAnio    Int?
+  detalle          Json?
+  ipOrigen         String?
+
+  @@index([fecha])
+  @@index([usuarioId])
+  @@index([accion])
+  @@index([normativaId])
 }

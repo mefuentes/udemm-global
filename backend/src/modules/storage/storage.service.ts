@@ -45,6 +45,22 @@ export class StorageService {
     }
   }
 
+  async mover(rutaOrigen: string, rutaDestino: string): Promise<void> {
+    const absOrigen  = this.resolverRuta(rutaOrigen);
+    const absDestino = this.resolverRuta(rutaDestino);
+    try {
+      await fs.promises.rename(absOrigen, absDestino);
+    } catch (e: any) {
+      if (e.code === 'EXDEV') {
+        // Cross-device link: copiar y eliminar origen
+        await fs.promises.copyFile(absOrigen, absDestino);
+        await fs.promises.unlink(absOrigen);
+      } else {
+        throw e;
+      }
+    }
+  }
+
   async existeArchivo(rutaRelativa: string): Promise<boolean> {
     try {
       await fs.promises.access(this.resolverRuta(rutaRelativa), fs.constants.F_OK);

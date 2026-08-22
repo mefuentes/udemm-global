@@ -9,6 +9,15 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
+interface NormativaResumenRelacion {
+  id: string;
+  titulo: string;
+  numeroNorma: string;
+  anio: number;
+  vigencia: string;
+  tipoNormativaId: string;
+}
+
 interface NormativaDetalle {
   id: string;
   titulo: string;
@@ -20,8 +29,16 @@ interface NormativaDetalle {
   vigencia: string;
   palabrasClave: string | null;
   tieneArchivo: boolean;
+  tieneArchivoEnCuarentena?: boolean;
   nombreArchivoOriginal: string | null;
   tamanioArchivo: number | null;
+  normativaSucesora: NormativaResumenRelacion | null;
+  normativasReemplazadas: NormativaResumenRelacion[];
+  // Campos de baja lógica (presentes cuando la normativa fue dada de baja)
+  eliminado?: boolean;
+  motivoEliminacion?: string | null;
+  fechaEliminacion?: string | null;
+  eliminadoPorNombre?: string | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -212,6 +229,21 @@ export default function NormativaDetallePage() {
       {/* ── Detalle ──────────────────────────────────────────────────────────── */}
       {!cargando && !error && normativa && (
         <>
+          {/* Banner de baja lógica */}
+          {normativa.eliminado && (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200">
+              <svg className="w-5 h-5 flex-shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div>
+                <p className="text-sm font-bold text-red-700 uppercase tracking-wide">NORMATIVA DADA DE BAJA</p>
+                <p className="text-xs text-red-600 mt-0.5">
+                  Este registro fue dado de baja lógicamente. No está disponible operativamente para usuarios del repositorio.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
 
             {/* Header de la tarjeta */}
@@ -267,6 +299,127 @@ export default function NormativaDetallePage() {
             </div>
           </div>
 
+          {/* ── Sección: Datos de la baja lógica ────────────────────────────── */}
+          {normativa.eliminado && (
+            <div className="bg-red-50 rounded-xl border border-red-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-red-100 bg-red-100/40 flex items-center gap-2">
+                <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <h2 className="text-xs font-bold uppercase tracking-widest text-red-600">
+                  DATOS DE LA BAJA LÓGICA
+                </h2>
+              </div>
+              <dl className="divide-y divide-red-50/60">
+                <div className="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-6 items-start">
+                  <dt className="text-[11px] font-bold uppercase tracking-widest text-red-400 py-0.5">Estado del registro</dt>
+                  <dd className="mt-1 sm:mt-0 sm:col-span-2">
+                    <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full bg-red-100 text-red-700 border border-red-200">ELIMINADA</span>
+                  </dd>
+                </div>
+                <div className="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-6 items-start">
+                  <dt className="text-[11px] font-bold uppercase tracking-widest text-red-400 py-0.5">Fecha de eliminación</dt>
+                  <dd className="mt-1 sm:mt-0 sm:col-span-2 text-sm text-slate-700">
+                    {normativa.fechaEliminacion ? formatFecha(normativa.fechaEliminacion) : '—'}
+                  </dd>
+                </div>
+                <div className="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-6 items-start">
+                  <dt className="text-[11px] font-bold uppercase tracking-widest text-red-400 py-0.5">Dado de baja por</dt>
+                  <dd className="mt-1 sm:mt-0 sm:col-span-2 text-sm text-slate-700">
+                    {normativa.eliminadoPorNombre ?? '—'}
+                  </dd>
+                </div>
+                <div className="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-6 items-start">
+                  <dt className="text-[11px] font-bold uppercase tracking-widest text-red-400 py-0.5">Motivo</dt>
+                  <dd className="mt-1 sm:mt-0 sm:col-span-2 text-sm text-slate-700 leading-relaxed">
+                    {normativa.motivoEliminacion ?? '—'}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          )}
+
+          {/* ── Sección: Fue reemplazada por ─────────────────────────────────── */}
+          {normativa.normativaSucesora && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl overflow-hidden">
+              <div className="px-6 py-3 border-b border-amber-200 flex items-center gap-2 bg-amber-100/60">
+                <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-amber-700">
+                  ESTA NORMATIVA FUE REEMPLAZADA POR
+                </h3>
+              </div>
+              <div className="px-6 py-4 flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-800 leading-snug">
+                    {normativa.normativaSucesora.titulo}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5 tabular-nums">
+                    N° {normativa.normativaSucesora.numeroNorma} / {normativa.normativaSucesora.anio}
+                    {'  ·  '}
+                    <span className={`font-bold ${normativa.normativaSucesora.vigencia === 'VIGENTE' ? 'text-emerald-700' : 'text-slate-600'}`}>
+                      {normativa.normativaSucesora.vigencia}
+                    </span>
+                  </p>
+                </div>
+                <Link
+                  href={`/repositorio-normativas/${normativa.normativaSucesora.tipoNormativaId}/${normativa.normativaSucesora.id}?nombre=${encodeURIComponent(categoriaNombre)}`}
+                  className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-700 text-xs font-semibold hover:bg-amber-50 transition-all"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  VER NORMATIVA SUCESORA
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* ── Sección: Reemplaza a ─────────────────────────────────────────── */}
+          {normativa.normativasReemplazadas.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="px-6 py-3 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+                <svg className="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                  REEMPLAZA A
+                </h3>
+                <span className="ml-auto text-[10px] font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
+                  {normativa.normativasReemplazadas.length}
+                </span>
+              </div>
+              <ul className="divide-y divide-slate-50">
+                {normativa.normativasReemplazadas.map(r => (
+                  <li key={r.id} className="px-6 py-3.5 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-700 leading-snug truncate">{r.titulo}</p>
+                      <p className="text-xs text-slate-400 mt-0.5 tabular-nums">
+                        N° {r.numeroNorma} / {r.anio}
+                        {'  ·  '}
+                        <span className={`font-semibold ${r.vigencia === 'VIGENTE' ? 'text-emerald-600' : r.vigencia === 'REEMPLAZADA' ? 'text-slate-500' : 'text-red-500'}`}>
+                          {r.vigencia}
+                        </span>
+                      </p>
+                    </div>
+                    <Link
+                      href={`/repositorio-normativas/${r.tipoNormativaId}/${r.id}?nombre=${encodeURIComponent(categoriaNombre)}`}
+                      className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-all"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      VER
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* ── Sección Documento PDF ─────────────────────────────────────────── */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
@@ -279,7 +432,23 @@ export default function NormativaDetallePage() {
             </div>
 
             <div className="px-6 py-5">
-              {normativa.tieneArchivo ? (
+              {normativa.tieneArchivoEnCuarentena ? (
+                /* Documento en cuarentena por baja lógica */
+                <div className="flex items-start gap-3 py-2">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-600 uppercase tracking-wide">DOCUMENTO EN CUARENTENA</p>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      El archivo PDF fue trasladado a almacenamiento seguro de cuarentena al momento de la baja lógica.
+                      No está disponible para descarga ni visualización.
+                    </p>
+                  </div>
+                </div>
+              ) : normativa.tieneArchivo ? (
                 <>
                   {/* Info del archivo */}
                   <div className="flex items-start gap-3 mb-4">
