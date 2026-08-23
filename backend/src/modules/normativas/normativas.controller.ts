@@ -23,6 +23,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { NormativasService } from './normativas.service';
+import { NormativasExportService } from './normativas-export.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { CrearNormativaDto } from './dto/crear-normativa.dto';
 import { ActualizarNormativaDto } from './dto/actualizar-normativa.dto';
@@ -62,8 +63,9 @@ function extraerUsuarioId(req: any): string | null {
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class NormativasController {
   constructor(
-    private readonly service:    NormativasService,
-    private readonly auditoria:  AuditoriaService,
+    private readonly service:       NormativasService,
+    private readonly exportService: NormativasExportService,
+    private readonly auditoria:     AuditoriaService,
   ) {}
 
   @Post()
@@ -126,6 +128,66 @@ export class NormativasController {
     return this.service.listar(dto, req.user?.rol?.nombre ?? '');
   }
 
+  // Exportaciones — rutas estáticas ANTES de :id/:algo para evitar conflictos
+
+  @Get('exportar/pdf')
+  @Roles(...ROLES_CONSULTA)
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  async exportarPdf(
+    @Query() dto: ListarNormativasDto,
+    @Req() req: any,
+  ): Promise<StreamableFile> {
+    const result = await this.service.exportar(
+      dto,
+      req.user?.rol?.nombre ?? '',
+      'PDF',
+      extraerUsuarioId(req),
+      extraerIp(req),
+    );
+    const buffer = await this.exportService.generarPdf(result.data, {
+      tipoNombre:             result.tipoNombre,
+      usuarioNombre:          result.usuarioNombre,
+      incluyeEliminadoFields: result.incluyeEliminadoFields,
+      filtros:                result.filtros,
+      total:                  result.total,
+    });
+    const fecha = new Date().toISOString().slice(0, 10);
+    return new StreamableFile(buffer, {
+      type:        'application/pdf',
+      disposition: `attachment; filename="normativas-${fecha}.pdf"`,
+    });
+  }
+
+  @Get('exportar/excel')
+  @Roles(...ROLES_CONSULTA)
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  async exportarExcel(
+    @Query() dto: ListarNormativasDto,
+    @Req() req: any,
+  ): Promise<StreamableFile> {
+    const result = await this.service.exportar(
+      dto,
+      req.user?.rol?.nombre ?? '',
+      'EXCEL',
+      extraerUsuarioId(req),
+      extraerIp(req),
+    );
+    const buffer = await this.exportService.generarExcel(result.data, {
+      tipoNombre:             result.tipoNombre,
+      usuarioNombre:          result.usuarioNombre,
+      incluyeEliminadoFields: result.incluyeEliminadoFields,
+      filtros:                result.filtros,
+      total:                  result.total,
+    });
+    const fecha = new Date().toISOString().slice(0, 10);
+    return new StreamableFile(buffer, {
+      type:        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename="normativas-${fecha}.xlsx"`,
+    });
+  }
+
   // :id/archivo ANTES de :id para que Express no consuma "archivo" como parámetro
   @Get(':id/archivo')
   @Roles(...ROLES_CONSULTA)
@@ -152,7 +214,7 @@ export class NormativasController {
     @Body() dto: CambiarEstadoNormativaDto,
     @Req() req: any,
   ) {
-    return this.service.cambiarEstado(id, dto, extraerUsuarioId(req), extraerIp(req));
+    return this.service.cambiarEstado(id, dto, extraerUsuarioId(req), extraerIp(req), req.user?.rol?.nombre ?? '');
   }
 
   @Patch(':id')
@@ -186,7 +248,7 @@ export class NormativasController {
     @Body() dto: EliminarNormativaDto,
     @Req() req: any,
   ) {
-    return this.service.eliminarLogico(id, dto, extraerUsuarioId(req), extraerIp(req));
+    return this.service.eliminarLogico(id, dto, extraerUsuarioId(req), extraerIp(req), req.user?.rol?.nombre ?? '');
   }
 
   @Get(':id')

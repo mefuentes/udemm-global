@@ -5,7 +5,7 @@ const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const ACCIONES_VALIDAS = [
   'CARGA', 'EDICION', 'CAMBIO_ESTADO', 'ELIMINACION_LOGICA',
-  'VER_DOCUMENTO', 'DESCARGA_PDF', 'ACCESO_DENEGADO',
+  'VER_DOCUMENTO', 'DESCARGA_PDF', 'ACCESO_DENEGADO', 'EXPORTACION',
 ] as const;
 
 export class ListarAuditoriaDto {

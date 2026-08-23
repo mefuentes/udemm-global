@@ -33,3 +33,6 @@ Desktop.ini
 
 # Logs
 *.log
+
+# Storage de archivos cargados por la aplicacion
+backend/storage/

@@ -4,11 +4,12 @@ import { StorageModule } from '../storage/storage.module';
 import { AuditoriaModule } from '../auditoria/auditoria.module';
 import { NormativasController } from './normativas.controller';
 import { NormativasService } from './normativas.service';
+import { NormativasExportService } from './normativas-export.service';
 
 @Module({
   imports:     [PrismaModule, StorageModule, AuditoriaModule],
   controllers: [NormativasController],
-  providers:   [NormativasService],
+  providers:   [NormativasService, NormativasExportService],
   exports:     [NormativasService],
 })
 export class NormativasModule {}

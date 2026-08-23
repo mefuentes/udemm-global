@@ -105,16 +105,18 @@ export function NormativaForm({
   // ── Archivo ─────────────────────────────────────────────────────────────────
   const [archivo, setArchivo]               = useState<File | null>(null);
   const [errorArchivo, setErrorArchivo]     = useState('');
-  const [reemplazando, setReemplazando]     = useState(false); // editar: toggle zona carga
-  const [viendoPdfActual, setViendoPdfActual] = useState(false); // botón VER
+  const [reemplazando, setReemplazando]     = useState(false);
+  const [viendoPdfActual, setViendoPdfActual] = useState(false);
+  const [isDragging, setIsDragging]         = useState(false);
 
   // ── Estado UI ───────────────────────────────────────────────────────────────
   const [guardando, setGuardando]         = useState(false);
   const [exito, setExito]                 = useState('');
   const [errorGeneral, setErrorGeneral]   = useState('');
 
-  const tagRef     = useRef<HTMLInputElement>(null);
-  const archivoRef = useRef<HTMLInputElement>(null);
+  const tagRef          = useRef<HTMLInputElement>(null);
+  const archivoRef      = useRef<HTMLInputElement>(null);
+  const dragCounterRef  = useRef(0);
 
   // ── Cargar tipos y áreas ────────────────────────────────────────────────────
   useEffect(() => {
@@ -153,8 +155,9 @@ export function NormativaForm({
   }
 
   // ── Archivo nuevo ───────────────────────────────────────────────────────────
-  function handleArchivoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
+
+  // Validación y estado compartidos entre click e input y drag & drop
+  function procesarArchivo(file: File | null) {
     setErrorArchivo('');
     setErrorGeneral('');
     if (!file) { setArchivo(null); return; }
@@ -171,6 +174,36 @@ export function NormativaForm({
       return;
     }
     setArchivo(file);
+  }
+
+  function handleArchivoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    procesarArchivo(e.target.files?.[0] ?? null);
+  }
+
+  // ── Drag & drop ─────────────────────────────────────────────────────────────
+
+  function handleDragEnter(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    dragCounterRef.current += 1;
+    if (dragCounterRef.current === 1) setIsDragging(true);
+  }
+
+  function handleDragOver(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }
+
+  function handleDragLeave(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current === 0) setIsDragging(false);
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDragging(false);
+    procesarArchivo(e.dataTransfer.files?.[0] ?? null);
   }
 
   function quitarArchivoNuevo() {
@@ -533,11 +566,19 @@ export function NormativaForm({
           {(!esEditar || reemplazando) && (
             <>
               {!archivo ? (
-                <label className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed transition-colors cursor-pointer px-6 py-8 ${
-                  errorArchivo
-                    ? 'border-red-300 bg-red-50 hover:border-red-400'
-                    : 'border-slate-200 bg-slate-50 hover:border-[#0f4c81]/40 hover:bg-blue-50/30'
-                } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <label
+                  className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed transition-all cursor-pointer px-6 py-8 ${
+                    isDragging
+                      ? 'border-[#0f4c81] bg-blue-50 scale-[1.01] shadow-sm'
+                      : errorArchivo
+                        ? 'border-red-300 bg-red-50 hover:border-red-400'
+                        : 'border-slate-200 bg-slate-50 hover:border-[#0f4c81]/40 hover:bg-blue-50/30'
+                  } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onDragEnter={disabled ? undefined : handleDragEnter}
+                  onDragOver={disabled ? undefined : handleDragOver}
+                  onDragLeave={disabled ? undefined : handleDragLeave}
+                  onDrop={disabled ? undefined : handleDrop}
+                >
                   <input
                     ref={archivoRef}
                     type="file"
@@ -546,17 +587,31 @@ export function NormativaForm({
                     onChange={handleArchivoChange}
                     disabled={disabled}
                   />
-                  <svg className={`w-10 h-10 ${errorArchivo ? 'text-red-400' : 'text-slate-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.25}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <div className="text-center">
-                    <p className="text-sm font-semibold text-slate-700">
-                      {esEditar ? 'Seleccioná el nuevo archivo PDF' : 'Hacé clic para seleccionar el archivo PDF'}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Solo archivos .pdf — máximo {MAX_MB} MB
-                    </p>
-                  </div>
+                  {isDragging ? (
+                    <>
+                      <svg className="w-10 h-10 text-[#0f4c81]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                      </svg>
+                      <div className="text-center">
+                        <p className="text-sm font-bold text-[#0f4c81] tracking-wide">SOLTAR PDF AQUÍ</p>
+                        <p className="text-xs text-[#0f4c81]/60 mt-0.5">Suelta el archivo para cargarlo</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <svg className={`w-10 h-10 ${errorArchivo ? 'text-red-400' : 'text-slate-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.25}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold text-slate-700">
+                          {esEditar ? 'Seleccioná el nuevo archivo PDF' : 'Hacé clic para seleccionar el archivo PDF'}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Arrastrá aquí o hacé clic — solo .pdf, máximo {MAX_MB} MB
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </label>
               ) : (
                 <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
@@ -598,7 +653,7 @@ export function NormativaForm({
         </div>
 
         {/* PIE */}
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex flex-wrap items-center justify-between gap-3">
           <p className="text-[10px] text-slate-400 font-medium">
             Los campos marcados con * son obligatorios
           </p>

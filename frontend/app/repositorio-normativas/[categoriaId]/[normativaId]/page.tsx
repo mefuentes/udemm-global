@@ -130,8 +130,8 @@ export default function NormativaDetallePage() {
         const res = await fetch(`${API}/normativas/${normativaId}/archivo`, {
           headers: { Authorization: `Bearer ${obtenerTokenActual()}` },
         });
-        if (res.status === 403) throw new Error('Sin permiso para acceder a este documento.');
-        if (res.status === 404) throw new Error('El archivo PDF no está disponible en este momento.');
+        if (res.status === 403) throw new Error('ACCESO DENEGADO. NO POSEE PERMISOS PARA VISUALIZAR ESTE DOCUMENTO.');
+        if (res.status === 404) throw new Error('EL DOCUMENTO PDF NO ESTÁ DISPONIBLE EN ESTE MOMENTO.');
         if (!res.ok) throw new Error('No se pudo cargar el documento. Intentá nuevamente.');
         const blob = await res.blob();
         url = URL.createObjectURL(blob);

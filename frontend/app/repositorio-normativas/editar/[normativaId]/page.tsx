@@ -71,9 +71,9 @@ export default function EditarNormativaPage() {
     <div className="max-w-3xl mx-auto space-y-6">
 
       {/* Encabezado */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex flex-wrap items-center gap-1.5 mb-2">
             <Link href="/repositorio-normativas" className="text-xs text-[#0f4c81] hover:underline font-medium">
               Repositorio de Normativas
             </Link>

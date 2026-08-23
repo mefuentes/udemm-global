@@ -184,10 +184,29 @@ export class NormativasService {
     ipOrigen: string | null,
   ) {
     // 1. Normativa debe existir y no estar eliminada
-    const normativa = await this.prisma.normativa.findFirst({
-      where: { id, eliminado: false },
-    });
+    const normativa = await this.prisma.normativa.findFirst({ where: { id } });
     if (!normativa) throw new NotFoundException('Normativa no encontrada');
+
+    if (normativa.eliminado) {
+      void this.auditoria.registrar({
+        accion:          'ACCESO_DENEGADO',
+        usuarioId,
+        normativaId:     normativa.id,
+        normativaTitulo: normativa.titulo,
+        normativaNumero: normativa.numeroNorma,
+        normativaAnio:   normativa.anio,
+        detalle: {
+          razon:      'INTENTO DE EDICIÓN SOBRE NORMATIVA DADA DE BAJA',
+          metodoHttp: 'PATCH',
+          endpoint:   `/normativas/${id}`,
+          rol:        rolUsuario,
+        },
+        ipOrigen,
+      });
+      throw new ForbiddenException(
+        'ACCESO DENEGADO. NO ES POSIBLE EDITAR UNA NORMATIVA QUE HA SIDO DADA DE BAJA LÓGICAMENTE.',
+      );
+    }
 
     // 2. Validar nuevo archivo (si se provee) — sin guardarlo todavía
     if (archivo) {
@@ -358,12 +377,32 @@ export class NormativasService {
     dto: CambiarEstadoNormativaDto,
     usuarioId: string | null,
     ipOrigen: string | null,
+    rolUsuario: string,
   ) {
-    // 1. Cargar normativa
-    const normativa = await this.prisma.normativa.findFirst({
-      where: { id, eliminado: false },
-    });
+    // 1. Cargar normativa — sin filtrar eliminado para detectar intentos sobre bajas
+    const normativa = await this.prisma.normativa.findFirst({ where: { id } });
     if (!normativa) throw new NotFoundException('Normativa no encontrada');
+
+    if (normativa.eliminado) {
+      void this.auditoria.registrar({
+        accion:          'ACCESO_DENEGADO',
+        usuarioId,
+        normativaId:     normativa.id,
+        normativaTitulo: normativa.titulo,
+        normativaNumero: normativa.numeroNorma,
+        normativaAnio:   normativa.anio,
+        detalle: {
+          razon:      'INTENTO DE CAMBIO DE ESTADO SOBRE NORMATIVA DADA DE BAJA',
+          metodoHttp: 'PATCH',
+          endpoint:   `/normativas/${id}/estado`,
+          rol:        rolUsuario,
+        },
+        ipOrigen,
+      });
+      throw new ForbiddenException(
+        'ACCESO DENEGADO. NO ES POSIBLE CAMBIAR EL ESTADO DE UNA NORMATIVA QUE HA SIDO DADA DE BAJA LÓGICAMENTE.',
+      );
+    }
 
     // 2. No permitir el mismo estado actual
     if (normativa.vigencia === dto.vigencia) {
@@ -764,7 +803,12 @@ export class NormativasService {
         normativaTitulo: normativa.titulo,
         normativaNumero: normativa.numeroNorma,
         normativaAnio:   normativa.anio,
-        detalle: { razon: 'USUARIO SIN PERMISOS PARA VER NORMATIVAS ELIMINADAS', rol: rolUsuario },
+        detalle: {
+          razon:      'USUARIO SIN PERMISOS PARA VER NORMATIVAS ELIMINADAS',
+          metodoHttp: 'GET',
+          endpoint:   `/normativas/${id}`,
+          rol:        rolUsuario,
+        },
         ipOrigen,
       });
       throw new NotFoundException('Normativa no encontrada');
@@ -778,7 +822,13 @@ export class NormativasService {
         normativaTitulo: normativa.titulo,
         normativaNumero: normativa.numeroNorma,
         normativaAnio:   normativa.anio,
-        detalle: { razon: 'DOCENTE SIN ACCESO A NORMATIVA NO VIGENTE', vigenciaRecurso: normativa.vigencia },
+        detalle: {
+          razon:           'DOCENTE SIN ACCESO A NORMATIVA NO VIGENTE',
+          vigenciaRecurso: normativa.vigencia,
+          metodoHttp:      'GET',
+          endpoint:        `/normativas/${id}`,
+          rol:             'DOCENTE',
+        },
         ipOrigen,
       });
       throw new NotFoundException('Normativa no encontrada');
@@ -816,11 +866,27 @@ export class NormativasService {
     dto: EliminarNormativaDto,
     usuarioId: string | null,
     ipOrigen: string | null,
+    rolUsuario: string,
   ) {
     const normativa = await this.prisma.normativa.findFirst({ where: { id } });
     if (!normativa) throw new NotFoundException('Normativa no encontrada');
 
     if (normativa.eliminado) {
+      void this.auditoria.registrar({
+        accion:          'ACCESO_DENEGADO',
+        usuarioId,
+        normativaId:     normativa.id,
+        normativaTitulo: normativa.titulo,
+        normativaNumero: normativa.numeroNorma,
+        normativaAnio:   normativa.anio,
+        detalle: {
+          razon:      'INTENTO DE ELIMINACIÓN SOBRE NORMATIVA YA DADA DE BAJA',
+          metodoHttp: 'DELETE',
+          endpoint:   `/normativas/${id}`,
+          rol:        rolUsuario,
+        },
+        ipOrigen,
+      });
       throw new ConflictException('LA NORMATIVA YA SE ENCUENTRA DADA DE BAJA.');
     }
 
@@ -928,10 +994,39 @@ export class NormativasService {
     usuarioId: string | null,
     ipOrigen: string | null,
   ): Promise<StreamableFile> {
-    const esDocente = rolUsuario === 'DOCENTE';
+    const esDocente          = rolUsuario === 'DOCENTE';
+    const puedeVerEliminadas = ROLES_VER_ELIMINADAS.includes(rolUsuario);
 
-    const normativa = await this.prisma.normativa.findFirst({ where: { id, eliminado: false } });
+    // Busca sin filtrar eliminado para detectar intentos sobre normativas dadas de baja
+    const normativa = await this.prisma.normativa.findFirst({ where: { id } });
     if (!normativa) throw new NotFoundException('Normativa no encontrada');
+
+    if (normativa.eliminado) {
+      if (puedeVerEliminadas) {
+        // Rol con visibilidad de bajas pero sin acceso al archivo en cuarentena
+        void this.auditoria.registrar({
+          accion:          'ACCESO_DENEGADO',
+          usuarioId,
+          normativaId:     normativa.id,
+          normativaTitulo: normativa.titulo,
+          normativaNumero: normativa.numeroNorma,
+          normativaAnio:   normativa.anio,
+          detalle: {
+            razon:           'ACCESO AL DOCUMENTO DE NORMATIVA DADA DE BAJA (ARCHIVO EN CUARENTENA)',
+            accionIntentada: download ? 'DESCARGA_PDF' : 'VER_DOCUMENTO',
+            metodoHttp:      'GET',
+            endpoint:        `/normativas/${id}/archivo`,
+            rol:             rolUsuario,
+          },
+          ipOrigen,
+        });
+        throw new ForbiddenException(
+          'ACCESO DENEGADO. EL DOCUMENTO DE ESTA NORMATIVA NO ESTÁ DISPONIBLE EN EL REPOSITORIO OPERATIVO.',
+        );
+      }
+      // Para roles sin visibilidad de bajas: 404 para no revelar la existencia
+      throw new NotFoundException('Normativa no encontrada');
+    }
 
     if (esDocente && normativa.vigencia !== 'VIGENTE') {
       void this.auditoria.registrar({
@@ -945,10 +1040,13 @@ export class NormativasService {
           razon:           'DOCENTE SIN ACCESO AL DOCUMENTO DE NORMATIVA NO VIGENTE',
           vigenciaRecurso: normativa.vigencia,
           accionIntentada: download ? 'DESCARGA_PDF' : 'VER_DOCUMENTO',
+          metodoHttp:      'GET',
+          endpoint:        `/normativas/${id}/archivo`,
+          rol:             'DOCENTE',
         },
         ipOrigen,
       });
-      throw new ForbiddenException('No tiene acceso a este documento.');
+      throw new ForbiddenException('ACCESO DENEGADO. NO POSEE PERMISOS PARA VISUALIZAR ESTE DOCUMENTO.');
     }
 
     if (!normativa.rutaArchivoOriginal) {
@@ -986,5 +1084,221 @@ export class NormativasService {
         : `inline; filename="${nombreDescarga}"`,
       length: normativa.tamanioArchivo ?? undefined,
     });
+  }
+
+  // ── Exportación (PDF / Excel) — sin paginación ────────────────────────────
+
+  async exportar(
+    dto: ListarNormativasDto,
+    rolUsuario: string,
+    formato: 'PDF' | 'EXCEL',
+    usuarioId: string | null,
+    ipOrigen: string | null,
+  ): Promise<{
+    data:                   any[];
+    total:                  number;
+    incluyeEliminadoFields: boolean;
+    tipoNombre:             string | null;
+    usuarioNombre:          string | null;
+    filtros:                Record<string, string>;
+  }> {
+    const { busqueda, areaEmisora, tipoId, vigencia, fechaDesde, fechaHasta, estadoRegistro } = dto;
+
+    const esDocente          = rolUsuario === 'DOCENTE';
+    const puedeVerEliminadas = ROLES_VER_ELIMINADAS.includes(rolUsuario);
+
+    const estadoEfectivo: 'ACTIVAS' | 'ELIMINADAS' | 'TODAS' =
+      (!puedeVerEliminadas || esDocente || !estadoRegistro) ? 'ACTIVAS'
+      : (estadoRegistro as 'ACTIVAS' | 'ELIMINADAS' | 'TODAS');
+
+    const incluyeEliminadoFields = estadoEfectivo === 'ELIMINADAS' || estadoEfectivo === 'TODAS';
+    const tokens = busqueda?.trim() ? tokenizar(busqueda) : [];
+
+    let data: any[];
+    let total: number;
+
+    if (tokens.length === 0) {
+      // Path A: Prisma ORM sin paginación
+      const where: Record<string, any> = {};
+
+      if (esDocente || !puedeVerEliminadas || estadoEfectivo === 'ACTIVAS') {
+        where.eliminado = false;
+      } else if (estadoEfectivo === 'ELIMINADAS') {
+        where.eliminado = true;
+      }
+
+      if (esDocente) {
+        where.vigencia = 'VIGENTE';
+      } else if (estadoEfectivo === 'ACTIVAS' && vigencia && VIGENCIAS_VALIDAS.includes(vigencia as any)) {
+        where.vigencia = vigencia;
+      }
+
+      if (areaEmisora?.trim()) where.areaEmisora    = { contains: areaEmisora.trim(), mode: 'insensitive' };
+      if (tipoId)              where.tipoNormativaId = tipoId;
+      if (fechaDesde || fechaHasta) {
+        where.fechaEmision = {};
+        if (fechaDesde) where.fechaEmision.gte = new Date(fechaDesde);
+        if (fechaHasta) where.fechaEmision.lte = new Date(fechaHasta + 'T23:59:59.999Z');
+      }
+
+      const rows = await this.prisma.normativa.findMany({
+        where,
+        orderBy: { fechaEmision: 'desc' },
+        include: { tipoNormativa: { select: { id: true, nombre: true } } },
+      });
+
+      data  = rows as any[];
+      total = rows.length;
+
+    } else {
+      // Path B: raw SQL con unaccent, sin paginación
+      const conditions: Prisma.Sql[] = [];
+
+      if (esDocente || !puedeVerEliminadas || estadoEfectivo === 'ACTIVAS') {
+        conditions.push(Prisma.sql`n."eliminado" = false`);
+      } else if (estadoEfectivo === 'ELIMINADAS') {
+        conditions.push(Prisma.sql`n."eliminado" = true`);
+      }
+
+      if (esDocente) {
+        conditions.push(Prisma.sql`n."vigencia" = 'VIGENTE'`);
+      } else if (estadoEfectivo === 'ACTIVAS' && vigencia && VIGENCIAS_VALIDAS.includes(vigencia as any)) {
+        conditions.push(Prisma.sql`n."vigencia" = ${vigencia}`);
+      }
+
+      if (tipoId) conditions.push(Prisma.sql`n."tipoNormativaId" = ${tipoId}::uuid`);
+
+      if (areaEmisora?.trim()) {
+        const ae = `%${areaEmisora.trim()}%`;
+        conditions.push(
+          Prisma.sql`unaccent(LOWER(n."areaEmisora")) LIKE unaccent(LOWER(${ae}))`,
+        );
+      }
+
+      if (fechaDesde) conditions.push(Prisma.sql`n."fechaEmision" >= ${new Date(fechaDesde)}`);
+      if (fechaHasta) conditions.push(Prisma.sql`n."fechaEmision" <= ${new Date(fechaHasta + 'T23:59:59.999Z')}`);
+
+      for (const token of tokens) {
+        const param = `%${token}%`;
+        if (incluyeEliminadoFields) {
+          conditions.push(Prisma.sql`(
+            unaccent(LOWER(n."titulo"))                                    LIKE unaccent(LOWER(${param}))
+            OR unaccent(LOWER(COALESCE(n."palabrasClave", '')))           LIKE unaccent(LOWER(${param}))
+            OR unaccent(LOWER(n."areaEmisora"))                           LIKE unaccent(LOWER(${param}))
+            OR unaccent(LOWER(COALESCE(n."motivoEliminacion", '')))       LIKE unaccent(LOWER(${param}))
+          )`);
+        } else {
+          conditions.push(Prisma.sql`(
+            unaccent(LOWER(n."titulo"))                          LIKE unaccent(LOWER(${param}))
+            OR unaccent(LOWER(COALESCE(n."palabrasClave", ''))) LIKE unaccent(LOWER(${param}))
+            OR unaccent(LOWER(n."areaEmisora"))                 LIKE unaccent(LOWER(${param}))
+          )`);
+        }
+      }
+
+      const extraSelect = incluyeEliminadoFields
+        ? Prisma.sql`, n."eliminado", n."motivoEliminacion", n."fechaEliminacion", n."eliminadoPorUsuarioId"`
+        : Prisma.sql``;
+
+      const where = conditions.length > 0 ? Prisma.join(conditions, ' AND ') : Prisma.sql`1=1`;
+
+      const rows = await this.prisma.$queryRaw<any[]>(Prisma.sql`
+        SELECT
+          n.id, n.titulo, n."areaEmisora", n."numeroNorma", n.anio,
+          n."fechaEmision", n.vigencia, n."palabrasClave", n."tipoNormativaId"${extraSelect},
+          tn.id AS "tn_id", tn.nombre AS "tn_nombre"
+        FROM "Normativa" n
+        JOIN "TipoNormativa" tn ON n."tipoNormativaId" = tn.id
+        WHERE ${where}
+        ORDER BY n."fechaEmision" DESC
+      `);
+
+      total = rows.length;
+      data  = rows.map(r => ({
+        id:              r.id,
+        titulo:          r.titulo,
+        areaEmisora:     r.areaEmisora,
+        numeroNorma:     r.numeroNorma,
+        anio:            r.anio,
+        fechaEmision:    r.fechaEmision,
+        vigencia:        r.vigencia,
+        palabrasClave:   r.palabrasClave,
+        tipoNormativaId: r.tipoNormativaId,
+        tipoNormativa:   { id: r.tn_id, nombre: r.tn_nombre },
+        ...(incluyeEliminadoFields ? {
+          eliminado:             r.eliminado,
+          motivoEliminacion:     r.motivoEliminacion,
+          fechaEliminacion:      r.fechaEliminacion,
+          eliminadoPorUsuarioId: r.eliminadoPorUsuarioId,
+        } : {}),
+      }));
+    }
+
+    // Enriquecer con nombre de quien realizó la baja
+    if (incluyeEliminadoFields && data.length > 0) {
+      const userIds = [...new Set(
+        data
+          .filter(n => n.eliminadoPorUsuarioId)
+          .map(n => n.eliminadoPorUsuarioId as string),
+      )];
+      if (userIds.length > 0) {
+        const usuarios = await this.prisma.usuario.findMany({
+          where:  { id: { in: userIds } },
+          select: { id: true, nombre: true, apellido: true },
+        });
+        const userMap = new Map(usuarios.map(u => [u.id, `${u.apellido}, ${u.nombre}`]));
+        data = data.map(n => ({
+          ...n,
+          eliminadoPorNombre: n.eliminadoPorUsuarioId
+            ? (userMap.get(n.eliminadoPorUsuarioId) ?? null)
+            : null,
+        }));
+      }
+    }
+
+    // Nombre del tipo para encabezado de exportación
+    let tipoNombre: string | null = null;
+    if (tipoId) {
+      const tipo = await this.prisma.tipoNormativa.findUnique({
+        where:  { id: tipoId },
+        select: { nombre: true },
+      });
+      tipoNombre = tipo?.nombre ?? null;
+    }
+
+    // Nombre del usuario para encabezado de exportación
+    let usuarioNombre: string | null = null;
+    if (usuarioId) {
+      const usr = await this.prisma.usuario.findUnique({
+        where:  { id: usuarioId },
+        select: { nombre: true, apellido: true },
+      });
+      if (usr) usuarioNombre = `${usr.apellido}, ${usr.nombre}`;
+    }
+
+    // Objeto de filtros para el documento y la auditoría
+    const filtros = {
+      busqueda:       busqueda       ?? '',
+      areaEmisora:    areaEmisora    ?? '',
+      vigencia:       vigencia       ?? '',
+      fechaDesde:     fechaDesde     ?? '',
+      fechaHasta:     fechaHasta     ?? '',
+      estadoRegistro: estadoEfectivo,
+    };
+
+    // Auditoría — un único evento por operación de exportación
+    void this.auditoria.registrar({
+      accion:   'EXPORTACION',
+      usuarioId,
+      detalle: {
+        formato,
+        filtros,
+        tipoNombre,
+        totalRegistros: total,
+      },
+      ipOrigen,
+    });
+
+    return { data, total, incluyeEliminadoFields, tipoNombre, usuarioNombre, filtros };
   }
 }

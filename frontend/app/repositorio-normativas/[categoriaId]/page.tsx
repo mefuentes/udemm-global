@@ -109,6 +109,18 @@ const IcTrash = () => (
   </svg>
 );
 
+const IcPdf = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+  </svg>
+);
+
+const IcExcel = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18M10 3v18M3 3h18v18H3z" />
+  </svg>
+);
+
 // ── Página ────────────────────────────────────────────────────────────────────
 
 export default function CategoriaDetallePage() {
@@ -140,6 +152,9 @@ export default function CategoriaDetallePage() {
 
   const [estadoRegistro, setEstadoRegistro] = useState<EstadoRegistro>('ACTIVAS');
   const [totalEliminadas, setTotalEliminadas] = useState(0);
+
+  const [exportando, setExportando]     = useState<'pdf' | 'excel' | null>(null);
+  const [exportError, setExportError]   = useState('');
 
   const [triggerRefresh, setTriggerRefresh] = useState(0);
   const [normativaParaCambiarEstado, setNormativaParaCambiarEstado] = useState<NormativaItem | null>(null);
@@ -252,6 +267,49 @@ export default function CategoriaDetallePage() {
 
   const hayFiltrosActivos = Object.values(filtros).some(v => v !== '');
 
+  // ── Exportación ──────────────────────────────────────────────────────────────
+  async function handleExportar(formato: 'pdf' | 'excel') {
+    setExportando(formato);
+    setExportError('');
+    try {
+      const url = new URL(`${API}/normativas/exportar/${formato}`);
+      url.searchParams.set('tipoId', categoriaId);
+      if (filtros.busqueda)    url.searchParams.set('busqueda',    filtros.busqueda);
+      if (filtros.areaEmisora) url.searchParams.set('areaEmisora', filtros.areaEmisora);
+      if (filtros.vigencia)    url.searchParams.set('vigencia',    filtros.vigencia);
+      if (filtros.fechaDesde)  url.searchParams.set('fechaDesde',  filtros.fechaDesde);
+      if (filtros.fechaHasta)  url.searchParams.set('fechaHasta',  filtros.fechaHasta);
+      if (puedeGestionar && estadoRegistro !== 'ACTIVAS') {
+        url.searchParams.set('estadoRegistro', estadoRegistro);
+      }
+
+      const res = await fetch(url.toString(), { headers: hdrs() });
+      if (!res.ok) {
+        const msg = await res.json().catch(() => ({}));
+        throw new Error((msg as any)?.message ?? 'Error al generar la exportación.');
+      }
+
+      const blob = await res.blob();
+      const ext  = formato === 'pdf' ? 'pdf' : 'xlsx';
+      const dia  = new Date().toISOString().slice(0, 10);
+      const nombre = `normativas-${categoriaNombre.replace(/\s+/g, '-').toLowerCase()}-${dia}.${ext}`;
+
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = nombre;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      setExportError('No se pudo generar la exportación. Intentá nuevamente.');
+      setTimeout(() => setExportError(''), 5000);
+    } finally {
+      setExportando(null);
+    }
+  }
+
   // ── Handlers cambio de estado ───────────────────────────────────────────────
   function handleEstadoConfirmado() {
     setNormativaParaCambiarEstado(null);
@@ -272,26 +330,26 @@ export default function CategoriaDetallePage() {
     <div className="max-w-6xl mx-auto space-y-5">
 
       {/* ── Encabezado ──────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1.5">
-            <Link href="/repositorio-normativas" className="text-xs text-[#0f4c81] hover:underline font-medium flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+            <Link href="/repositorio-normativas" className="text-xs text-[#0f4c81] hover:underline font-medium flex items-center gap-1 whitespace-nowrap">
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
               Repositorio de Normativas
             </Link>
             <span className="text-slate-300 text-xs">/</span>
-            <span className="text-xs text-slate-500 truncate">{categoriaNombre}</span>
+            <span className="text-xs text-slate-500 truncate max-w-[200px] sm:max-w-none">{categoriaNombre}</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">{categoriaNombre}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight">{categoriaNombre}</h1>
           <p className="mt-1 text-sm text-slate-500 font-medium tracking-wide">REPOSITORIO DE NORMATIVAS</p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-2">
           {puedeGestionar && (
             <Link
               href={`/repositorio-normativas/nueva?tipoId=${categoriaId}&nombre=${encodeURIComponent(categoriaNombre)}`}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0f4c81] hover:bg-[#0d3f6d] text-white text-sm font-bold tracking-wide transition-all shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0f4c81] hover:bg-[#0d3f6d] text-white text-sm font-bold tracking-wide transition-all shadow-sm whitespace-nowrap"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -301,12 +359,12 @@ export default function CategoriaDetallePage() {
           )}
           <Link
             href="/repositorio-normativas"
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm whitespace-nowrap"
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
-            Volver a categorías
+            Volver
           </Link>
         </div>
       </div>
@@ -511,9 +569,19 @@ export default function CategoriaDetallePage() {
         </div>
       </div>
 
+      {/* ── Banner error exportación ───────────────────────────────────────────── */}
+      {exportError && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold">
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          {exportError}
+        </div>
+      )}
+
       {/* ── Grilla de normativas ──────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-bold text-slate-800">
               {estadoRegistro === 'ELIMINADAS' ? 'NORMATIVAS DADAS DE BAJA'
@@ -528,6 +596,29 @@ export default function CategoriaDetallePage() {
               </p>
             )}
           </div>
+          {/* Botones de exportación */}
+          {!cargando && !error && totalRegistros > 0 && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={() => handleExportar('pdf')}
+                disabled={exportando !== null}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100 hover:border-red-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Exportar resultados completos en PDF"
+              >
+                <IcPdf />
+                {exportando === 'pdf' ? 'GENERANDO...' : 'EXPORTAR PDF'}
+              </button>
+              <button
+                onClick={() => handleExportar('excel')}
+                disabled={exportando !== null}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 hover:border-emerald-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Exportar resultados completos en Excel"
+              >
+                <IcExcel />
+                {exportando === 'excel' ? 'GENERANDO...' : 'EXPORTAR EXCEL'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Error */}
@@ -717,7 +808,7 @@ export default function CategoriaDetallePage() {
 
         {/* Paginación */}
         {!cargando && !error && totalRegistros > 0 && (
-          <div className="px-5 py-3.5 border-t border-slate-100 flex items-center justify-between gap-4">
+          <div className="px-5 py-3.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-slate-500">
               {totalRegistros === 0 ? 'Sin resultados' : (
                 <>
