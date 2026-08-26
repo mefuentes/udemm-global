@@ -6,10 +6,13 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Environment variables
+# Environment variables — archivos reales de configuración
 .env
 .env.*
 *.env
+# Los archivos .env.example son plantillas intencionales y SÍ deben commitearse
+!.env.example
+!**/.env.example
 
 # Build output
 dist/

@@ -17,10 +17,10 @@ import { RolesModule } from '../roles/roles.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') || 'supersecretjwtkey',
+        secret: configService.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRES_IN') || '3600s'
-        }
+          expiresIn: configService.get<string>('JWT_EXPIRES_IN') ?? '3600s',
+        },
       })
     }),
     UsersModule,
