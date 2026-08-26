@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,8 +83,6 @@ function validarAnio(val: string): string | null {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function FormularioVinculacion({ onGuardado, onCerrar }: Props) {
-  const { obtenerTokenActual } = useAuth();
-
   const [form, setForm] = useState<FormState>(VACIO);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,10 +107,8 @@ export function FormularioVinculacion({ onGuardado, onCerrar }: Props) {
   const [loadingPlanes,   setLoadingPlanes]   = useState(false);
   const [loadingMaterias, setLoadingMaterias] = useState(false);
 
-  const hdrs = () => ({ Authorization: `Bearer ${obtenerTokenActual()}` });
-
   async function get<T>(url: string): Promise<T> {
-    const r = await fetch(`${API}${url}`, { headers: hdrs() });
+    const r = await apiFetch(`${API}${url}`);
     if (!r.ok) throw new Error(`Error ${r.status}`);
     return r.json();
   }
@@ -220,9 +216,8 @@ export function FormularioVinculacion({ onGuardado, onCerrar }: Props) {
         anioInicio:    parseInt(form.anioInicio, 10),
         observaciones: form.observaciones || undefined,
       };
-      const r = await fetch(`${API}/vinculaciones-catedra`, {
+      const r = await apiFetch(`${API}/vinculaciones-catedra`, {
         method: 'POST',
-        headers: { ...hdrs(), 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       const data = await r.json().catch(() => null);

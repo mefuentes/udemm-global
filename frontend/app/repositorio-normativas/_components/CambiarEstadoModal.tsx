@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { apiFetch } from '@/lib/api';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
@@ -26,7 +27,6 @@ interface CandidataSucesora {
 
 export interface CambiarEstadoModalProps {
   normativa: NormativaResumen;
-  obtenerToken: () => string | null;
   onConfirmado: () => void;
   onCancelar: () => void;
 }
@@ -47,7 +47,6 @@ function vigenciaBadge(v: string) {
 
 export function CambiarEstadoModal({
   normativa,
-  obtenerToken,
   onConfirmado,
   onCancelar,
 }: CambiarEstadoModalProps) {
@@ -99,9 +98,7 @@ export function CambiarEstadoModal({
         anio:        String(anio),
         excluirId:   normativa.id,
       });
-      const res = await fetch(`${API}/normativas/candidata-sucesora?${params}`, {
-        headers: { Authorization: `Bearer ${obtenerToken()}` },
-      });
+      const res = await apiFetch(`${API}/normativas/candidata-sucesora?${params}`);
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
@@ -149,12 +146,8 @@ export function CambiarEstadoModal({
         body.normativaSucesoraId = candidata.id;
       }
 
-      const res = await fetch(`${API}/normativas/${normativa.id}/estado`, {
-        method:  'PATCH',
-        headers: {
-          'Content-Type':  'application/json',
-          Authorization:   `Bearer ${obtenerToken()}`,
-        },
+      const res = await apiFetch(`${API}/normativas/${normativa.id}/estado`, {
+        method: 'PATCH',
         body: JSON.stringify(body),
       });
 

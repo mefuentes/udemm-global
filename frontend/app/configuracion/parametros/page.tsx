@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 
 interface Parametro { id: string; clave: string; valor: string; descripcion: string | null; }
 
@@ -18,7 +18,6 @@ const LABELS: Record<string, string> = {
 };
 
 export default function ParametrosPage() {
-  const { obtenerTokenActual } = useAuth();
   const [parametros, setParametros] = useState<Parametro[]>([]);
   const [valores, setValores] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -26,12 +25,10 @@ export default function ParametrosPage() {
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
 
-  const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${obtenerTokenActual()}` });
-
   async function cargar() {
     setLoading(true); setError(null);
     try {
-      const res = await fetch(`${API}/configuracion/parametros`, { headers: headers() });
+      const res = await apiFetch(`${API}/configuracion/parametros`);
       if (!res.ok) throw new Error('Error al cargar parámetros');
       const data: Parametro[] = await res.json();
       setParametros(data);
@@ -46,7 +43,7 @@ export default function ParametrosPage() {
     setSubmitting(true); setError(null); setExito(null);
     try {
       const payload = { parametros: Object.entries(valores).map(([clave, valor]) => ({ clave, valor })) };
-      const res = await fetch(`${API}/configuracion/parametros`, { method: 'PATCH', headers: headers(), body: JSON.stringify(payload) });
+      const res = await apiFetch(`${API}/configuracion/parametros`, { method: 'PATCH', body: JSON.stringify(payload) });
       if (!res.ok) throw new Error('Error al guardar');
       setExito('Parámetros guardados correctamente.');
       cargar();

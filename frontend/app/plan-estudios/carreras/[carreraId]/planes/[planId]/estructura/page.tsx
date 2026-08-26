@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch as apiFetchBase } from '@/lib/api';
 import { getPermisosPlanEstudio } from '@/lib/permisos-plan-estudios';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -180,7 +181,7 @@ export default function EstructuraCurricularPage() {
   const params    = useParams();
   const carreraId = params.carreraId as string;
   const planId    = params.planId    as string;
-  const { usuario, token, obtenerTokenActual, logout } = useAuth();
+  const { usuario } = useAuth();
   const permisos = getPermisosPlanEstudio(usuario?.rol?.nombre ?? '');
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -212,21 +213,14 @@ export default function EstructuraCurricularPage() {
 
   // ── API ───────────────────────────────────────────────────────────────────
   async function apiFetch(url: string, opts?: RequestInit) {
-    const tok = obtenerTokenActual();
-    const res = await fetch(url, {
-      ...opts,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}`, ...(opts?.headers ?? {}) },
-    });
+    const res = await apiFetchBase(url, opts);
     const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) logout();
-      throw new Error(data?.message ?? 'Error en la solicitud');
-    }
+    if (!res.ok) throw new Error(data?.message ?? 'Error en la solicitud');
     return data;
   }
 
   useEffect(() => {
-    if (!token || !planId) return;
+    if (!usuario || !planId) return;
     setCargando(true);
     Promise.all([
       apiFetch(`${API_URL}/plan-estudios/${planId}`),
@@ -240,7 +234,7 @@ export default function EstructuraCurricularPage() {
       })
       .catch(e => setError((e as Error).message))
       .finally(() => setCargando(false));
-  }, [token, planId]);
+  }, [usuario, planId]);
 
   async function cargarCorrelativas(lista: Materia[]) {
     setCargandoCorr(true);

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 
 interface Docente {
   id: string;
@@ -31,7 +32,7 @@ interface EditarPageProps {
 
 export default function EditarDocentePage({ params }: EditarPageProps) {
   const router = useRouter();
-  const { token, obtenerTokenActual } = useAuth();
+  const { usuario } = useAuth();
   const { id } = params;
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
@@ -40,24 +41,15 @@ export default function EditarDocentePage({ params }: EditarPageProps) {
   const [formData, setFormData] = useState<Partial<Docente>>({});
 
   useEffect(() => {
-    if (!token) return;
+    if (!usuario) return;
     cargarDocente();
-  }, [token, id]);
+  }, [usuario, id]);
 
   async function cargarDocente() {
     try {
       setCargando(true);
       setError(null);
-      const tokenActual = obtenerTokenActual();
-      if (!tokenActual) {
-        throw new Error('No hay sesión activa');
-      }
-
-      const response = await fetch(`${API_URL}/docentes/${id}`, {
-        headers: {
-          Authorization: `Bearer ${tokenActual}`
-        }
-      });
+      const response = await apiFetch(`${API_URL}/docentes/${id}`);
 
       if (!response.ok) {
         throw new Error('No se pudo cargar el docente');
@@ -99,18 +91,9 @@ export default function EditarDocentePage({ params }: EditarPageProps) {
         antecedentesAcademicos: formData.antecedentesAcademicos ? formData.antecedentesAcademicos.trim() : undefined
       };
 
-      const tokenActual = obtenerTokenActual();
-      if (!tokenActual) {
-        throw new Error('No hay sesión activa');
-      }
-
-      const response = await fetch(`${API_URL}/docentes/${id}`, {
+      const response = await apiFetch(`${API_URL}/docentes/${id}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokenActual}`
-        },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -131,7 +114,7 @@ export default function EditarDocentePage({ params }: EditarPageProps) {
     }
   }
 
-  if (!token) {
+  if (!usuario) {
     return (
       <main className="max-w-2xl mx-auto space-y-4">
         <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200">

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 import { useNotificaciones } from '@/lib/notificaciones-context';
 import { ModalRechazar } from './_components/ModalRechazar';
 import { ModalDetalle } from './_components/ModalDetalle';
@@ -140,7 +141,7 @@ function Campo({ label, valor }: { label: string; valor?: string | null }) {
 // ── Página ────────────────────────────────────────────────────────────────────
 
 export default function BandejaAprobacionesPage() {
-  const { usuario, obtenerTokenActual } = useAuth();
+  const { usuario } = useAuth();
   const { recargarContador }            = useNotificaciones();
 
   const rolNombre = usuario?.rol?.nombre ?? '';
@@ -179,13 +180,10 @@ export default function BandejaAprobacionesPage() {
     setCargando(true);
     setError(null);
     try {
-      const token  = obtenerTokenActual();
       const params = new URLSearchParams();
       if (!esDocente && estado) params.set('estado', estado);
 
-      const res = await fetch(`${API}/vinculaciones-catedra?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`${API}/vinculaciones-catedra?${params}`);
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const data = await res.json();
       setVinculaciones(Array.isArray(data) ? data : (data.data ?? []));
@@ -194,7 +192,7 @@ export default function BandejaAprobacionesPage() {
     } finally {
       setCargando(false);
     }
-  }, [obtenerTokenActual, esDocente, estado]);
+  }, [esDocente, estado]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -202,13 +200,10 @@ export default function BandejaAprobacionesPage() {
   const cargarNotificaciones = useCallback(async () => {
     if (!esDocente) return;
     try {
-      const token = obtenerTokenActual();
-      const res = await fetch(`${API}/notificaciones`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`${API}/notificaciones`);
       if (res.ok) setNotificaciones(await res.json());
     } catch { /* silencioso */ }
-  }, [esDocente, obtenerTokenActual]);
+  }, [esDocente]);
 
   useEffect(() => { cargarNotificaciones(); }, [cargarNotificaciones]);
 
@@ -218,10 +213,8 @@ export default function BandejaAprobacionesPage() {
     if (!window.confirm(`¿Aprobar la vinculación de ${v.docente.apellido}, ${v.docente.nombre} para "${v.materia.nombre}"?`)) return;
     setAccionandoId(v.id);
     try {
-      const token = obtenerTokenActual();
-      const res = await fetch(`${API}/vinculaciones-catedra/${v.id}/aprobar`, {
+      const res = await apiFetch(`${API}/vinculaciones-catedra/${v.id}/aprobar`, {
         method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -238,10 +231,8 @@ export default function BandejaAprobacionesPage() {
   }
 
   async function rechazar(v: Vinculacion, motivo: string) {
-    const token = obtenerTokenActual();
-    const res = await fetch(`${API}/vinculaciones-catedra/${v.id}/rechazar`, {
+    const res = await apiFetch(`${API}/vinculaciones-catedra/${v.id}/rechazar`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ motivo }),
     });
     if (!res.ok) {
@@ -259,10 +250,8 @@ export default function BandejaAprobacionesPage() {
     if (!n.leida) {
       setMarcandoNotifId(n.id);
       try {
-        const token = obtenerTokenActual();
-        const res = await fetch(`${API}/notificaciones/${n.id}/leer`, {
+        const res = await apiFetch(`${API}/notificaciones/${n.id}/leer`, {
           method: 'PATCH',
-          headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
           setNotificaciones(prev => prev.map(x => x.id === n.id ? { ...x, leida: true } : x));

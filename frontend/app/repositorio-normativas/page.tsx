@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -165,7 +166,7 @@ function getIcono(nombre: string): React.ReactNode {
 // ── Página ────────────────────────────────────────────────────────────────────
 
 export default function RepositorioNormativasPage() {
-  const { usuario, obtenerTokenActual } = useAuth();
+  const { usuario } = useAuth();
   const router = useRouter();
   const [categorias, setCategorias] = useState<CategoriaConConteo[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -187,19 +188,15 @@ export default function RepositorioNormativasPage() {
   const puedeGestionar = ROLES_GESTION.includes(rol);
 
   useEffect(() => {
-    const tok = obtenerTokenActual();
-    fetch(`${API}/normativas/conteo-por-tipo`, {
-      headers: { Authorization: `Bearer ${tok}` },
-    })
+    apiFetch(`${API}/normativas/conteo-por-tipo`)
       .then(r => (r.ok ? r.json() : Promise.reject()))
       .then(d => setCategorias(Array.isArray(d) ? d : []))
       .catch(() => setError('No se pudieron cargar las categorías.'))
       .finally(() => setCargando(false));
-  }, [obtenerTokenActual]);
+  }, []);
 
   const cargarAuditoria = useCallback(() => {
     if (!puedeGestionar) return;
-    const tok = obtenerTokenActual();
     setAuditCargando(true);
     setAuditError('');
     const params = new URLSearchParams();
@@ -209,9 +206,7 @@ export default function RepositorioNormativasPage() {
     if (auditFiltros.fechaHasta) params.set('fechaHasta', auditFiltros.fechaHasta);
     params.set('page',  String(auditPagina));
     params.set('limit', '10');
-    fetch(`${API}/normativas/auditoria?${params}`, {
-      headers: { Authorization: `Bearer ${tok}` },
-    })
+    apiFetch(`${API}/normativas/auditoria?${params}`)
       .then(r => (r.ok ? r.json() : Promise.reject()))
       .then(d => {
         setAuditData(d.data ?? []);
@@ -220,7 +215,7 @@ export default function RepositorioNormativasPage() {
       })
       .catch(() => setAuditError('No se pudo cargar el log de auditoría.'))
       .finally(() => setAuditCargando(false));
-  }, [obtenerTokenActual, puedeGestionar, auditFiltros, auditPagina]);
+  }, [puedeGestionar, auditFiltros, auditPagina]);
 
   useEffect(() => {
     if (seccion === 'auditoria') cargarAuditoria();

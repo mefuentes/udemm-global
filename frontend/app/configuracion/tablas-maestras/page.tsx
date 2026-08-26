@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -96,8 +96,6 @@ const CAT_ICONS: Record<CategoriaId, React.ReactNode> = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function TablasMaestrasPage() {
-  const { obtenerTokenActual } = useAuth();
-
   // Category
   const [categoria,    setCategoria]    = useState<CategoriaId>('catedras');
   const catInfo = CATEGORIAS.find(c => c.id === categoria)!;
@@ -124,11 +122,6 @@ export default function TablasMaestrasPage() {
   const [modalError, setModalError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const hdrs = () => ({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${obtenerTokenActual()}`,
-  });
-
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
   async function cargar() {
@@ -144,7 +137,7 @@ export default function TablasMaestrasPage() {
       } else {
         url = `${API}/configuracion/tablas-maestras/${categoria}?${params}`;
       }
-      const res = await fetch(url, { headers: hdrs() });
+      const res = await apiFetch(url);
       if (!res.ok) throw new Error('Error al cargar los datos');
       setItems(await res.json());
     } catch (e) {
@@ -156,10 +149,7 @@ export default function TablasMaestrasPage() {
 
   async function cargarAreasActivas() {
     try {
-      const res = await fetch(
-        `${API}/configuracion/tablas-maestras/areas-disciplinares/activos`,
-        { headers: hdrs() },
-      );
+      const res = await apiFetch(`${API}/configuracion/tablas-maestras/areas-disciplinares/activos`);
       if (res.ok) setAreasActivas(await res.json());
     } catch {}
   }
@@ -227,9 +217,8 @@ export default function TablasMaestrasPage() {
         ? `${API}/configuracion/subareas`
         : `${API}/configuracion/tablas-maestras/${categoria}`;
       const url = modal.id ? `${base}/${modal.id}` : base;
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: modal.id ? 'PATCH' : 'POST',
-        headers: hdrs(),
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
@@ -252,7 +241,7 @@ export default function TablasMaestrasPage() {
       const base = categoria === 'subareas'
         ? `${API}/configuracion/subareas`
         : `${API}/configuracion/tablas-maestras/${categoria}`;
-      const res = await fetch(`${base}/${item.id}/toggle`, { method: 'PATCH', headers: hdrs() });
+      const res = await apiFetch(`${base}/${item.id}/toggle`, { method: 'PATCH' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message ?? 'Error al cambiar estado');
       flash(item.activo ? 'Registro desactivado' : 'Registro activado');
@@ -266,7 +255,7 @@ export default function TablasMaestrasPage() {
       const base = categoria === 'subareas'
         ? `${API}/configuracion/subareas`
         : `${API}/configuracion/tablas-maestras/${categoria}`;
-      const res = await fetch(`${base}/${item.id}`, { method: 'DELETE', headers: hdrs() });
+      const res = await apiFetch(`${base}/${item.id}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message ?? 'Error al eliminar');
       flash('Registro eliminado');

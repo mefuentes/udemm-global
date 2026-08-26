@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -25,7 +26,7 @@ interface NormativaDetalle {
 }
 
 export default function EditarNormativaPage() {
-  const { usuario, obtenerTokenActual } = useAuth();
+  const { usuario } = useAuth();
   const router       = useRouter();
   const params       = useParams();
   const searchParams = useSearchParams();
@@ -46,9 +47,7 @@ export default function EditarNormativaPage() {
 
   useEffect(() => {
     if (!normativaId || !puedeGestionar) return;
-    fetch(`${API}/normativas/${normativaId}`, {
-      headers: { Authorization: `Bearer ${obtenerTokenActual()}` },
-    })
+    apiFetch(`${API}/normativas/${normativaId}`)
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(setNormativa)
       .catch(status => {
@@ -56,7 +55,7 @@ export default function EditarNormativaPage() {
         else setError('No se pudieron cargar los datos de la normativa.');
       })
       .finally(() => setCargando(false));
-  }, [normativaId, puedeGestionar, obtenerTokenActual]);
+  }, [normativaId, puedeGestionar]);
 
   if (usuario === undefined || !puedeGestionar) return null;
 
@@ -146,7 +145,6 @@ export default function EditarNormativaPage() {
               ? { nombre: normativa.nombreArchivoOriginal, tamanio: normativa.tamanioArchivo }
               : undefined
           }
-          obtenerToken={() => obtenerTokenActual() ?? ''}
           onSuccess={({ tipoId: tid, tipoNombre: tnom }) => {
             const nom = tnom || nombreTipo;
             const id  = tid  || tipoId;

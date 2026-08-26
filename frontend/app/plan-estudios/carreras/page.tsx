@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch as apiFetchBase } from '@/lib/api';
 import { getPermisosPlanEstudio } from '@/lib/permisos-plan-estudios';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -69,7 +70,7 @@ function iniciales(nombre: string): string {
 
 export default function CarrerasPage() {
   const pathname = usePathname();
-  const { token, obtenerTokenActual, logout } = useAuth();
+  const { usuario } = useAuth();
 
   const [facultades,  setFacultades]  = useState<Facultad[]>([]);
   const [carreras,    setCarreras]    = useState<Carrera[]>([]);
@@ -81,20 +82,14 @@ export default function CarrerasPage() {
   // ── API ───────────────────────────────────────────────────────────────────
 
   async function apiFetch(url: string) {
-    const tok = obtenerTokenActual();
-    const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
-    });
+    const res = await apiFetchBase(url);
     const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) logout();
-      throw new Error(data?.message ?? 'Error en la solicitud');
-    }
+    if (!res.ok) throw new Error(data?.message ?? 'Error en la solicitud');
     return data;
   }
 
   useEffect(() => {
-    if (!token) return;
+    if (!usuario) return;
     setCargando(true);
     Promise.all([
       apiFetch(`${API_URL}/facultades`),
@@ -114,7 +109,7 @@ export default function CarrerasPage() {
       })
       .catch(e => setError((e as Error).message))
       .finally(() => setCargando(false));
-  }, [token]);
+  }, [usuario]);
 
   // ── Filtrado ──────────────────────────────────────────────────────────────
 

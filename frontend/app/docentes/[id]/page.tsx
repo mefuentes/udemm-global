@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 
 interface Docente {
   id: string;
@@ -40,31 +41,22 @@ interface DocentePageProps {
 
 export default function DetallDocentePage({ params }: DocentePageProps) {
   const router = useRouter();
-  const { token, obtenerTokenActual, usuario } = useAuth();
+  const { usuario } = useAuth();
   const { id } = params;
   const [docente, setDocente] = useState<Docente | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
-    if (!token) return;
+    if (!usuario) return;
     cargarDocente();
-  }, [token, id]);
+  }, [usuario, id]);
 
   async function cargarDocente() {
     try {
       setCargando(true);
       setError(null);
-      const tokenActual = obtenerTokenActual();
-      if (!tokenActual) {
-        throw new Error('No hay sesión activa');
-      }
-
-      const response = await fetch(`${API_URL}/docentes/${id}`, {
-        headers: {
-          Authorization: `Bearer ${tokenActual}`
-        }
-      });
+      const response = await apiFetch(`${API_URL}/docentes/${id}`);
 
       if (!response.ok) {
         throw new Error('No se pudo cargar el docente');
@@ -87,17 +79,7 @@ export default function DetallDocentePage({ params }: DocentePageProps) {
 
     try {
       setError(null);
-      const tokenActual = obtenerTokenActual();
-      if (!tokenActual) {
-        throw new Error('No hay sesión activa');
-      }
-
-      const response = await fetch(`${API_URL}/docentes/${id}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${tokenActual}`
-        }
-      });
+      const response = await apiFetch(`${API_URL}/docentes/${id}`, { method: 'DELETE' });
 
       if (!response.ok) {
         throw new Error('No se pudo dar de baja el docente');
@@ -112,7 +94,7 @@ export default function DetallDocentePage({ params }: DocentePageProps) {
     }
   }
 
-  if (!token) {
+  if (!usuario) {
     return (
       <main className="max-w-2xl mx-auto">
         <div className="rounded-xl bg-white p-5 shadow-sm border border-slate-200">
@@ -312,7 +294,6 @@ export default function DetallDocentePage({ params }: DocentePageProps) {
               </div>
             </section>
           )}
-        </div>
 
         <div className="mt-8 flex flex-wrap items-center gap-3">
           <Link href="/docentes" className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 font-medium hover:bg-slate-50 transition">

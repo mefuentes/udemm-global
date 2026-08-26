@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch as apiFetchBase } from '@/lib/api';
 import { getPermisosPlanEstudio } from '@/lib/permisos-plan-estudios';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -60,7 +61,7 @@ const IcSpinner = () => (
 export default function InformacionPlanesPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { usuario, token, obtenerTokenActual, logout } = useAuth();
+  const { usuario } = useAuth();
 
   const [carreras,         setCarreras]         = useState<Carrera[]>([]);
   const [planes,           setPlanes]           = useState<Plan[]>([]);
@@ -77,20 +78,14 @@ export default function InformacionPlanesPage() {
   // ── API ───────────────────────────────────────────────────────────────────
 
   async function apiFetch(url: string) {
-    const tok = obtenerTokenActual();
-    const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
-    });
+    const res = await apiFetchBase(url);
     const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) logout();
-      throw new Error(data?.message ?? 'Error en la solicitud');
-    }
+    if (!res.ok) throw new Error(data?.message ?? 'Error en la solicitud');
     return data;
   }
 
   useEffect(() => {
-    if (!token) return;
+    if (!usuario) return;
     setCargandoCarreras(true);
     apiFetch(`${API_URL}/plan-estudios/carreras`)
       .then(data => {
@@ -103,7 +98,7 @@ export default function InformacionPlanesPage() {
       })
       .catch(e => setError((e as Error).message))
       .finally(() => setCargandoCarreras(false));
-  }, [token]);
+  }, [usuario]);
 
   useEffect(() => {
     if (!carreraId) { setPlanes([]); setPlanId(''); setMaterias([]); setEstadisticas(null); return; }
@@ -163,10 +158,7 @@ export default function InformacionPlanesPage() {
       const params = new URLSearchParams();
       if (carreraId) params.set('carreraId', carreraId);
       if (planId) params.set('planId', planId);
-      const tok = obtenerTokenActual();
-      const res = await fetch(`${API_URL}/plan-estudios/exportar/${formato}?${params}`, {
-        headers: { Authorization: `Bearer ${tok}` },
-      });
+      const res = await apiFetchBase(`${API_URL}/plan-estudios/exportar/${formato}?${params}`);
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         setError(data?.message ?? 'No se pudo generar el archivo.');

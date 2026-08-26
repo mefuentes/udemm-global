@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 import { FormularioVinculacion } from './_components/FormularioVinculacion';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -111,8 +111,6 @@ function CampoDetalle({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function VinculacionesCatedraPage() {
-  const { obtenerTokenActual } = useAuth();
-
   const [items, setItems]           = useState<Vinculacion[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
@@ -151,12 +149,8 @@ export default function VinculacionesCatedraPage() {
     setDesvinculando(true);
     setErrorDesvincular(null);
     try {
-      const r = await fetch(`${API}/vinculaciones-catedra/${desvinculandoTarget.id}/desvincular`, {
+      const r = await apiFetch(`${API}/vinculaciones-catedra/${desvinculandoTarget.id}/desvincular`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${obtenerTokenActual()}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           fechaDesvinculacion:  formDesvincular.fecha,
           motivoDesvinculacion: formDesvincular.motivo,
@@ -185,9 +179,7 @@ export default function VinculacionesCatedraPage() {
       if (filtroEstado)  params.set('estado', filtroEstado);
       params.set('page',  String(pagina));
       params.set('limit', '10');
-      const r = await fetch(`${API}/vinculaciones-catedra?${params}`, {
-        headers: { Authorization: `Bearer ${obtenerTokenActual()}` },
-      });
+      const r = await apiFetch(`${API}/vinculaciones-catedra?${params}`);
       if (!r.ok) throw new Error('Error al cargar las vinculaciones');
       const resp = await r.json();
       setItems(resp.data);
@@ -201,7 +193,7 @@ export default function VinculacionesCatedraPage() {
     } finally {
       setLoading(false);
     }
-  }, [buscar, filtroEstado, pagina, obtenerTokenActual]);
+  }, [buscar, filtroEstado, pagina]);
 
   useEffect(() => { cargar(); }, [cargar]);
 

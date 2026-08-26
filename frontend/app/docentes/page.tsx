@@ -5,6 +5,7 @@ import { jsPDF } from 'jspdf';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 
 interface Docente {
   id: string;
@@ -23,7 +24,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
 export default function DocentesPage() {
   const router = useRouter();
-  const { token, obtenerTokenActual, logout, usuario } = useAuth();
+  const { usuario } = useAuth();
   const [docentes, setDocentes] = useState<Docente[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const [pagina, setPagina] = useState(1);
@@ -35,34 +36,26 @@ export default function DocentesPage() {
   const [filtroEstado, setFiltroEstado] = useState<'TODOS' | 'ACTIVO' | 'INACTIVO'>('TODOS');
 
   useEffect(() => {
-    if (!token) return;
+    if (!usuario) return;
     if (usuario?.rol?.nombre === 'DOCENTE') {
       router.push('/docentes/mi-ficha');
       return;
     }
     fetchDocentes();
-  }, [token, busqueda, pagina, limite, usuario, router]);
+  }, [usuario, busqueda, pagina, limite, router]);
 
   async function fetchDocentes() {
     try {
       setError(null);
-      const tok = obtenerTokenActual();
-      if (!tok) throw new Error('No hay sesión activa');
-
       const url = new URL(`${API_URL}/docentes`);
       if (busqueda) url.searchParams.set('buscar', busqueda);
       url.searchParams.set('page', String(pagina));
       url.searchParams.set('limit', String(limite));
-
-      const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${tok}` } });
+      const response = await apiFetch(url.toString());
       const data = await response.json().catch(() => null);
-
       if (!response.ok) {
-        const msg = data?.message ?? response.statusText ?? 'No se pudo cargar el listado';
-        if (response.status === 401 || response.status === 403) { logout(); throw new Error(`Sesión inválida: ${msg}`); }
-        throw new Error(msg);
+        throw new Error(data?.message ?? response.statusText ?? 'No se pudo cargar el listado');
       }
-
       setDocentes(data?.data ?? []);
       setTotal(data?.total ?? 0);
     } catch (err) {
@@ -135,11 +128,9 @@ export default function DocentesPage() {
   }
 
   async function exportFichaPorRegistro(docente: Docente) {
-    const authToken = obtenerTokenActual();
-    if (!authToken) return;
     let data: Record<string, unknown> = {};
     try {
-      const res = await fetch(`${API_URL}/docentes/${docente.id}`, { headers: { Authorization: `Bearer ${authToken}` } });
+      const res = await apiFetch(`${API_URL}/docentes/${docente.id}`);
       if (res.ok) data = await res.json();
     } catch { /* usa datos básicos */ }
 
@@ -388,7 +379,7 @@ export default function DocentesPage() {
 
   const INPUT_CLS = 'rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none transition focus:border-[#0f4c81] focus:ring-1 focus:ring-[#0f4c81]/20';
 
-  if (!token) {
+  if (!usuario) {
     return (
       <main className="p-6 sm:p-8">
         <div className="max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

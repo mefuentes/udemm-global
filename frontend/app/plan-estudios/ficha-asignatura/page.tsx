@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch as apiFetchBase } from '@/lib/api';
 import { getPermisosPlanEstudio, getPermisosPrograma, PermisosPrograma } from '@/lib/permisos-plan-estudios';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -275,26 +276,15 @@ function FichaContent() {
     ? (tabParam as TabId)
     : 'general';
 
-  const { usuario, token, obtenerTokenActual, logout } = useAuth();
+  const { usuario } = useAuth();
   const permisos = getPermisosPlanEstudio(usuario?.rol?.nombre ?? '');
   const permisosPrograma = getPermisosPrograma(usuario?.rol?.nombre ?? '');
 
   // ── API helper ─────────────────────────────────────────────────────────
   async function apiFetch(url: string, opts?: RequestInit) {
-    const tok = obtenerTokenActual();
-    const res = await fetch(url, {
-      ...opts,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${tok}`,
-        ...(opts?.headers ?? {})
-      }
-    });
+    const res = await apiFetchBase(url, opts);
     const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) logout();
-      throw new Error(data?.message ?? 'Error en la solicitud');
-    }
+    if (!res.ok) throw new Error(data?.message ?? 'Error en la solicitud');
     return data;
   }
 
@@ -343,8 +333,8 @@ function FichaContent() {
 
       {/* Vista de ficha o selector */}
       {materiaId
-        ? <FichaView materiaId={materiaId} permisos={permisos} permisosPrograma={permisosPrograma} apiFetch={apiFetch} token={token} router={router} initialTab={initialTab} modoVer={modoVer} />
-        : <SelectorView apiFetch={apiFetch} token={token} router={router} />
+        ? <FichaView materiaId={materiaId} permisos={permisos} permisosPrograma={permisosPrograma} apiFetch={apiFetch} usuario={usuario} router={router} initialTab={initialTab} modoVer={modoVer} />
+        : <SelectorView apiFetch={apiFetch} usuario={usuario} router={router} />
       }
     </div>
   );
@@ -352,9 +342,9 @@ function FichaContent() {
 
 // ── Vista: Selector (sin materiaId) ──────────────────────────────────────────
 
-function SelectorView({ apiFetch, token, router }: {
+function SelectorView({ apiFetch, usuario, router }: {
   apiFetch: (url: string, opts?: RequestInit) => Promise<any>;
-  token: string | null;
+  usuario: unknown;
   router: ReturnType<typeof useRouter>;
 }) {
   const [carreras, setCarreras] = useState<Carrera[]>([]);
@@ -367,9 +357,9 @@ function SelectorView({ apiFetch, token, router }: {
   const [aniosColapsados, setAniosColapsados] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!token) return;
+    if (!usuario) return;
     apiFetch(`${API_URL}/plan-estudios/carreras`).then(setCarreras).catch(() => {});
-  }, [token]);
+  }, [usuario]);
 
   useEffect(() => {
     if (!carreraId) { setPlanes([]); setPlanId(''); return; }
@@ -592,12 +582,12 @@ function SelectorView({ apiFetch, token, router }: {
 
 // ── Vista: Ficha completa ─────────────────────────────────────────────────────
 
-function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, token, router, initialTab, modoVer = false }: {
+function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, usuario, router, initialTab, modoVer = false }: {
   materiaId: string;
   permisos: ReturnType<typeof getPermisosPlanEstudio>;
   permisosPrograma: PermisosPrograma;
   apiFetch: (url: string, opts?: RequestInit) => Promise<any>;
-  token: string | null;
+  usuario: unknown;
   router: ReturnType<typeof useRouter>;
   initialTab: TabId;
   modoVer?: boolean;
@@ -623,9 +613,9 @@ function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, token, rou
   const [mostrarFormCorr, setMostrarFormCorr] = useState(false);
 
   useEffect(() => {
-    if (!token || !materiaId) return;
+    if (!usuario || !materiaId) return;
     fetchFicha();
-  }, [token, materiaId]);
+  }, [usuario, materiaId]);
 
   async function fetchFicha() {
     setCargando(true);

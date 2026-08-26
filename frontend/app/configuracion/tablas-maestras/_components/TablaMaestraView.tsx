@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 import Link from 'next/link';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -76,8 +76,6 @@ const INPUT_CLS = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function TablaMaestraView({ tipo, titulo, descripcion }: Props) {
-  const { obtenerTokenActual } = useAuth();
-
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -95,11 +93,6 @@ export function TablaMaestraView({ tipo, titulo, descripcion }: Props) {
   const [modalError, setModalError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const headers = () => ({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${obtenerTokenActual()}`,
-  });
-
   // ── Data fetch ──────────────────────────────────────────────────────────
 
   async function cargar() {
@@ -108,10 +101,7 @@ export function TablaMaestraView({ tipo, titulo, descripcion }: Props) {
       const params = new URLSearchParams();
       if (buscar.trim()) params.set('buscar', buscar.trim());
       if (filtroActivo !== '') params.set('activo', filtroActivo);
-      const res = await fetch(
-        `${API}/configuracion/tablas-maestras/${tipo}?${params}`,
-        { headers: headers() },
-      );
+      const res = await apiFetch(`${API}/configuracion/tablas-maestras/${tipo}?${params}`);
       if (!res.ok) throw new Error('Error al cargar los datos');
       setItems(await res.json());
     } catch (e) {
@@ -155,9 +145,8 @@ export function TablaMaestraView({ tipo, titulo, descripcion }: Props) {
       const url = modal.id
         ? `${API}/configuracion/tablas-maestras/${tipo}/${modal.id}`
         : `${API}/configuracion/tablas-maestras/${tipo}`;
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: modal.id ? 'PATCH' : 'POST',
-        headers: headers(),
         body: JSON.stringify({ nombre }),
       });
       const data = await res.json().catch(() => ({}));
@@ -174,9 +163,9 @@ export function TablaMaestraView({ tipo, titulo, descripcion }: Props) {
 
   async function toggle(item: Item) {
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API}/configuracion/tablas-maestras/${tipo}/${item.id}/toggle`,
-        { method: 'PATCH', headers: headers() },
+        { method: 'PATCH' },
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message ?? 'Error al cambiar estado');
@@ -190,9 +179,9 @@ export function TablaMaestraView({ tipo, titulo, descripcion }: Props) {
   async function eliminar(item: Item) {
     if (!confirm(`¿Eliminar "${item.nombre}"?\nEsta acción no se puede deshacer.`)) return;
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API}/configuracion/tablas-maestras/${tipo}/${item.id}`,
-        { method: 'DELETE', headers: headers() },
+        { method: 'DELETE' },
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message ?? 'Error al eliminar');

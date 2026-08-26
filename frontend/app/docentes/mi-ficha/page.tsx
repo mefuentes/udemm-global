@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { jsPDF } from 'jspdf';
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 
 interface FormData {
   nombre: string;
@@ -690,7 +691,7 @@ function parseDesempenoPasado(rawValue: unknown): DesempenoPasadoItem[] {
 
 export default function MiFichaPage() {
   const router = useRouter();
-  const { obtenerTokenActual, usuario } = useAuth();
+  const { usuario } = useAuth();
   const [docenteIdDesdeListado, setDocenteIdDesdeListado] = useState<string | null>(null);
   const [esNuevoDocente, setEsNuevoDocente] = useState(false);
   const [nuevoDocenteId, setNuevoDocenteId] = useState<string | null>(null);
@@ -831,14 +832,10 @@ export default function MiFichaPage() {
 
   useEffect(() => {
     if (!queryReady || esNuevoDocente || !usuario) return;
-    const token = obtenerTokenActual();
-    if (!token) return;
     setLoadingVinculaciones(true);
     const qp = new URLSearchParams({ estado: 'APROBADA' });
     if (esVistaDesdeListado && docenteIdDesdeListado) qp.set('docenteId', docenteIdDesdeListado);
-    fetch(`${API_URL}/vinculaciones-catedra?${qp}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    apiFetch(`${API_URL}/vinculaciones-catedra?${qp}`)
       .then(r => r.ok ? r.json() : [])
       .then(data => setVinculacionesAprobadas(Array.isArray(data) ? data : []))
       .catch(() => setVinculacionesAprobadas([]))
@@ -846,26 +843,23 @@ export default function MiFichaPage() {
   }, [queryReady, esNuevoDocente, usuario, docenteIdDesdeListado, esVistaDesdeListado]);
 
   useEffect(() => {
-    const token = obtenerTokenActual();
-    if (!token) return;
-    const hdrs = { Authorization: `Bearer ${token}` };
-    fetch(`${API_URL}/configuracion/tablas-maestras/areas-disciplinares/activos`, { headers: hdrs })
+    apiFetch(`${API_URL}/configuracion/tablas-maestras/areas-disciplinares/activos`)
       .then(r => r.ok ? r.json() : [])
       .then(d => setAreasDisciplinares(Array.isArray(d) ? d : []))
       .catch(() => {});
-    fetch(`${API_URL}/configuracion/subareas/activos`, { headers: hdrs })
+    apiFetch(`${API_URL}/configuracion/subareas/activos`)
       .then(r => r.ok ? r.json() : [])
       .then(d => setSubareas(Array.isArray(d) ? d : []))
       .catch(() => {});
-    fetch(`${API_URL}/configuracion/tablas-maestras/cargos/activos`, { headers: hdrs })
+    apiFetch(`${API_URL}/configuracion/tablas-maestras/cargos/activos`)
       .then(r => r.ok ? r.json() : [])
       .then(d => setCargosOpciones(Array.isArray(d) ? d : []))
       .catch(() => {});
-    fetch(`${API_URL}/configuracion/tablas-maestras/modalidades/activos`, { headers: hdrs })
+    apiFetch(`${API_URL}/configuracion/tablas-maestras/modalidades/activos`)
       .then(r => r.ok ? r.json() : [])
       .then(d => setModalidadesOpciones(Array.isArray(d) ? d : []))
       .catch(() => {});
-    fetch(`${API_URL}/configuracion/tablas-maestras/tipos-posgrado/activos`, { headers: hdrs })
+    apiFetch(`${API_URL}/configuracion/tablas-maestras/tipos-posgrado/activos`)
       .then(r => r.ok ? r.json() : [])
       .then(d => setTiposPosgrado(Array.isArray(d) ? d : []))
       .catch(() => {});
@@ -934,15 +928,10 @@ export default function MiFichaPage() {
     setSuccessMessage(null);
 
     try {
-      const token = obtenerTokenActual();
-      if (!token) throw new Error('No hay sesion activa');
-
       const endpoint = esVistaDesdeListado && docenteIdDesdeListado
         ? `${API_URL}/docentes/${docenteIdDesdeListado}`
         : `${API_URL}/docentes/mi-ficha`;
-      const res = await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await apiFetch(endpoint);
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -2067,15 +2056,9 @@ export default function MiFichaPage() {
   async function guardarSeccionTab5() {
     if (!formData) return;
     try {
-      const token = obtenerTokenActual();
-      if (!token) throw new Error('No hay sesion activa');
-      const response = await fetch(getFichaUpdateEndpoint(), {
+      const response = await apiFetch(getFichaUpdateEndpoint(), {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(formData),
       });
       const result = await response.json().catch(() => null);
       if (!response.ok) throw new Error(result?.message || `Error ${response.status}`);
@@ -2691,9 +2674,6 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
     setSuccessMessage(null);
 
     try {
-      const token = obtenerTokenActual();
-      if (!token) throw new Error('No hay sesion activa');
-
       let endpoint: string;
       let method: string;
 
@@ -2706,9 +2686,8 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
         method = 'PATCH';
       }
 
-      const response = await fetch(endpoint, {
+      const response = await apiFetch(endpoint, {
         method,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(getDatosPestana(activeTab)),
       });
 
@@ -2748,16 +2727,9 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
     }
 
     try {
-      const token = obtenerTokenActual();
-      if (!token) throw new Error('No hay sesion activa');
-
-      const response = await fetch(getFichaUpdateEndpoint(), {
+      const response = await apiFetch(getFichaUpdateEndpoint(), {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(formData),
       });
 
       const result = await response.json().catch(() => null);
@@ -2789,16 +2761,9 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
     setSuccessMessage(null);
 
     try {
-      const token = obtenerTokenActual();
-      if (!token) throw new Error('No hay sesion activa');
-
-      const response = await fetch(getFichaUpdateEndpoint(), {
+      const response = await apiFetch(getFichaUpdateEndpoint(), {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ activo: false })
+        body: JSON.stringify({ activo: false }),
       });
 
       const result = await response.json().catch(() => null);
@@ -3158,7 +3123,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                       ) : (
                         <p className="mt-1 text-sm">
                           {formData.areaDisciplinarId
-                            ? (areasDisciplinares.find(a => a.id === formData.areaDisciplinarId)?.nombre ?? formData.areaDisciplinar || '-')
+                            ? ((areasDisciplinares.find(a => a.id === formData.areaDisciplinarId)?.nombre ?? formData.areaDisciplinar) || '-')
                             : (formData.areaDisciplinar || '-')}
                         </p>
                       )}
@@ -3182,7 +3147,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                       ) : (
                         <p className="mt-1 text-sm">
                           {formData.subareaId
-                            ? (subareas.find(s => s.id === formData.subareaId)?.nombre ?? formData.subarea || '-')
+                            ? ((subareas.find(s => s.id === formData.subareaId)?.nombre ?? formData.subarea) || '-')
                             : (formData.subarea || '-')}
                         </p>
                       )}

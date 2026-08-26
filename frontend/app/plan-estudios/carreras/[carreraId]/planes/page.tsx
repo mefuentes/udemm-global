@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch as apiFetchBase } from '@/lib/api';
 import { getPermisosPlanEstudio } from '@/lib/permisos-plan-estudios';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -115,7 +116,7 @@ const IcDocument = () => (
 export default function PlanesCarreraPage() {
   const params = useParams();
   const carreraId = params.carreraId as string;
-  const { usuario, token, obtenerTokenActual, logout } = useAuth();
+  const { usuario } = useAuth();
   const permisos = getPermisosPlanEstudio(usuario?.rol?.nombre ?? '');
 
   const [carrera,        setCarrera]        = useState<Carrera | null>(null);
@@ -130,25 +131,14 @@ export default function PlanesCarreraPage() {
   // ── API ───────────────────────────────────────────────────────────────────
 
   async function apiFetch(url: string, opts?: RequestInit) {
-    const tok = obtenerTokenActual();
-    const res = await fetch(url, {
-      ...opts,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${tok}`,
-        ...(opts?.headers ?? {}),
-      },
-    });
+    const res = await apiFetchBase(url, opts);
     const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) logout();
-      throw new Error(data?.message ?? 'Error en la solicitud');
-    }
+    if (!res.ok) throw new Error(data?.message ?? 'Error en la solicitud');
     return data;
   }
 
   useEffect(() => {
-    if (!token || !carreraId) return;
+    if (!usuario || !carreraId) return;
     setCargando(true);
     Promise.all([
       apiFetch(`${API_URL}/carreras/${carreraId}`),
@@ -160,7 +150,7 @@ export default function PlanesCarreraPage() {
       })
       .catch(e => setError((e as Error).message))
       .finally(() => setCargando(false));
-  }, [token, carreraId]);
+  }, [usuario, carreraId]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 

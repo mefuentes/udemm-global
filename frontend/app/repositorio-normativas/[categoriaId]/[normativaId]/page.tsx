@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -68,7 +68,6 @@ function formatBytes(bytes: number) {
 // ── Página ────────────────────────────────────────────────────────────────────
 
 export default function NormativaDetallePage() {
-  const { obtenerTokenActual } = useAuth();
   const params = useParams();
   const searchParams = useSearchParams();
 
@@ -103,9 +102,7 @@ export default function NormativaDetallePage() {
     setCargando(true);
     setError('');
 
-    fetch(`${API}/normativas/${normativaId}`, {
-      headers: { Authorization: `Bearer ${obtenerTokenActual()}` },
-    })
+    apiFetch(`${API}/normativas/${normativaId}`)
       .then(r => {
         if (r.status === 404) return Promise.reject('no-encontrada');
         if (!r.ok) return Promise.reject('error');
@@ -117,7 +114,7 @@ export default function NormativaDetallePage() {
         : 'No se pudo cargar la normativa. Intentá nuevamente.'
       ))
       .finally(() => setCargando(false));
-  }, [normativaId, obtenerTokenActual]);
+  }, [normativaId]);
 
   // Carga el PDF como blob (una sola vez) y ejecuta la acción solicitada
   const cargarPdf = useCallback(async (modo: 'ver' | 'descargar') => {
@@ -127,9 +124,7 @@ export default function NormativaDetallePage() {
       setCargandoPdf(true);
       setErrorPdf('');
       try {
-        const res = await fetch(`${API}/normativas/${normativaId}/archivo`, {
-          headers: { Authorization: `Bearer ${obtenerTokenActual()}` },
-        });
+        const res = await apiFetch(`${API}/normativas/${normativaId}/archivo`);
         if (res.status === 403) throw new Error('ACCESO DENEGADO. NO POSEE PERMISOS PARA VISUALIZAR ESTE DOCUMENTO.');
         if (res.status === 404) throw new Error('EL DOCUMENTO PDF NO ESTÁ DISPONIBLE EN ESTE MOMENTO.');
         if (!res.ok) throw new Error('No se pudo cargar el documento. Intentá nuevamente.');
@@ -156,7 +151,7 @@ export default function NormativaDetallePage() {
       a.click();
       document.body.removeChild(a);
     }
-  }, [normativaId, normativa, obtenerTokenActual]);
+  }, [normativaId, normativa]);
 
   const cerrarVisor = () => setVisorAbierto(false);
 

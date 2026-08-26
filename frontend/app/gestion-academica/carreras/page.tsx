@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch as apiFetchBase } from '@/lib/api';
 import { getPermisosGestionAcademica } from '@/lib/permisos-gestion-academica';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -70,7 +71,7 @@ const IcSpinner = () => (
 
 export default function CarrerasPage() {
   const pathname = usePathname();
-  const { usuario, token, obtenerTokenActual, logout } = useAuth();
+  const { usuario } = useAuth();
   const permisos = getPermisosGestionAcademica(usuario?.rol?.nombre ?? '');
 
   const [carreras, setCarreras] = useState<Carrera[]>([]);
@@ -92,16 +93,9 @@ export default function CarrerasPage() {
 
   // ── API ─────────────────────────────────────────────────────────────────
   async function apiFetch(url: string, opts?: RequestInit) {
-    const tok = obtenerTokenActual();
-    const res = await fetch(url, {
-      ...opts,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}`, ...(opts?.headers ?? {}) }
-    });
+    const res = await apiFetchBase(url, opts);
     const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) logout();
-      throw new Error(data?.message ?? 'Error en la solicitud');
-    }
+    if (!res.ok) throw new Error(data?.message ?? 'Error en la solicitud');
     return data;
   }
 
@@ -119,10 +113,10 @@ export default function CarrerasPage() {
   }
 
   useEffect(() => {
-    if (!token) return;
+    if (!usuario) return;
     fetchCarreras();
     apiFetch(`${API_URL}/facultades`).then(setFacultades).catch(() => {});
-  }, [token]);
+  }, [usuario]);
 
   // Reset página al cambiar filtros
   useEffect(() => { setPagina(1); }, [buscar, filtroEstado, filtroFacultad]);

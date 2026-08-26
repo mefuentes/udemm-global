@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 
 interface Rol { id: string; nombre: string; descripcion: string | null; activo: boolean; fechaCreacion: string; cantidadUsuarios: number; }
 
@@ -10,7 +10,6 @@ const INPUT = 'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text
 const EMPTY = { nombre: '', descripcion: '' };
 
 export default function RolesPage() {
-  const { obtenerTokenActual } = useAuth();
   const [roles, setRoles] = useState<Rol[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,12 +20,10 @@ export default function RolesPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${obtenerTokenActual()}` });
-
   async function cargar() {
     setLoading(true); setError(null);
     try {
-      const res = await fetch(`${API}/configuracion/roles`, { headers: headers() });
+      const res = await apiFetch(`${API}/configuracion/roles`);
       if (!res.ok) throw new Error('Error al cargar roles');
       setRoles(await res.json());
     } catch (e) { setError((e as Error).message); }
@@ -46,7 +43,7 @@ export default function RolesPage() {
     setSubmitting(true); setFormError(null);
     try {
       const url = editandoId ? `${API}/configuracion/roles/${editandoId}` : `${API}/configuracion/roles`;
-      const res = await fetch(url, { method: editandoId ? 'PATCH' : 'POST', headers: headers(), body: JSON.stringify(form) });
+      const res = await apiFetch(url, { method: editandoId ? 'PATCH' : 'POST', body: JSON.stringify(form) });
       if (!res.ok) { const d = await res.json(); throw new Error(d.message ?? 'Error al guardar'); }
       setExito(editandoId ? 'Rol actualizado.' : 'Rol creado.');
       setMostrarForm(false); cargar();
@@ -55,7 +52,7 @@ export default function RolesPage() {
   }
 
   async function toggleEstado(id: string) {
-    await fetch(`${API}/configuracion/roles/${id}/estado`, { method: 'PATCH', headers: headers() });
+    await apiFetch(`${API}/configuracion/roles/${id}/estado`, { method: 'PATCH' });
     cargar();
   }
 

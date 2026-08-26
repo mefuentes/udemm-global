@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 
 interface FormData {
   nombre: string;
@@ -27,7 +27,6 @@ const TIPOS_DOCUMENTO_PREDETERMINADOS = ['DNI', 'CUIL', 'Pasaporte', 'LC', 'LE']
 
 export default function NuevoDocentePage() {
   const router = useRouter();
-  const { obtenerTokenActual } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -102,11 +101,6 @@ export default function NuevoDocentePage() {
     setEnviando(true);
 
     try {
-      const tokenActual = obtenerTokenActual();
-      if (!tokenActual) {
-        throw new Error('No hay sesión activa. Por favor inicia sesión.');
-      }
-
       const payload = {
         nombre: formData.nombre.trim(),
         apellido: formData.apellido.trim(),
@@ -123,13 +117,9 @@ export default function NuevoDocentePage() {
         antecedentesAcademicos: formData.antecedentesAcademicos ? formData.antecedentesAcademicos.trim() : undefined
       };
 
-      const response = await fetch(`${API_URL}/docentes`, {
+      const response = await apiFetch(`${API_URL}/docentes`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokenActual}`
-        },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {

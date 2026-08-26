@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { apiFetch } from '@/lib/api';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
@@ -17,7 +18,6 @@ interface NormativaResumen {
 
 export interface EliminarNormativaModalProps {
   normativa: NormativaResumen;
-  obtenerToken: () => string | null;
   onConfirmado: () => void;
   onCancelar: () => void;
 }
@@ -38,7 +38,6 @@ function vigenciaColor(v: string) {
 
 export function EliminarNormativaModal({
   normativa,
-  obtenerToken,
   onConfirmado,
   onCancelar,
 }: EliminarNormativaModalProps) {
@@ -63,12 +62,8 @@ export function EliminarNormativaModal({
     setErrorMotivo('');
 
     try {
-      const res = await fetch(`${API}/normativas/${normativa.id}`, {
-        method:  'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization:  `Bearer ${obtenerToken()}`,
-        },
+      const res = await apiFetch(`${API}/normativas/${normativa.id}`, {
+        method: 'DELETE',
         body: JSON.stringify({ motivo: motivo.trim() }),
       });
 

@@ -9,7 +9,7 @@ import { NormativaForm } from '../_components/NormativaForm';
 const ROLES_GESTION = ['SECRETARIA_ACADEMICA', 'DECANO', 'RECTORADO', 'ADMINISTRADOR_SISTEMA'];
 
 export default function NuevaNormativaPage() {
-  const { usuario, obtenerTokenActual } = useAuth();
+  const { usuario } = useAuth();
   const router       = useRouter();
   const searchParams = useSearchParams();
 
@@ -70,7 +70,6 @@ export default function NuevaNormativaPage() {
         modo="crear"
         volverHref={volverHref}
         valoresIniciales={{ tipoNormativaId: tipoIdParam }}
-        obtenerToken={() => obtenerTokenActual() ?? ''}
         onSuccess={({ tipoId, tipoNombre }) => {
           const nom = tipoNombre || nombreParam;
           router.push(`/repositorio-normativas/${tipoId}?nombre=${encodeURIComponent(nom)}`);

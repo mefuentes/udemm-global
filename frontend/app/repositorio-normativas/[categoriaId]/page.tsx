@@ -1,9 +1,10 @@
 'use client';
 
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CambiarEstadoModal } from '../_components/CambiarEstadoModal';
 import { EliminarNormativaModal } from '../_components/EliminarNormativaModal';
 
@@ -124,7 +125,7 @@ const IcExcel = () => (
 // ── Página ────────────────────────────────────────────────────────────────────
 
 export default function CategoriaDetallePage() {
-  const { usuario, obtenerTokenActual } = useAuth();
+  const { usuario } = useAuth();
   const params = useParams();
   const searchParams = useSearchParams();
 
@@ -161,33 +162,28 @@ export default function CategoriaDetallePage() {
   const [normativaParaEliminar, setNormativaParaEliminar] = useState<NormativaItem | null>(null);
   const [mensajeExito, setMensajeExito] = useState('');
 
-  const hdrs = useCallback(() => ({
-    Authorization: `Bearer ${obtenerTokenActual()}`,
-  }), [obtenerTokenActual]);
-
   // ── KPIs ────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!categoriaId) return;
     setCargandoKpi(true);
-    const h = hdrs();
     const base = `${API}/normativas?tipoId=${categoriaId}&limit=1`;
 
     if (esDocente) {
-      fetch(`${base}&vigencia=VIGENTE`, { headers: h })
+      apiFetch(`${base}&vigencia=VIGENTE`)
         .then(r => r.ok ? r.json() : { total: 0 })
         .then(d => setKpi({ vigentes: d.total ?? 0, derogadas: 0, suspendidas: 0, total: d.total ?? 0 }))
         .catch(() => {})
         .finally(() => setCargandoKpi(false));
     } else {
       const kpiPromises: Promise<{ total: number }>[] = [
-        fetch(`${base}&vigencia=VIGENTE`,    { headers: h }).then(r => r.ok ? r.json() : { total: 0 }),
-        fetch(`${base}&vigencia=DEROGADA`,   { headers: h }).then(r => r.ok ? r.json() : { total: 0 }),
-        fetch(`${base}&vigencia=SUSPENDIDA`, { headers: h }).then(r => r.ok ? r.json() : { total: 0 }),
-        fetch(`${API}/normativas?tipoId=${categoriaId}&limit=1`, { headers: h }).then(r => r.ok ? r.json() : { total: 0 }),
+        apiFetch(`${base}&vigencia=VIGENTE`).then(r => r.ok ? r.json() : { total: 0 }),
+        apiFetch(`${base}&vigencia=DEROGADA`).then(r => r.ok ? r.json() : { total: 0 }),
+        apiFetch(`${base}&vigencia=SUSPENDIDA`).then(r => r.ok ? r.json() : { total: 0 }),
+        apiFetch(`${API}/normativas?tipoId=${categoriaId}&limit=1`).then(r => r.ok ? r.json() : { total: 0 }),
       ];
       if (puedeGestionar) {
         kpiPromises.push(
-          fetch(`${API}/normativas?tipoId=${categoriaId}&estadoRegistro=ELIMINADAS&limit=1`, { headers: h }).then(r => r.ok ? r.json() : { total: 0 }),
+          apiFetch(`${API}/normativas?tipoId=${categoriaId}&estadoRegistro=ELIMINADAS&limit=1`).then(r => r.ok ? r.json() : { total: 0 }),
         );
       }
       Promise.all(kpiPromises)
@@ -203,7 +199,7 @@ export default function CategoriaDetallePage() {
         .catch(() => {})
         .finally(() => setCargandoKpi(false));
     }
-  }, [categoriaId, hdrs, esDocente, puedeGestionar, triggerRefresh]);
+  }, [categoriaId, esDocente, puedeGestionar, triggerRefresh]);
 
   // ── Listado ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -225,7 +221,7 @@ export default function CategoriaDetallePage() {
       url.searchParams.set('estadoRegistro', estadoRegistro);
     }
 
-    fetch(url.toString(), { headers: hdrs() })
+    apiFetch(url.toString())
       .then(r => r.ok ? r.json() : Promise.reject())
       .then((d: ListadoResponse) => {
         setNormativas(Array.isArray(d.data) ? d.data : []);
@@ -235,7 +231,7 @@ export default function CategoriaDetallePage() {
       })
       .catch(() => setError('No se pudieron cargar las normativas.'))
       .finally(() => setCargando(false));
-  }, [categoriaId, pagina, filtros, hdrs, estadoRegistro, puedeGestionar, triggerRefresh]);
+  }, [categoriaId, pagina, filtros, estadoRegistro, puedeGestionar, triggerRefresh]);
 
   // ── Handlers filtros ────────────────────────────────────────────────────────
   function handleBuscar() {
@@ -283,7 +279,7 @@ export default function CategoriaDetallePage() {
         url.searchParams.set('estadoRegistro', estadoRegistro);
       }
 
-      const res = await fetch(url.toString(), { headers: hdrs() });
+      const res = await apiFetch(url.toString());
       if (!res.ok) {
         const msg = await res.json().catch(() => ({}));
         throw new Error((msg as any)?.message ?? 'Error al generar la exportación.');
@@ -852,7 +848,6 @@ export default function CategoriaDetallePage() {
       {normativaParaCambiarEstado && (
         <CambiarEstadoModal
           normativa={normativaParaCambiarEstado}
-          obtenerToken={obtenerTokenActual}
           onConfirmado={handleEstadoConfirmado}
           onCancelar={() => setNormativaParaCambiarEstado(null)}
         />
@@ -865,7 +860,6 @@ export default function CategoriaDetallePage() {
             ...normativaParaEliminar,
             tipoNormativa: normativaParaEliminar.tipoNormativa,
           }}
-          obtenerToken={obtenerTokenActual}
           onConfirmado={handleEliminacionConfirmada}
           onCancelar={() => setNormativaParaEliminar(null)}
         />

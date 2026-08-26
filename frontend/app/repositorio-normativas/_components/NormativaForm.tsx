@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { apiFetch } from '@/lib/api';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
@@ -43,7 +44,6 @@ export interface NormativaFormProps {
   volverHref: string;
   valoresIniciales?: Partial<FormValues & { palabrasClave?: string }>;
   archivoActual?: ArchivoActual;
-  obtenerToken: () => string | null;
   onSuccess: (data: { tipoId: string; tipoNombre: string }) => void;
 }
 
@@ -75,7 +75,6 @@ export function NormativaForm({
   volverHref,
   valoresIniciales,
   archivoActual,
-  obtenerToken,
   onSuccess,
 }: NormativaFormProps) {
   const esEditar = modo === 'editar';
@@ -120,10 +119,9 @@ export function NormativaForm({
 
   // ── Cargar tipos y áreas ────────────────────────────────────────────────────
   useEffect(() => {
-    const h = { Authorization: `Bearer ${obtenerToken()}` };
     Promise.all([
-      fetch(`${API}/normativas/tipos`, { headers: h }).then(r => r.ok ? r.json() : []),
-      fetch(`${API}/configuracion/tablas-maestras/tipos-area-emisora/activos`, { headers: h }).then(r => r.ok ? r.json() : []),
+      apiFetch(`${API}/normativas/tipos`).then(r => r.ok ? r.json() : []),
+      apiFetch(`${API}/configuracion/tablas-maestras/tipos-area-emisora/activos`).then(r => r.ok ? r.json() : []),
     ])
       .then(([t, a]) => {
         setTipos(Array.isArray(t) ? t : []);
@@ -131,7 +129,7 @@ export function NormativaForm({
       })
       .catch(() => {})
       .finally(() => setCargandoOpciones(false));
-  }, [obtenerToken]);
+  }, []);
 
   // ── Handlers form ───────────────────────────────────────────────────────────
   function handleChange(field: keyof FormValues, value: string) {
@@ -222,9 +220,7 @@ export function NormativaForm({
     if (!normativaId) return;
     setViendoPdfActual(true);
     try {
-      const res = await fetch(`${API}/normativas/${normativaId}/archivo`, {
-        headers: { Authorization: `Bearer ${obtenerToken()}` },
-      });
+      const res = await apiFetch(`${API}/normativas/${normativaId}/archivo`);
       if (!res.ok) {
         alert('No se pudo obtener el documento PDF.');
         return;
@@ -286,9 +282,8 @@ export function NormativaForm({
     const method = esEditar ? 'PATCH' : 'POST';
 
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
-        headers: { Authorization: `Bearer ${obtenerToken()}` },
         body: fd,
       });
 

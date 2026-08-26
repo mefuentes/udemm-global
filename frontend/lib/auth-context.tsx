@@ -16,11 +16,9 @@ interface Usuario {
 
 interface AuthContextType {
   usuario: Usuario | null;
-  token: string | null;
   cargando: boolean;
   login: (correoElectronico: string, contrasena: string) => Promise<void>;
   logout: () => void;
-  obtenerTokenActual: () => string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,61 +27,65 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
   const router = useRouter();
 
-  // Obtener token actual desde localStorage
-  const obtenerTokenActual = useCallback(() => {
-    if (typeof window === 'undefined') return null;
-    return window.localStorage.getItem('accessToken')?.trim() ?? null;
-  }, []);
-
-  // Obtener usuario actual desde localStorage
-  const obtenerUsuarioActual = useCallback(() => {
-    if (typeof window === 'undefined') return null;
+  const logout = useCallback(async () => {
     try {
-      const stored = window.localStorage.getItem('usuario');
-      return stored ? JSON.parse(stored) : null;
+      await fetch(`${API_URL}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
     } catch {
-      return null;
+      // ignorar errores de red — la sesión local se limpia igual
     }
+    setUsuario(null);
+    router.push('/login');
+  }, [router]);
+
+  // Restaurar sesión desde el servidor al montar la aplicación
+  useEffect(() => {
+    let activo = true;
+    fetch(`${API_URL}/auth/me`, { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (activo && data?.usuario) {
+          setUsuario(data.usuario);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (activo) setCargando(false);
+      });
+    return () => { activo = false; };
   }, []);
 
-  // Inicializar sesión desde localStorage
+  // Escuchar evento de sesión expirada emitido por apiFetch
   useEffect(() => {
-    const tokenGuardado = obtenerTokenActual();
-    const usuarioGuardado = obtenerUsuarioActual();
-
-    if (tokenGuardado && usuarioGuardado) {
-      setToken(tokenGuardado);
-      setUsuario(usuarioGuardado);
-    }
-    setCargando(false);
-  }, [obtenerTokenActual, obtenerUsuarioActual]);
+    const onExpirada = () => {
+      setUsuario(null);
+      router.push('/login');
+    };
+    window.addEventListener('auth:sesion-expirada', onExpirada);
+    return () => window.removeEventListener('auth:sesion-expirada', onExpirada);
+  }, [router]);
 
   const login = async (correoElectronico: string, contrasena: string) => {
     try {
       const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ correoElectronico, contrasena })
+        credentials: 'include',
+        body: JSON.stringify({ correoElectronico, contrasena }),
       });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        throw new Error(error.message || 'Credenciales inválidas');
+        throw new Error((error as { message?: string }).message || 'Credenciales inválidas');
       }
 
       const data = await response.json();
-      const { accessToken, usuario: usuarioData } = data;
-
-      window.localStorage.setItem('accessToken', accessToken);
-      window.localStorage.setItem('usuario', JSON.stringify(usuarioData));
-
-      setToken(accessToken);
-      setUsuario(usuarioData);
-
+      setUsuario(data.usuario);
       router.push('/');
     } catch (error) {
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
@@ -93,16 +95,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = () => {
-    window.localStorage.removeItem('accessToken');
-    window.localStorage.removeItem('usuario');
-    setToken(null);
-    setUsuario(null);
-    router.push('/login');
-  };
-
   return (
-    <AuthContext.Provider value={{ usuario, token, cargando, login, logout, obtenerTokenActual }}>
+    <AuthContext.Provider value={{ usuario, cargando, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

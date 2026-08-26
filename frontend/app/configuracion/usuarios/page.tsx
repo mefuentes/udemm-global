@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 
 interface Rol { id: string; nombre: string; }
 interface Usuario {
@@ -15,7 +15,6 @@ const INPUT = 'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text
 const EMPTY_FORM = { nombre: '', apellido: '', correoElectronico: '', contrasena: '', rolId: '' };
 
 export default function UsuariosPage() {
-  const { obtenerTokenActual } = useAuth();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
   const [buscar, setBuscar] = useState('');
@@ -30,8 +29,6 @@ export default function UsuariosPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${obtenerTokenActual()}` });
-
   async function cargar() {
     setLoading(true); setError(null);
     try {
@@ -39,8 +36,8 @@ export default function UsuariosPage() {
       if (buscar) params.set('buscar', buscar);
       if (filtroActivo) params.set('activo', filtroActivo);
       const [resU, resR] = await Promise.all([
-        fetch(`${API}/configuracion/usuarios?${params}`, { headers: headers() }),
-        fetch(`${API}/configuracion/roles`, { headers: headers() })
+        apiFetch(`${API}/configuracion/usuarios?${params}`),
+        apiFetch(`${API}/configuracion/roles`),
       ]);
       if (!resU.ok) throw new Error('Error al cargar usuarios');
       const dataU = await resU.json();
@@ -68,7 +65,7 @@ export default function UsuariosPage() {
       const body: any = { nombre: form.nombre, apellido: form.apellido, correoElectronico: form.correoElectronico, rolId: form.rolId };
       if (form.contrasena) body.contrasena = form.contrasena;
       const url = editandoId ? `${API}/configuracion/usuarios/${editandoId}` : `${API}/configuracion/usuarios`;
-      const res = await fetch(url, { method: editandoId ? 'PATCH' : 'POST', headers: headers(), body: JSON.stringify(body) });
+      const res = await apiFetch(url, { method: editandoId ? 'PATCH' : 'POST', body: JSON.stringify(body) });
       if (!res.ok) { const d = await res.json(); throw new Error(d.message ?? 'Error al guardar'); }
       setExito(editandoId ? 'Usuario actualizado.' : 'Usuario creado.');
       setMostrarForm(false); cargar();
@@ -77,7 +74,7 @@ export default function UsuariosPage() {
   }
 
   async function toggleEstado(id: string) {
-    await fetch(`${API}/configuracion/usuarios/${id}/estado`, { method: 'PATCH', headers: headers() });
+    await apiFetch(`${API}/configuracion/usuarios/${id}/estado`, { method: 'PATCH' });
     cargar();
   }
 

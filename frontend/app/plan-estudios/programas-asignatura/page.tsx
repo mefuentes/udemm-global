@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch as apiFetchBase } from '@/lib/api';
 import { getPermisosPrograma } from '@/lib/permisos-plan-estudios';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -126,7 +127,7 @@ const IcSpinner = () => (
 export default function ProgramasAsignaturaPage() {
   const pathname  = usePathname();
   const router    = useRouter();
-  const { usuario, token, obtenerTokenActual, logout } = useAuth();
+  const { usuario } = useAuth();
 
   const permisosPrograma = getPermisosPrograma(usuario?.rol?.nombre ?? '');
   const puedeCompletar   = permisosPrograma.editar;
@@ -147,29 +148,18 @@ export default function ProgramasAsignaturaPage() {
   // ── API helper ─────────────────────────────────────────────────────────────
 
   async function apiFetch(url: string, opts?: RequestInit) {
-    const tok = obtenerTokenActual();
-    const res = await fetch(url, {
-      ...opts,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${tok}`,
-        ...(opts?.headers ?? {}),
-      },
-    });
+    const res = await apiFetchBase(url, opts);
     const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) logout();
-      throw new Error(data?.message ?? 'Error en la solicitud');
-    }
+    if (!res.ok) throw new Error(data?.message ?? 'Error en la solicitud');
     return data;
   }
 
   // ── Efectos de carga ───────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!token) return;
+    if (!usuario) return;
     apiFetch(`${API_URL}/plan-estudios/carreras`).then(setCarreras).catch(() => {});
-  }, [token]);
+  }, [usuario]);
 
   useEffect(() => {
     if (!carreraId) { setPlanes([]); setPlanId(''); setMaterias([]); return; }

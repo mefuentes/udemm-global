@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useAuth } from './auth-context';
+import { apiFetch } from './api';
 
 // Cuenta vinculaciones PENDIENTE_DE_APROBACION + notificaciones no leídas para DOCENTE.
 // Otros roles retornan 0 (no tienen badge).
@@ -19,7 +20,7 @@ const NotificacionesContext = createContext<NotificacionesContextType>({
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
 export function NotificacionesProvider({ children }: { children: React.ReactNode }) {
-  const { usuario, obtenerTokenActual } = useAuth();
+  const { usuario } = useAuth();
   const [contadorNovedades, setContadorNovedades] = useState(0);
 
   const esDocente = usuario?.rol?.nombre === 'DOCENTE';
@@ -29,17 +30,11 @@ export function NotificacionesProvider({ children }: { children: React.ReactNode
       setContadorNovedades(0);
       return;
     }
+    if (!usuario) return;
     try {
-      const token = obtenerTokenActual();
-      if (!token) return;
-
       const [resNotif, resVinc] = await Promise.all([
-        fetch(`${API}/notificaciones/no-leidas/count`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${API}/vinculaciones-catedra?estado=PENDIENTE_DE_APROBACION`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+        apiFetch(`${API}/notificaciones/no-leidas/count`),
+        apiFetch(`${API}/vinculaciones-catedra?estado=PENDIENTE_DE_APROBACION`),
       ]);
 
       let total = 0;
@@ -58,7 +53,7 @@ export function NotificacionesProvider({ children }: { children: React.ReactNode
     } catch {
       // silencioso
     }
-  }, [esDocente, obtenerTokenActual]);
+  }, [esDocente, usuario]);
 
   useEffect(() => {
     recargarContador();

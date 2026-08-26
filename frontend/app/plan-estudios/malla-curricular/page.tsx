@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { apiFetch as apiFetchBase } from '@/lib/api';
 import { getPermisosPlanEstudio } from '@/lib/permisos-plan-estudios';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -126,7 +127,7 @@ const IcChevron = ({ up }: { up: boolean }) => (
 export default function MallaCurricularPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { usuario, token, obtenerTokenActual, logout } = useAuth();
+  const { usuario } = useAuth();
   const permisos = getPermisosPlanEstudio(usuario?.rol?.nombre ?? '');
   const paramPlanId = useRef(searchParams.get('planId'));
 
@@ -163,19 +164,19 @@ export default function MallaCurricularPage() {
 
   // ── Effects ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!token) return;
+    if (!usuario) return;
     fetchCarreras();
-  }, [token]);
+  }, [usuario]);
 
   useEffect(() => {
-    if (!token || !carreraId) { setPlanes([]); setPlanId(''); return; }
+    if (!usuario || !carreraId) { setPlanes([]); setPlanId(''); return; }
     fetchPlanes(carreraId);
-  }, [token, carreraId]);
+  }, [usuario, carreraId]);
 
   useEffect(() => {
-    if (!token || !planId) { setMaterias([]); return; }
+    if (!usuario || !planId) { setMaterias([]); return; }
     fetchMaterias(planId);
-  }, [token, planId]);
+  }, [usuario, planId]);
 
   // Al cambiar plan, expandir todos los años
   useEffect(() => {
@@ -193,20 +194,9 @@ export default function MallaCurricularPage() {
 
   // ── API ───────────────────────────────────────────────────────────────────
   async function apiFetch(url: string, opts?: RequestInit) {
-    const tok = obtenerTokenActual();
-    const res = await fetch(url, {
-      ...opts,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${tok}`,
-        ...(opts?.headers ?? {})
-      }
-    });
+    const res = await apiFetchBase(url, opts);
     const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) logout();
-      throw new Error(data?.message ?? 'Error en la solicitud');
-    }
+    if (!res.ok) throw new Error(data?.message ?? 'Error en la solicitud');
     return data;
   }
 

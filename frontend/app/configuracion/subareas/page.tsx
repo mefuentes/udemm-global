@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
 import Link from 'next/link';
 
 interface AreaDisciplinar {
@@ -46,8 +46,6 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 const INPUT_CLS = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:ring-2 focus:ring-[#0f4c81]/15 transition';
 
 export default function SubareasPage() {
-  const { obtenerTokenActual } = useAuth();
-
   const [items, setItems]         = useState<Subarea[]>([]);
   const [areas, setAreas]         = useState<AreaDisciplinar[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -63,13 +61,8 @@ export default function SubareasPage() {
   const [modalError, setModalError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const headers = () => ({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${obtenerTokenActual()}`,
-  });
-
   async function cargarAreas() {
-    const res = await fetch(`${API}/configuracion/tablas-maestras/areas-disciplinares`, { headers: headers() });
+    const res = await apiFetch(`${API}/configuracion/tablas-maestras/areas-disciplinares`);
     if (res.ok) setAreas(await res.json());
   }
 
@@ -80,7 +73,7 @@ export default function SubareasPage() {
       if (buscar.trim())   params.set('buscar', buscar.trim());
       if (filtroActivo)    params.set('activo', filtroActivo);
       if (filtroArea)      params.set('areaDisciplinarId', filtroArea);
-      const res = await fetch(`${API}/configuracion/subareas?${params}`, { headers: headers() });
+      const res = await apiFetch(`${API}/configuracion/subareas?${params}`);
       if (!res.ok) throw new Error('Error al cargar los datos');
       setItems(await res.json());
     } catch (e) {
@@ -120,9 +113,8 @@ export default function SubareasPage() {
       const url = modal.id
         ? `${API}/configuracion/subareas/${modal.id}`
         : `${API}/configuracion/subareas`;
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: modal.id ? 'PATCH' : 'POST',
-        headers: headers(),
         body: JSON.stringify({ nombre, areaDisciplinarId: modal.areaDisciplinarId }),
       });
       const data = await res.json().catch(() => ({}));
@@ -139,7 +131,7 @@ export default function SubareasPage() {
 
   async function toggle(item: Subarea) {
     try {
-      const res = await fetch(`${API}/configuracion/subareas/${item.id}/toggle`, { method: 'PATCH', headers: headers() });
+      const res = await apiFetch(`${API}/configuracion/subareas/${item.id}/toggle`, { method: 'PATCH' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message ?? 'Error al cambiar estado');
       flash(item.activo ? 'Desactivada' : 'Activada');
@@ -150,7 +142,7 @@ export default function SubareasPage() {
   async function eliminar(item: Subarea) {
     if (!confirm(`¿Eliminar "${item.nombre}"?\nEsta acción no se puede deshacer.`)) return;
     try {
-      const res = await fetch(`${API}/configuracion/subareas/${item.id}`, { method: 'DELETE', headers: headers() });
+      const res = await apiFetch(`${API}/configuracion/subareas/${item.id}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message ?? 'Error al eliminar');
       flash('Eliminada correctamente');
