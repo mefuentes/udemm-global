@@ -17,6 +17,80 @@ const SELECT_USUARIO = {
 export class UsuariosService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Garantiza la existencia y estado correcto del registro Docente vinculado al usuario.
+   * Idempotente: si el docente ya existe lo actualiza; si no, lo crea o vincula uno pre-existente.
+   *
+   * - Rol DOCENTE + usuario activo   → docente activo   (aparece en selector de vinculación)
+   * - Rol DOCENTE + usuario inactivo → docente inactivo (no aparece)
+   * - Rol distinto de DOCENTE        → docente inactivo (preserva historia, no se elimina)
+   *
+   * Si ya existía un Docente creado manualmente con el mismo correo y sin usuarioId,
+   * se vincula en lugar de crear uno nuevo.
+   *
+   * Para el placeholder de numeroDocumento se usa el UUID del usuario, que es único
+   * por definición. El docente lo reemplaza con su documento real desde Mi Ficha.
+   */
+  private async sincronizarDocente(
+    usuario: { id: string; nombre: string; apellido: string; correoElectronico: string; activo: boolean },
+    rolNombre: string,
+  ): Promise<void> {
+    const docenteVinculado = await this.prisma.docente.findUnique({
+      where: { usuarioId: usuario.id },
+    });
+
+    if (rolNombre !== 'DOCENTE') {
+      if (docenteVinculado) {
+        await this.prisma.docente.update({
+          where: { id: docenteVinculado.id },
+          data: { activo: false },
+        });
+      }
+      return;
+    }
+
+    // El rol ES DOCENTE — garantizar que el docente exista y su estado esté sincronizado.
+
+    if (docenteVinculado) {
+      await this.prisma.docente.update({
+        where: { id: docenteVinculado.id },
+        data: { activo: usuario.activo },
+      });
+      return;
+    }
+
+    // Sin docente vinculado por usuarioId — buscar si existe uno con el mismo correo
+    // (puede haber sido creado manualmente antes de la existencia del usuario).
+    const docentePorEmail = await this.prisma.docente.findUnique({
+      where: { correoElectronico: usuario.correoElectronico },
+    });
+    if (docentePorEmail) {
+      if (!docentePorEmail.usuarioId) {
+        // Vincular el docente existente a este usuario
+        await this.prisma.docente.update({
+          where: { id: docentePorEmail.id },
+          data: { usuarioId: usuario.id, activo: usuario.activo },
+        });
+      }
+      // Si ya tiene otro usuarioId: inconsistencia de datos existente, no tocar.
+      return;
+    }
+
+    // Crear nuevo registro Docente con los datos disponibles del usuario.
+    // Los campos académicos se completan desde Mi Ficha Docente.
+    await this.prisma.docente.create({
+      data: {
+        usuarioId:         usuario.id,
+        nombre:            usuario.nombre,
+        apellido:          usuario.apellido,
+        correoElectronico: usuario.correoElectronico,
+        tipoDocumento:     'DNI',
+        numeroDocumento:   usuario.id,   // UUID único como placeholder; se reemplaza en Mi Ficha
+        activo:            usuario.activo,
+      },
+    });
+  }
+
   async crearUsuario(data: {
     nombre: string;
     apellido: string;
@@ -30,7 +104,7 @@ export class UsuariosService {
     if (existe) throw new BadRequestException('El correo electrónico ya está registrado');
 
     const contrasenaHash = await bcrypt.hash(data.contrasena, 10);
-    return this.prisma.usuario.create({
+    const usuario = await this.prisma.usuario.create({
       data: {
         nombre: data.nombre,
         apellido: data.apellido,
@@ -40,6 +114,22 @@ export class UsuariosService {
       },
       select: SELECT_USUARIO
     });
+
+    // Si el rol es DOCENTE, garantizar la existencia del registro Docente vinculado
+    if (usuario.rol.nombre === 'DOCENTE') {
+      await this.sincronizarDocente(
+        {
+          id:                usuario.id,
+          nombre:            usuario.nombre,
+          apellido:          usuario.apellido,
+          correoElectronico: usuario.correoElectronico,
+          activo:            usuario.activo,
+        },
+        'DOCENTE',
+      );
+    }
+
+    return usuario;
   }
 
   async obtenerUsuarios(buscar?: string, activo?: boolean) {
@@ -88,15 +178,52 @@ export class UsuariosService {
     }
     delete updateData.contrasena;
 
-    return this.prisma.usuario.update({ where: { id }, data: updateData, select: SELECT_USUARIO });
+    const usuarioActualizado = await this.prisma.usuario.update({
+      where: { id },
+      data: updateData,
+      select: SELECT_USUARIO
+    });
+
+    // Sincronizar el registro Docente cuando:
+    //   - El rol cambió (cualquier dirección)
+    //   - El usuario resultante tiene rol DOCENTE (garantiza creación tardía para
+    //     usuarios creados antes de la existencia de esta lógica)
+    if (data.rolId !== undefined || usuarioActualizado.rol.nombre === 'DOCENTE') {
+      await this.sincronizarDocente(
+        {
+          id:                usuarioActualizado.id,
+          nombre:            usuarioActualizado.nombre,
+          apellido:          usuarioActualizado.apellido,
+          correoElectronico: usuarioActualizado.correoElectronico,
+          activo:            usuarioActualizado.activo,
+        },
+        usuarioActualizado.rol.nombre,
+      );
+    }
+
+    return usuarioActualizado;
   }
 
   async toggleEstado(id: string) {
     const usuario = await this.obtenerUsuarioPorId(id);
-    return this.prisma.usuario.update({
+    const actualizado = await this.prisma.usuario.update({
       where: { id },
       data: { activo: !usuario.activo },
       select: SELECT_USUARIO
     });
+
+    // Sincronizar registro Docente: crea si falta, actualiza activo según rol y estado del usuario
+    await this.sincronizarDocente(
+      {
+        id:                actualizado.id,
+        nombre:            actualizado.nombre,
+        apellido:          actualizado.apellido,
+        correoElectronico: actualizado.correoElectronico,
+        activo:            actualizado.activo,
+      },
+      actualizado.rol.nombre,
+    );
+
+    return actualizado;
   }
 }

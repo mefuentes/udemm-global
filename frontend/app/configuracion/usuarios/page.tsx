@@ -219,11 +219,21 @@ export default function UsuariosPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Nombre *</label>
-                  <input value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} className={INPUT} />
+                  <input
+                    data-no-uppercase="true"
+                    value={form.nombre}
+                    onChange={e => { const v = e.target.value.toUpperCase(); setForm(p => ({ ...p, nombre: v })); }}
+                    className={INPUT}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Apellido *</label>
-                  <input value={form.apellido} onChange={e => setForm(p => ({ ...p, apellido: e.target.value }))} className={INPUT} />
+                  <input
+                    data-no-uppercase="true"
+                    value={form.apellido}
+                    onChange={e => { const v = e.target.value.toUpperCase(); setForm(p => ({ ...p, apellido: v })); }}
+                    className={INPUT}
+                  />
                 </div>
               </div>
               <div>

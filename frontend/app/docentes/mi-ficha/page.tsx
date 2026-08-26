@@ -2191,14 +2191,24 @@ export default function MiFichaPage() {
       summaryLines?: string[]
     ) => {
       const colWidths = colFractions.map(f => f * tableWidth);
-      const colHdrH = 18;
       const fontSize = 8;
       const lineH = fontSize * LH_FACTOR;
       const padTop = 4;
       const padBot = 3;
       const minRowH = 18;
 
+      // Pre-compute header wrapping to set dynamic column header height
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'bold');
+      const hdrCellLines = headers.map((h, i) =>
+        doc.splitTextToSize(h.toUpperCase(), colWidths[i] - 8) as string[]
+      );
+      const maxHdrLines = Math.max(...hdrCellLines.map((l: string[]) => l.length), 1);
+      const hdrLineH = Math.ceil(7.5 * LH_FACTOR);
+      const colHdrH = Math.max(18, 4 + maxHdrLines * hdrLineH + 4);
+
       // Pre-compute all cell lines and row heights at fontSize=8
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(fontSize);
       const rowData = rows.map(row => {
         const cells = row.map((cell, i) =>
@@ -2227,7 +2237,7 @@ export default function MiFichaPage() {
         let cx = marginX;
         headers.forEach((h, i) => {
           if (i > 0) doc.line(cx, y, cx, y + colHdrH);
-          doc.text(h.toUpperCase(), cx + 4, y + 12);
+          doc.text(hdrCellLines[i], cx + 4, y + 4 + 7.5, { lineHeightFactor: LH_FACTOR });
           cx += colWidths[i];
         });
         y += colHdrH;
@@ -2369,16 +2379,132 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
   ['Observaciones', formData.observacionesArea || 'Sin información registrada'],
 ]);
     // ── 4. Docencia universitaria ─────────────────────────────
-    drawTableSection(
-      'Docencia universitaria', '4.1 Situación actual',
-      ['Carrera', 'Asignatura', 'Plan', 'Cátedra', 'Año inicio', 'Cargo', 'Modalidad', 'Designación'],
-      vinculacionesAprobadas.map(a => [
-        a.carrera.nombre, a.materia.nombre, a.planEstudio.nombre, a.catedra.nombre,
-        a.anioInicio != null ? String(a.anioInicio) : '',
-        a.cargo.nombre, a.modalidad.nombre, a.designacion.nombre,
-      ]),
-      [0.16, 0.16, 0.12, 0.10, 0.08, 0.12, 0.12, 0.14]
-    );
+    // 4.1 Situación actual — orientación vertical, 11 columnas, fuente compacta
+    {
+      const p41Fs    = 7;
+      const p41LH    = LH_FACTOR;
+      const p41LineH = p41Fs * p41LH;
+      const p41Pad   = 3;  // padding horizontal en celdas
+
+      // Anchos proporcionales al contenido (suma = tableWidth)
+      // Columnas cortas: H/SEM (num.), Año inicio (4 dígitos), Aprobada (fecha)
+      const p41RawW  = [58, 56, 41, 56, 44, 40, 48, 56, 31, 32, 53];
+      const p41RawSum = p41RawW.reduce((s, w) => s + w, 0);
+      const p41ColW   = p41RawW.map(w => (w / p41RawSum) * tableWidth);
+
+      const p41Hdrs = [
+        'Facultad','Carrera','Plan','Asignatura','Cátedra',
+        'Cargo','Modalidad','Designación','H/SEM','Año inicio','Aprobada',
+      ];
+      const p41Data: string[][] = vinculacionesAprobadas.map(a => [
+        a.facultad.nombre,
+        a.carrera.nombre,
+        a.planEstudio.nombre + (a.planEstudio.codigo ? ` (${a.planEstudio.codigo})` : ''),
+        a.materia.nombre,
+        a.catedra.nombre,
+        a.cargo.nombre,
+        a.modalidad.nombre,
+        a.designacion.nombre,
+        a.horasSemana != null ? String(a.horasSemana) : '—',
+        a.anioInicio   != null ? String(a.anioInicio)   : '—',
+        formatFechaCorta(a.fechaAprobacion),
+      ]);
+
+      // Pre-computar líneas de encabezado con wrap dinámico (misma fuente que datos)
+      doc.setFontSize(p41Fs);
+      doc.setFont('helvetica', 'bold');
+      const p41HdrLines = p41Hdrs.map((h, i) =>
+        doc.splitTextToSize(h.toUpperCase(), p41ColW[i] - p41Pad * 2) as string[]
+      );
+      const p41MaxHL = Math.max(...p41HdrLines.map(l => l.length), 1);
+      const p41CHH   = Math.max(18, p41Pad + p41MaxHL * Math.ceil(p41Fs * p41LH) + p41Pad);
+
+      // Pre-computar alturas de filas con wrap dinámico
+      doc.setFont('helvetica', 'normal');
+      const p41Rows = p41Data.map(row => {
+        const cells = row.map((cell, i) =>
+          doc.splitTextToSize(cell || '-', p41ColW[i] - p41Pad * 2) as string[]
+        );
+        const maxL = Math.max(...cells.map(c => c.length), 1);
+        return { cells, rowH: Math.max(14, p41Pad + maxL * p41LineH + p41Pad) };
+      });
+
+      // Verificar espacio para encabezado de sección + col header + primera fila
+      const p41SHH      = 24 + 18;
+      const p41FirstH   = p41Rows.length > 0 ? p41Rows[0].rowH : 14;
+      checkPage(p41SHH + p41CHH + p41FirstH);
+
+      // Barra de sección principal
+      doc.setFillColor(15, 76, 129);
+      doc.rect(marginX, y, tableWidth, 24, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Docencia universitaria', marginX + 8, y + 16);
+      y += 24;
+
+      // Barra de subtítulo
+      doc.setFillColor(235, 241, 248);
+      doc.rect(marginX, y, tableWidth, 18, 'F');
+      doc.setDrawColor(190, 210, 230);
+      doc.rect(marginX, y, tableWidth, 18);
+      doc.setTextColor(15, 76, 129);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.text('4.1 Situación actual', marginX + 8, y + 12);
+      y += 18;
+
+      // Encabezados de columna (función redibujable en salto de página)
+      const drawP41CH = () => {
+        doc.setFillColor(226, 232, 240);
+        doc.rect(marginX, y, tableWidth, p41CHH, 'F');
+        doc.setDrawColor(226, 232, 240);
+        doc.rect(marginX, y, tableWidth, p41CHH);
+        doc.setTextColor(71, 85, 105);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(p41Fs);
+        let cx = marginX;
+        p41Hdrs.forEach((hdr, i) => {
+          if (i > 0) doc.line(cx, y, cx, y + p41CHH);
+          doc.text(p41HdrLines[i], cx + p41Pad, y + p41Pad + p41Fs, { lineHeightFactor: p41LH });
+          cx += p41ColW[i];
+        });
+        y += p41CHH;
+      };
+      drawP41CH();
+
+      if (p41Data.length === 0) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(marginX, y, tableWidth, 14, 'F');
+        doc.setDrawColor(226, 232, 240);
+        doc.rect(marginX, y, tableWidth, 14);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text('Sin registros', marginX + 6, y + 10);
+        y += 14;
+      } else {
+        p41Rows.forEach(({ cells, rowH }, idx) => {
+          if (y + rowH > PAGE_BOTTOM) { doc.addPage(); y = 50; drawP41CH(); }
+          doc.setFillColor(idx % 2 === 0 ? 248 : 255, idx % 2 === 0 ? 250 : 255, idx % 2 === 0 ? 252 : 255);
+          doc.rect(marginX, y, tableWidth, rowH, 'F');
+          doc.setDrawColor(226, 232, 240);
+          doc.rect(marginX, y, tableWidth, rowH);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(p41Fs);
+          doc.setTextColor(30, 41, 59);
+          const textY = y + p41Pad + p41Fs;
+          let colX = marginX;
+          cells.forEach((lines, i) => {
+            if (i > 0) doc.line(colX, y, colX, y + rowH);
+            doc.text(lines, colX + p41Pad, textY, { lineHeightFactor: p41LH });
+            colX += p41ColW[i];
+          });
+          y += rowH;
+        });
+      }
+      y += 12;
+    }
     drawTableSection(
       '', '4.2 Actividades curriculares de posgrado',
       ['Carrera / Posgrado', 'Actividad curricular', 'Plan', 'Año inicio'],
@@ -2391,7 +2517,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
       trayectoriaCargosPasados.map(t => [t.periodoDesde, t.periodoHasta, t.institucion, t.unidadAcademica, t.cargo, t.modalidad, t.dedicacionSem]),
       [0.10, 0.10, 0.20, 0.18, 0.15, 0.15, 0.12]
     );
-    drawSection('', 'Dirección de tesis, tesinas y trabajos finales', [
+    drawSection('', '4.4 Dirección de tesis, tesinas y trabajos finales', [
       ['Tesis doctorales concluidas',  direccionTesisSummary.tesisDoctoralesConcluidas],
       ['Tesis doctorales en curso',    direccionTesisSummary.tesisDoctoralesActuales],
       ['Tesis de maestría concluidas', direccionTesisSummary.tesisMaestriaConcluidas],
@@ -2399,7 +2525,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
       ['Trabajos finales concluidos',  direccionTesisSummary.trabajosFinalesConcluidos],
       ['Trabajos finales en curso',    direccionTesisSummary.trabajosFinalesActuales],
     ]);
-    drawSection('', '4.4 Experiencia en educación a distancia', [
+    drawSection('', '4.5 Experiencia en educación a distancia', [
       ['Descripción', formData.experienciaDistancia],
     ]);
 
@@ -2461,7 +2587,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
     drawTableSection(
       'Reuniones Científicas', '8.1 Congresos, jornadas y eventos académicos (Últimos 5 años)',
-      ['Título', 'Lugar', 'Forma de participación', 'Tipo', 'Fecha'],
+      ['Título', 'Lugar', 'Forma de participación', 'Tipo', 'Período'],
       reunionesCientificas.map(r => [r.titulo, r.lugar, r.formaParticipacion, r.tipo, r.fecha]),
       [0.32, 0.18, 0.22, 0.16, 0.12]
     );
@@ -3165,7 +3291,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                 )}
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-slate-700">Actividades curriculares de posgrado</p>
+                    <p className="text-sm font-semibold text-slate-700">4.2 Actividades curriculares de posgrado</p>
                     {editMode && !mostrarFormActPosgrado && (
                       <button type="button" onClick={() => { limpiarActividadPosgradoForm(); setMostrarFormActPosgrado(true); }} className="rounded-md bg-sky-600 px-3 py-1 text-xs font-medium text-white">+ Agregar</button>
                     )}
@@ -3281,7 +3407,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                 )}
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-slate-700">4.2 Trayectoria — cargos pasados</p>
+                    <p className="text-sm font-semibold text-slate-700">4.3 Trayectoria — cargos pasados</p>
                     {editMode && !mostrarFormTrayectoria && (
                       <button type="button" onClick={() => { limpiarTrayectoriaCargoForm(); setMostrarFormTrayectoria(true); }} className="rounded-md bg-sky-600 px-3 py-1 text-xs font-medium text-white">+ Agregar</button>
                     )}
@@ -3329,7 +3455,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
 
                 {/* 4.3 Dirección de tesis, tesinas y trabajos finales */}
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <p className="text-sm font-semibold text-slate-700">4.3 Dirección de tesis, tesinas y trabajos finales</p>
+                  <p className="text-sm font-semibold text-slate-700">4.4 Dirección de tesis, tesinas y trabajos finales</p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {([
                       ['tesisDoctoralesConcluidas', 'Tesis doctorales concluidas (5 a.)'],
@@ -3358,7 +3484,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
 
                 {/* 4.4 Experiencia en educación a distancia */}
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <p className="text-sm font-semibold text-slate-700">4.4 Experiencia en educación a distancia</p>
+                  <p className="text-sm font-semibold text-slate-700">4.5 Experiencia en educación a distancia</p>
                   <div className="mt-3">
                     {editMode ? (
                       <textarea
@@ -4043,7 +4169,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                         <input value={reunionCientificaForm.lugar} onChange={(e) => setReunionCientificaForm((prev) => ({ ...prev, lugar: e.target.value }))} placeholder="Ciudad" className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-                        <p className="text-xs uppercase text-slate-500">Fecha</p>
+                        <p className="text-xs uppercase text-slate-500">Período</p>
                         <input value={reunionCientificaForm.fecha} onChange={(e) => setReunionCientificaForm((prev) => ({ ...prev, fecha: formatearPeriodo(e.target.value) }))} maxLength={7} placeholder="mm-aaaa" className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
@@ -4089,7 +4215,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                           <th className="px-3 py-2">Lugar</th>
                           <th className="px-3 py-2">Forma de participación</th>
                           <th className="px-3 py-2">Tipo</th>
-                          <th className="px-3 py-2">Fecha</th>
+                          <th className="px-3 py-2">Período</th>
                           {editMode && <th className="px-3 py-2 text-right">Acciones</th>}
                         </tr>
                       </thead>

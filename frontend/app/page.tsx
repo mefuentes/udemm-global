@@ -44,17 +44,37 @@ const IcAprobaciones = () => (
   </svg>
 );
 
+const IcNormativas = () => (
+  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
+  </svg>
+);
+
+const IcVinculacion = () => (
+  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899l4-4a4 4 0 115.656 5.656l-1.1 1.1" />
+  </svg>
+);
+
+const IcManage = () => (
+  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+  </svg>
+);
+
 // ── Color palette ─────────────────────────────────────────────────────────────
 
-type ColorKey = 'blue' | 'violet' | 'teal' | 'slate' | 'indigo' | 'amber';
+type ColorKey = 'blue' | 'violet' | 'teal' | 'slate' | 'indigo' | 'amber' | 'emerald' | 'rose';
 
 const COLORES: Record<ColorKey, { gradient: string; shadow: string; text: string; border: string; pill: string }> = {
-  blue:   { gradient: 'from-[#0f4c81] to-[#1a5ea8]',  shadow: 'shadow-blue-900/20',    text: 'text-[#0f4c81]',  border: 'hover:border-[#0f4c81]/40', pill: 'bg-blue-50 text-blue-800'     },
-  violet: { gradient: 'from-violet-600 to-purple-700', shadow: 'shadow-violet-500/20',  text: 'text-violet-700', border: 'hover:border-violet-300',   pill: 'bg-violet-50 text-violet-700' },
-  teal:   { gradient: 'from-teal-500 to-emerald-600',  shadow: 'shadow-teal-500/20',    text: 'text-teal-700',   border: 'hover:border-teal-300',     pill: 'bg-teal-50 text-teal-700'    },
-  slate:  { gradient: 'from-slate-500 to-slate-700',   shadow: 'shadow-slate-400/20',   text: 'text-slate-600',  border: 'hover:border-slate-400',    pill: 'bg-slate-100 text-slate-600'  },
-  indigo: { gradient: 'from-indigo-500 to-indigo-700', shadow: 'shadow-indigo-500/20',  text: 'text-indigo-700', border: 'hover:border-indigo-300',   pill: 'bg-indigo-50 text-indigo-700' },
-  amber:  { gradient: 'from-amber-400 to-orange-500',  shadow: 'shadow-amber-400/20',   text: 'text-amber-700',  border: 'hover:border-amber-300',    pill: 'bg-amber-50 text-amber-700'   },
+  blue:    { gradient: 'from-[#0f4c81] to-[#1a5ea8]',   shadow: 'shadow-blue-900/20',     text: 'text-[#0f4c81]',   border: 'hover:border-[#0f4c81]/40', pill: 'bg-blue-50 text-blue-800'      },
+  violet:  { gradient: 'from-violet-600 to-purple-700',  shadow: 'shadow-violet-500/20',   text: 'text-violet-700',  border: 'hover:border-violet-300',   pill: 'bg-violet-50 text-violet-700'  },
+  teal:    { gradient: 'from-teal-500 to-emerald-600',   shadow: 'shadow-teal-500/20',     text: 'text-teal-700',    border: 'hover:border-teal-300',     pill: 'bg-teal-50 text-teal-700'     },
+  slate:   { gradient: 'from-slate-500 to-slate-700',    shadow: 'shadow-slate-400/20',    text: 'text-slate-600',   border: 'hover:border-slate-400',    pill: 'bg-slate-100 text-slate-600'  },
+  indigo:  { gradient: 'from-indigo-500 to-indigo-700',  shadow: 'shadow-indigo-500/20',   text: 'text-indigo-700',  border: 'hover:border-indigo-300',   pill: 'bg-indigo-50 text-indigo-700' },
+  amber:   { gradient: 'from-amber-400 to-orange-500',   shadow: 'shadow-amber-400/20',    text: 'text-amber-700',   border: 'hover:border-amber-300',    pill: 'bg-amber-50 text-amber-700'   },
+  emerald: { gradient: 'from-emerald-500 to-green-600',  shadow: 'shadow-emerald-500/20',  text: 'text-emerald-700', border: 'hover:border-emerald-300',  pill: 'bg-emerald-50 text-emerald-700' },
+  rose:    { gradient: 'from-rose-500 to-pink-600',      shadow: 'shadow-rose-400/20',     text: 'text-rose-700',    border: 'hover:border-rose-300',     pill: 'bg-rose-50 text-rose-700'     },
 };
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -62,43 +82,92 @@ const COLORES: Record<ColorKey, { gradient: string; shadow: string; text: string
 interface SubItem { label: string; href: string; }
 interface Modulo  { href: string; titulo: string; descripcion: string; subItems?: SubItem[]; colorKey: ColorKey; icon: ReactNode; }
 
+// ── Shared module definitions ─────────────────────────────────────────────────
+
+const MOD_PLAN_ESTUDIOS: Modulo = {
+  href: '/plan-estudios/carreras',
+  titulo: 'Plan de Estudios',
+  descripcion: 'Administración de planes académicos, asignaturas y programas curriculares.',
+  subItems: [
+    { label: 'Carreras',                href: '/plan-estudios/carreras'             },
+    { label: 'Programas de Asignatura', href: '/plan-estudios/programas-asignatura' },
+    { label: 'Información de Planes',   href: '/plan-estudios/informacion-planes'   },
+  ],
+  colorKey: 'violet',
+  icon: <IcPlanEstudios />,
+};
+
+const MOD_GESTION_ACADEMICA: Modulo = {
+  href: '/gestion-academica/facultades',
+  titulo: 'Gestión Académica',
+  descripcion: 'Administración de facultades y carreras de la institución.',
+  subItems: [
+    { label: 'Facultades', href: '/gestion-academica/facultades' },
+    { label: 'Carreras',   href: '/gestion-academica/carreras'   },
+  ],
+  colorKey: 'teal',
+  icon: <IcGestionAcademica />,
+};
+
+const MOD_DOCENTES_BASE: Modulo = {
+  href: '/docentes',
+  titulo: 'Docentes',
+  descripcion: 'Gestión completa de la planta docente institucional.',
+  subItems: [{ label: 'Listado de Docentes', href: '/docentes' }],
+  colorKey: 'blue',
+  icon: <IcDocentes />,
+};
+
+const MOD_REPOSITORIO_NORMATIVAS: Modulo = {
+  href: '/repositorio-normativas',
+  titulo: 'Repositorio de Normativas',
+  descripcion: 'Consulta y gestión del repositorio institucional de normativas, resoluciones y reglamentos.',
+  colorKey: 'emerald',
+  icon: <IcNormativas />,
+};
+
+const MOD_VINCULACION_CATEDRA: Modulo = {
+  href: '/vinculaciones-catedra',
+  titulo: 'Vinculación a Cátedra',
+  descripcion: 'Gestión de vinculaciones de docentes a cátedras, cargos y designaciones.',
+  colorKey: 'rose',
+  icon: <IcVinculacion />,
+};
+
+const MOD_BANDEJA_APROBACIONES: Modulo = {
+  href: '/bandeja-aprobaciones',
+  titulo: 'Bandeja de Aprobaciones',
+  descripcion: 'Revisá y gestioná las solicitudes pendientes de aprobación.',
+  colorKey: 'amber',
+  icon: <IcAprobaciones />,
+};
+
+const MOD_CONFIGURACION_ADMIN: Modulo = {
+  href: '/configuracion/usuarios',
+  titulo: 'Configuración',
+  descripcion: 'Gestión de usuarios, roles, parámetros generales y tablas maestras del sistema.',
+  subItems: [
+    { label: 'Usuarios',             href: '/configuracion/usuarios'        },
+    { label: 'Roles',                href: '/configuracion/roles'           },
+    { label: 'Parámetros Generales', href: '/configuracion/parametros'      },
+    { label: 'Tablas Maestras',      href: '/configuracion/tablas-maestras' },
+  ],
+  colorKey: 'slate',
+  icon: <IcConfig />,
+};
+
+const MOD_CONFIGURACION_TABLAS: Modulo = {
+  href: '/configuracion/tablas-maestras',
+  titulo: 'Configuración',
+  descripcion: 'Administración de tablas maestras del sistema.',
+  subItems: [{ label: 'Tablas Maestras', href: '/configuracion/tablas-maestras' }],
+  colorKey: 'slate',
+  icon: <IcConfig />,
+};
+
 // ── Modules by role ───────────────────────────────────────────────────────────
 
 function getModulosByRol(rolNombre: string): Modulo[] {
-  const PLAN_ESTUDIOS: Modulo = {
-    href: '/plan-estudios/carreras',
-    titulo: 'Plan de Estudios',
-    descripcion: 'Administración de planes académicos, asignaturas y programas curriculares.',
-    subItems: [
-      { label: 'Carreras',                href: '/plan-estudios/carreras'            },
-      { label: 'Programas de Asignatura', href: '/plan-estudios/programas-asignatura' },
-      { label: 'Información de Planes',   href: '/plan-estudios/informacion-planes'  },
-    ],
-    colorKey: 'violet',
-    icon: <IcPlanEstudios />,
-  };
-
-  const GESTION_ACADEMICA: Modulo = {
-    href: '/gestion-academica/facultades',
-    titulo: 'Gestión Académica',
-    descripcion: 'Administración de facultades y carreras de la institución.',
-    subItems: [
-      { label: 'Facultades', href: '/gestion-academica/facultades' },
-      { label: 'Carreras',   href: '/gestion-academica/carreras'   },
-    ],
-    colorKey: 'teal',
-    icon: <IcGestionAcademica />,
-  };
-
-  const DOCENTES_BASE: Modulo = {
-    href: '/docentes',
-    titulo: 'Docentes',
-    descripcion: 'Gestión completa de la planta docente institucional.',
-    subItems: [{ label: 'Listado de Docentes', href: '/docentes' }],
-    colorKey: 'blue',
-    icon: <IcDocentes />,
-  };
-
   switch (rolNombre) {
     case 'DOCENTE':
       return [
@@ -109,33 +178,9 @@ function getModulosByRol(rolNombre: string): Modulo[] {
           colorKey: 'indigo',
           icon: <IcFicha />,
         },
-        {
-          href: '/docentes/aprobaciones',
-          titulo: 'Bandeja de Aprobaciones',
-          descripcion: 'Revisá y gestioná las solicitudes pendientes de aprobación.',
-          colorKey: 'amber',
-          icon: <IcAprobaciones />,
-        },
-        PLAN_ESTUDIOS,
-      ];
-
-    case 'ADMINISTRADOR_SISTEMA':
-      return [
-        DOCENTES_BASE,
-        PLAN_ESTUDIOS,
-        GESTION_ACADEMICA,
-        {
-          href: '/configuracion/usuarios',
-          titulo: 'Configuración',
-          descripcion: 'Gestión de usuarios, roles y parámetros generales del sistema.',
-          subItems: [
-            { label: 'Usuarios',             href: '/configuracion/usuarios'   },
-            { label: 'Roles',                href: '/configuracion/roles'      },
-            { label: 'Parámetros Generales', href: '/configuracion/parametros' },
-          ],
-          colorKey: 'slate',
-          icon: <IcConfig />,
-        },
+        MOD_BANDEJA_APROBACIONES,
+        MOD_PLAN_ESTUDIOS,
+        MOD_REPOSITORIO_NORMATIVAS,
       ];
 
     case 'ADMINISTRATIVO':
@@ -145,20 +190,60 @@ function getModulosByRol(rolNombre: string): Modulo[] {
           titulo: 'Gestión Docentes',
           descripcion: 'Administración de la planta docente: altas, listado y bandeja de aprobaciones.',
           subItems: [
-            { label: 'Listado de Docentes',    href: '/docentes'              },
-            { label: 'Nuevos Docentes',        href: '/docentes/nuevo'        },
-            { label: 'Bandeja de Aprobaciones', href: '/docentes/aprobaciones' },
+            { label: 'Listado de Docentes',      href: '/docentes'              },
+            { label: 'Nuevos Docentes',          href: '/docentes/nuevo'        },
+            { label: 'Bandeja de Aprobaciones',  href: '/docentes/aprobaciones' },
           ],
           colorKey: 'blue',
-          icon: <IcDocentes />,
+          icon: <IcManage />,
         },
-        PLAN_ESTUDIOS,
-        GESTION_ACADEMICA,
+        MOD_PLAN_ESTUDIOS,
+        MOD_REPOSITORIO_NORMATIVAS,
+        MOD_GESTION_ACADEMICA,
+      ];
+
+    case 'DIRECTOR_CARRERA':
+      return [
+        MOD_DOCENTES_BASE,
+        MOD_PLAN_ESTUDIOS,
+        MOD_REPOSITORIO_NORMATIVAS,
+        MOD_GESTION_ACADEMICA,
+        MOD_CONFIGURACION_TABLAS,
+      ];
+
+    case 'SECRETARIA_ACADEMICA':
+      return [
+        MOD_DOCENTES_BASE,
+        MOD_PLAN_ESTUDIOS,
+        MOD_REPOSITORIO_NORMATIVAS,
+        MOD_GESTION_ACADEMICA,
+        MOD_VINCULACION_CATEDRA,
+        MOD_CONFIGURACION_TABLAS,
+      ];
+
+    case 'DECANO':
+    case 'RECTORADO':
+      return [
+        MOD_DOCENTES_BASE,
+        MOD_PLAN_ESTUDIOS,
+        MOD_REPOSITORIO_NORMATIVAS,
+        MOD_GESTION_ACADEMICA,
+        MOD_VINCULACION_CATEDRA,
+      ];
+
+    case 'ADMINISTRADOR_SISTEMA':
+      return [
+        MOD_DOCENTES_BASE,
+        MOD_PLAN_ESTUDIOS,
+        MOD_REPOSITORIO_NORMATIVAS,
+        MOD_GESTION_ACADEMICA,
+        MOD_VINCULACION_CATEDRA,
+        MOD_BANDEJA_APROBACIONES,
+        MOD_CONFIGURACION_ADMIN,
       ];
 
     default:
-      // SECRETARIA_ACADEMICA, DIRECTOR_CARRERA, DECANO, RECTORADO
-      return [DOCENTES_BASE, PLAN_ESTUDIOS, GESTION_ACADEMICA];
+      return [MOD_DOCENTES_BASE, MOD_PLAN_ESTUDIOS, MOD_REPOSITORIO_NORMATIVAS, MOD_GESTION_ACADEMICA];
   }
 }
 
