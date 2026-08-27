@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Post,
@@ -10,6 +11,7 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -38,6 +40,9 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store, private')
+  // Límite estricto: 5 intentos/min por IP para proteger contra fuerza bruta
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async login(
     @Body() loginDto: LoginDto,
     @Req() req: Request,
@@ -64,6 +69,9 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store, private')
+  // ~20 req/min: permite renovación activa en múltiples pestañas sin abrir a abuso
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   async refresh(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -104,6 +112,7 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
+  @Header('Cache-Control', 'no-store, private')
   async me(@Req() req: Request) {
     const usuario = await this.authService.me((req.user as { id: string }).id);
     return { usuario };
@@ -111,6 +120,8 @@ export class AuthController {
 
   @Post('solicitar-recuperacion')
   @HttpCode(HttpStatus.OK)
+  // 3 solicitudes por 15 min por IP — limitar abusos de envío masivo de emails
+  @Throttle({ default: { limit: 3, ttl: 900_000 } })
   async solicitarRecuperacion(@Body() dto: SolicitarRecuperacionDto) {
     await this.authService.solicitarRecuperacion(dto.correoElectronico);
     return { message: 'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.' };
@@ -118,6 +129,8 @@ export class AuthController {
 
   @Post('restablecer-contrasena')
   @HttpCode(HttpStatus.OK)
+  // 5 intentos/15 min: el token tiene una sola vida útil; limitar spray de tokens
+  @Throttle({ default: { limit: 5, ttl: 900_000 } })
   async restablecerContrasena(@Body() dto: RestablecerContrasenaDto) {
     await this.authService.restablecerContrasena(dto.token, dto.nuevaContrasena);
     return { message: 'Contraseña actualizada correctamente. Ya podés iniciar sesión.' };

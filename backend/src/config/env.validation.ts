@@ -66,6 +66,33 @@ export function validateEnv(config: Record<string, unknown>): Record<string, unk
     }
   }
 
+  // ── FRONTEND_URL ─────────────────────────────────────────────────────────────
+  // Obligatoria — usada en la configuración de CORS y en emails de recuperación.
+  const frontendUrl = config['FRONTEND_URL'];
+  if (!frontendUrl || typeof frontendUrl !== 'string' || frontendUrl.trim() === '') {
+    errores.push('FRONTEND_URL: variable obligatoria no definida.');
+  } else {
+    try {
+      const parsed = new URL(frontendUrl.trim());
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        errores.push('FRONTEND_URL: debe comenzar con http:// o https://.');
+      }
+    } catch {
+      errores.push('FRONTEND_URL: formato de URL inválido (ej: http://localhost:3000).');
+    }
+  }
+
+  // ── STORAGE_NORMATIVAS_PATH ──────────────────────────────────────────────────
+  // Opcional — si está definida debe ser una ruta absoluta.
+  const storageNormativas = config['STORAGE_NORMATIVAS_PATH'];
+  if (storageNormativas !== undefined && storageNormativas !== null && String(storageNormativas).trim() !== '') {
+    const p = String(storageNormativas).trim();
+    const esAbsoluta = p.startsWith('/') || /^[A-Za-z]:[/\\]/.test(p);
+    if (!esAbsoluta) {
+      errores.push('STORAGE_NORMATIVAS_PATH: debe ser una ruta absoluta.');
+    }
+  }
+
   // ── Fallo seguro ────────────────────────────────────────────────────────────
   if (errores.length > 0) {
     const detalle = errores.map(e => `  - ${e}`).join('\n');

@@ -8,6 +8,7 @@ async function tentarRenovar(): Promise<boolean> {
     renovandoToken = fetch(`${API_URL}/auth/refresh`, {
       method: 'POST',
       credentials: 'include',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
     })
       .then(r => r.ok)
       .finally(() => { renovandoToken = null; });
@@ -19,13 +20,20 @@ async function tentarRenovar(): Promise<boolean> {
  * Wrapper de fetch con cookies HttpOnly (credentials: 'include').
  * Reintenta automáticamente tras renovar el access token en caso de 401.
  * Si la renovación falla, emite el evento 'auth:sesion-expirada'.
+ *
+ * Incluye X-Requested-With en todas las solicitudes mutantes (POST/PUT/PATCH/DELETE)
+ * como cabecera de protección CSRF (verificada por CsrfMiddleware en el backend).
  */
 export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const url = path.startsWith('http') ? path : `${API_URL}${path}`;
   const esFormData = init?.body instanceof FormData;
-  const headersBase: Record<string, string> = esFormData
-    ? {}
-    : { 'Content-Type': 'application/json' };
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const esMutante = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+
+  const headersBase: Record<string, string> = {
+    ...(esMutante ? { 'X-Requested-With': 'XMLHttpRequest' } : {}),
+    ...(esFormData ? {} : { 'Content-Type': 'application/json' }),
+  };
 
   const respuesta = await fetch(url, {
     ...init,

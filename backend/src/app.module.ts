@@ -1,6 +1,9 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { validateEnv } from './config/env.validation';
+import { CsrfMiddleware } from './common/middleware/csrf.middleware';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -23,6 +26,17 @@ import { NormativasModule } from './modules/normativas/normativas.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    ThrottlerModule.forRoot([
+      {
+        // Nombre 'default' requerido: @Throttle({ default: {...} }) en los
+        // controladores almacena metadata bajo la clave THROTTLER_LIMIT+'default'.
+        // El guard lee esa clave usando namedThrottler.name — si no coincide,
+        // el override se ignora y se aplica el límite global (100/60s).
+        name: 'default',
+        ttl: 60_000, // 1 minuto (en ms)
+        limit: 100,  // máx. 100 solicitudes/IP/minuto para el API general
+      },
+    ]),
     PrismaModule,
     HealthModule,
     AuthModule,
@@ -43,6 +57,17 @@ import { NormativasModule } from './modules/normativas/normativas.module';
     NormativasModule,
   ],
   controllers: [],
-  providers: []
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(CsrfMiddleware)
+      .forRoutes({ path: '*', method: RequestMethod.ALL });
+  }
+}
