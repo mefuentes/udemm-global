@@ -40,7 +40,7 @@ export class ProgramasController {
     @Body() dto: ActualizarProgramaDto,
     @Req() req: any
   ) {
-    return this.programasService.actualizarPrograma(materiaId, dto, req.user.id);
+    return this.programasService.actualizarPrograma(materiaId, dto, req.user.id, req.user.rol.nombre);
   }
 
   @Post('materia/:materiaId/aprobar')

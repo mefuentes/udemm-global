@@ -212,6 +212,14 @@ export class UsuariosService {
       select: SELECT_USUARIO
     });
 
+    // Al desactivar: revocar todas las sesiones activas (M-05b)
+    if (!actualizado.activo) {
+      await this.prisma.sesion.updateMany({
+        where: { usuarioId: id, activo: true },
+        data: { activo: false },
+      });
+    }
+
     // Sincronizar registro Docente: crea si falta, actualiza activo según rol y estado del usuario
     await this.sincronizarDocente(
       {

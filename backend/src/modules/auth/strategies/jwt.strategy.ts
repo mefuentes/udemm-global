@@ -24,10 +24,24 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     sesionId?: string;
   }) {
     if (payload.sesionId) {
-      const sesion = await this.prisma.sesion.findUnique({ where: { id: payload.sesionId } });
+      const sesion = await this.prisma.sesion.findUnique({
+        where: { id: payload.sesionId },
+        include: {
+          usuario: { select: { activo: true, rol: { select: { nombre: true } } } },
+        },
+      });
       if (!sesion || !sesion.activo) {
         throw new UnauthorizedException('Sesión inválida o revocada');
       }
+      if (!sesion.usuario.activo) {
+        throw new UnauthorizedException('Cuenta desactivada');
+      }
+      return {
+        id: payload.sub,
+        correoElectronico: payload.correoElectronico,
+        rol: { nombre: sesion.usuario.rol.nombre },
+        sesionId: payload.sesionId,
+      };
     }
 
     return {

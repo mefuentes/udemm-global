@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActualizarProgramaDto } from './dto/actualizar-programa.dto';
 
@@ -85,6 +85,23 @@ function calcEstadoSecciones(prog: Record<string, unknown>): Record<string, stri
 export class ProgramasService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async verificarOwnershipDocente(materiaId: string, usuarioId: string): Promise<void> {
+    const docente = await this.prisma.docente.findUnique({ where: { usuarioId } });
+    if (!docente) {
+      throw new ForbiddenException('Sin acceso: sin perfil docente asociado');
+    }
+    const vinculacion = await this.prisma.vinculacionCatedra.findFirst({
+      where: {
+        docenteId: docente.id,
+        materiaId,
+        estado: 'APROBADA',
+      },
+    });
+    if (!vinculacion) {
+      throw new ForbiddenException('Sin acceso: no tenés una vinculación aprobada con esta asignatura');
+    }
+  }
+
   async obtenerPrograma(materiaId: string) {
     const materia = await this.prisma.materia.findUnique({ where: { id: materiaId } });
     if (!materia) throw new NotFoundException(`Materia ${materiaId} no encontrada`);
@@ -109,7 +126,10 @@ export class ProgramasService {
     return { ...prog, ...estadoSecciones, estadoPrograma };
   }
 
-  async actualizarPrograma(materiaId: string, dto: ActualizarProgramaDto, usuarioId: string) {
+  async actualizarPrograma(materiaId: string, dto: ActualizarProgramaDto, usuarioId: string, rolNombre: string) {
+    if (rolNombre === 'DOCENTE') {
+      await this.verificarOwnershipDocente(materiaId, usuarioId);
+    }
     const materia = await this.prisma.materia.findUnique({ where: { id: materiaId } });
     if (!materia) throw new NotFoundException(`Materia ${materiaId} no encontrada`);
 

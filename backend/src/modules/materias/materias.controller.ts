@@ -37,13 +37,21 @@ const ROLES_EDITAR = [
   'ADMINISTRATIVO'
 ] as const;
 
-// DOCENTE puede editar datos y correlativas de materias asignadas (no crear ni dar de baja)
-const ROLES_ACTUALIZAR = [
+// DOCENTE puede editar datos de materias con vinculación activa (ownership verificado en servicio)
+const ROLES_ACTUALIZAR_MATERIA = [
   'ADMINISTRADOR_SISTEMA',
   'SECRETARIA_ACADEMICA',
   'DIRECTOR_CARRERA',
   'ADMINISTRATIVO',
   'DOCENTE',
+] as const;
+
+// Correlatividades son arquitectura curricular: solo roles institucionales
+const ROLES_ACTUALIZAR_CORRELATIVAS = [
+  'ADMINISTRADOR_SISTEMA',
+  'SECRETARIA_ACADEMICA',
+  'DIRECTOR_CARRERA',
+  'ADMINISTRATIVO',
 ] as const;
 
 @Controller('materias')
@@ -91,9 +99,9 @@ export class MateriasController {
   }
 
   @Patch(':id')
-  @Roles(...ROLES_ACTUALIZAR)
+  @Roles(...ROLES_ACTUALIZAR_MATERIA)
   actualizar(@Param('id') id: string, @Body() dto: ActualizarMateriaDto, @Req() req: any) {
-    return this.materiasService.actualizar(id, dto, req.user.id);
+    return this.materiasService.actualizar(id, dto, req.user.id, req.user.rol.nombre);
   }
 
   @Delete(':id')
@@ -111,7 +119,7 @@ export class MateriasController {
   }
 
   @Post(':id/correlativas')
-  @Roles(...ROLES_ACTUALIZAR)
+  @Roles(...ROLES_ACTUALIZAR_CORRELATIVAS)
   agregarCorrelativa(
     @Param('id') id: string,
     @Body() dto: GestionarCorrelativaDto,
@@ -121,7 +129,7 @@ export class MateriasController {
   }
 
   @Delete(':id/correlativas/:correlativaId')
-  @Roles(...ROLES_ACTUALIZAR)
+  @Roles(...ROLES_ACTUALIZAR_CORRELATIVAS)
   quitarCorrelativa(
     @Param('id') id: string,
     @Param('correlativaId') correlativaId: string,

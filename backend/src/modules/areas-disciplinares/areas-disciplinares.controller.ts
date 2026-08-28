@@ -8,6 +8,8 @@ import {
   Post,
   Query,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -21,6 +23,7 @@ const ROLES_VER   = [...ROLES_ADMIN, 'DOCENTE'];
 
 @Controller('configuracion/subareas')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class AreasDisiplinaresController {
   constructor(private readonly service: AreasDisiplinaresService) {}
 
