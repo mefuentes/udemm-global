@@ -4,6 +4,7 @@ const SOLO_CARACTERES_REGEX = /^[\p{L}\s'\-]+$/u;
 const SOLO_NUMEROS_REGEX = /^\d+$/;
 const FECHA_YYYY_MM_DD_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const DOCUMENTO_REGEX = /^\d+$|^[A-Za-z0-9-]+$/;
+const SOLO_ALFANUMERICO_REGEX = /^[\p{L}\p{N}\s'.,\-()\/:;°+&#º]+$/u;
 
 export class ActualizarDocenteDto {
   @IsString()
@@ -50,7 +51,7 @@ export class ActualizarDocenteDto {
 
   @IsString()
   @IsOptional()
-  @Matches(SOLO_CARACTERES_REGEX, { message: 'La calle solo puede contener letras' })
+  @Matches(SOLO_ALFANUMERICO_REGEX, { message: 'La calle contiene caracteres no permitidos' })
   calle?: string;
 
   @IsString()

@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { apiFetch as apiFetchBase } from '@/lib/api';
+import { apiFetch as apiFetchBase, mensajeErrorHttp } from '@/lib/api';
 import { getPermisosPlanEstudio, getPermisosPrograma, PermisosPrograma } from '@/lib/permisos-plan-estudios';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -284,7 +284,7 @@ function FichaContent() {
   async function apiFetch(url: string, opts?: RequestInit) {
     const res = await apiFetchBase(url, opts);
     const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.message ?? 'Error en la solicitud');
+    if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error en la solicitud'));
     return data;
   }
 

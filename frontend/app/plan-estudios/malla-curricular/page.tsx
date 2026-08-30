@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { apiFetch as apiFetchBase } from '@/lib/api';
+import { apiFetch as apiFetchBase, mensajeErrorHttp } from '@/lib/api';
 import { getPermisosPlanEstudio } from '@/lib/permisos-plan-estudios';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -196,7 +196,7 @@ export default function MallaCurricularPage() {
   async function apiFetch(url: string, opts?: RequestInit) {
     const res = await apiFetchBase(url, opts);
     const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.message ?? 'Error en la solicitud');
+    if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error en la solicitud'));
     return data;
   }
 

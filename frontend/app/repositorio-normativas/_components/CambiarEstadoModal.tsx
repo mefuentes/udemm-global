@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, mensajeErrorHttp } from '@/lib/api';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
@@ -102,7 +102,7 @@ export function CambiarEstadoModal({
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setErrorBusqueda(data?.message ?? 'No se encontró la normativa.');
+        setErrorBusqueda(mensajeErrorHttp(res, data, 'No se encontró la normativa.'));
         return;
       }
       setCandidata(data);
@@ -154,10 +154,8 @@ export function CambiarEstadoModal({
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        const msg = Array.isArray(data?.message)
-          ? data.message.join(' | ')
-          : (data?.message ?? 'Error al cambiar el estado.');
-        if (msg.includes('MOTIVO')) setErrorMotivo(msg);
+        const msg = mensajeErrorHttp(res, data, 'Error al cambiar el estado.');
+        if (res.status !== 403 && msg.includes('MOTIVO')) setErrorMotivo(msg);
         else setErrorGeneral(msg);
         return;
       }

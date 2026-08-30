@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, mensajeErrorHttp } from '@/lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -138,7 +138,7 @@ export default function TablasMaestrasPage() {
         url = `${API}/configuracion/tablas-maestras/${categoria}?${params}`;
       }
       const res = await apiFetch(url);
-      if (!res.ok) throw new Error('Error al cargar los datos');
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, null, 'Error al cargar los datos'));
       setItems(await res.json());
     } catch (e) {
       setError((e as Error).message);
@@ -222,7 +222,7 @@ export default function TablasMaestrasPage() {
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message ?? 'Error al guardar');
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error al guardar'));
       cerrarModal();
       flash(modal.id ? 'Registro actualizado' : 'Registro creado');
       cargar();
@@ -243,7 +243,7 @@ export default function TablasMaestrasPage() {
         : `${API}/configuracion/tablas-maestras/${categoria}`;
       const res = await apiFetch(`${base}/${item.id}/toggle`, { method: 'PATCH' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message ?? 'Error al cambiar estado');
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error al cambiar estado'));
       flash(item.activo ? 'Registro desactivado' : 'Registro activado');
       cargar();
     } catch (e) { alert((e as Error).message); }
@@ -257,7 +257,7 @@ export default function TablasMaestrasPage() {
         : `${API}/configuracion/tablas-maestras/${categoria}`;
       const res = await apiFetch(`${base}/${item.id}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message ?? 'Error al eliminar');
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error al eliminar'));
       flash('Registro eliminado');
       cargar();
     } catch (e) { alert((e as Error).message); }

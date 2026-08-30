@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, mensajeErrorHttp } from '@/lib/api';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
@@ -70,10 +70,8 @@ export function EliminarNormativaModal({
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        const msg = Array.isArray(data?.message)
-          ? data.message.join(' | ')
-          : (data?.message ?? 'Error al dar de baja la normativa.');
-        if (msg.includes('MOTIVO')) setErrorMotivo(msg);
+        const msg = mensajeErrorHttp(res, data, 'Error al dar de baja la normativa.');
+        if (res.status !== 403 && msg.includes('MOTIVO')) setErrorMotivo(msg);
         else setErrorGeneral(msg);
         return;
       }

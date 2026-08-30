@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { jsPDF } from 'jspdf';
 import { useAuth } from '@/lib/auth-context';
@@ -701,6 +701,7 @@ export default function MiFichaPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData | null>(null);
+  const isComposingRef = useRef(false);
   const puedeEditarFicha = esNuevoDocente || (esRolDocente || esVistaDesdeListado) && Boolean(formData?.activo);
   const puedeDarBajaLogica =
     esVistaDesdeListado &&
@@ -922,10 +923,10 @@ export default function MiFichaPage() {
     cargarFicha();
   }, [usuario, router, esRolDocente, esVistaDesdeListado, docenteIdDesdeListado, queryReady, esNuevoDocente]);
 
-  async function cargarFicha() {
-    setLoading(true);
+  async function cargarFicha(silencioso = false) {
+    if (!silencioso) setLoading(true);
     setError(null);
-    setSuccessMessage(null);
+    if (!silencioso) setSuccessMessage(null);
 
     try {
       const endpoint = esVistaDesdeListado && docenteIdDesdeListado
@@ -1070,9 +1071,9 @@ export default function MiFichaPage() {
             : []
       );
     } catch (err) {
-      setError((err as Error).message);
+      if (!silencioso) setError((err as Error).message);
     } finally {
-      setLoading(false);
+      if (!silencioso) setLoading(false);
     }
   }
 
@@ -1093,14 +1094,22 @@ export default function MiFichaPage() {
   }
 
   function handleConstrainFieldChange(field: keyof FormData, value: string) {
-    let nextValue = value;
+    // Durante composición IME (ej: teclas muertas para tildes) no filtrar caracteres intermedios
+    if (isComposingRef.current) {
+      handleFieldChange(field, value);
+      return;
+    }
+
+    // Normalizar a NFC antes de filtrar para manejar caracteres Unicode descompuestos
+    const nfc = value.normalize('NFC');
+    let nextValue = nfc;
 
     if (['apellido', 'nombre', 'residencia', 'provincia', 'localidad'].includes(field)) {
-      nextValue = value.replace(/[^\p{L}\s'\-]/gu, '');
+      nextValue = nfc.replace(/[^\p{L}\s'\-]/gu, '');
     }
 
     if (field === 'numeroDocumento' || field === 'telefono' || field === 'numero') {
-      nextValue = value.replace(/\D/g, '');
+      nextValue = nfc.replace(/\D/g, '');
     }
 
     if (
@@ -1111,22 +1120,22 @@ export default function MiFichaPage() {
       field === 'tiempoGestionAcademica' ||
       field === 'tiempoDedicacionGestionSemanal'
     ) {
-      nextValue = value.replace(/\D/g, '');
+      nextValue = nfc.replace(/\D/g, '');
     }
 
     if (field === 'cuit') {
-      nextValue = value.replace(/\D/g, '').slice(0, 11);
+      nextValue = nfc.replace(/\D/g, '').slice(0, 11);
     }
 
     if (field === 'calle' || field === 'pisoDepto') {
-      nextValue = value.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, '');
+      nextValue = nfc.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, '');
     }
 
     if (field === 'unidadAcademica') {
-      nextValue = value.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, '');
+      nextValue = nfc.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, '');
     }
     if (field === 'unidadAcademicaGestion' || field === 'carreraAsociadaGestion') {
-      nextValue = value.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, '');
+      nextValue = nfc.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, '');
     }
 
     handleFieldChange(field, nextValue);
@@ -1185,7 +1194,7 @@ export default function MiFichaPage() {
   function validarTitulo(form: TituloGradoForm) {
     const errors: Partial<Record<keyof TituloGradoForm, string>> = {};
     if (!form.denominacion.trim()) errors.denominacion = 'Campo obligatorio';
-    else if (!SOLO_CARACTERES_REGEX.test(form.denominacion.trim())) errors.denominacion = 'Solo acepta caracteres';
+    else if (!SOLO_ALFANUMERICO_REGEX.test(form.denominacion.trim())) errors.denominacion = 'Solo acepta letras, números y puntuación académica';
 
     if (!form.anio.trim()) errors.anio = 'Campo obligatorio';
     else if (!ANIO_REGEX.test(form.anio.trim())) errors.anio = 'Debe tener 4 valores numericos';
@@ -1219,7 +1228,7 @@ export default function MiFichaPage() {
   function validarPosgrado(form: TituloPosgradoForm) {
     const errors: Partial<Record<keyof TituloPosgradoForm, string>> = {};
     if (!form.denominacion.trim()) errors.denominacion = 'Campo obligatorio';
-    else if (!SOLO_CARACTERES_REGEX.test(form.denominacion.trim())) errors.denominacion = 'Solo acepta caracteres';
+    else if (!SOLO_ALFANUMERICO_REGEX.test(form.denominacion.trim())) errors.denominacion = 'Solo acepta letras, números y puntuación académica';
 
     if (!form.tipo.trim()) errors.tipo = 'Campo obligatorio';
 
@@ -1252,7 +1261,7 @@ export default function MiFichaPage() {
   function validarOtroTitulo(form: OtroTituloForm) {
     const errors: Partial<Record<keyof OtroTituloForm, string>> = {};
     if (!form.denominacion.trim()) errors.denominacion = 'Campo obligatorio';
-    else if (!SOLO_CARACTERES_REGEX.test(form.denominacion.trim())) errors.denominacion = 'Solo acepta caracteres';
+    else if (!SOLO_ALFANUMERICO_REGEX.test(form.denominacion.trim())) errors.denominacion = 'Solo acepta letras, números y puntuación académica';
 
     if (!form.anio.trim()) errors.anio = 'Campo obligatorio';
     else if (!ANIO_REGEX.test(form.anio.trim())) errors.anio = 'Debe tener 4 valores numericos';
@@ -1317,7 +1326,7 @@ export default function MiFichaPage() {
   function validarCarreraFormDoc(form: CarreraFormacionDocenteForm) {
     const errors: Partial<Record<keyof CarreraFormacionDocenteForm, string>> = {};
     if (!form.denominacion.trim()) errors.denominacion = 'Campo obligatorio';
-    else if (!SOLO_CARACTERES_REGEX.test(form.denominacion.trim())) errors.denominacion = 'Solo acepta caracteres';
+    else if (!SOLO_ALFANUMERICO_REGEX.test(form.denominacion.trim())) errors.denominacion = 'Solo acepta letras, números y puntuación académica';
     if (!form.institucion.trim()) errors.institucion = 'Campo obligatorio';
     else if (!SOLO_ALFANUMERICO_REGEX.test(form.institucion.trim())) errors.institucion = 'Solo acepta valores alfanumericos';
     if (!form.anio.trim()) errors.anio = 'Campo obligatorio';
@@ -2686,9 +2695,10 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
         method = 'PATCH';
       }
 
+      const payload = getDatosPestana(activeTab);
       const response = await apiFetch(endpoint, {
         method,
-        body: JSON.stringify(getDatosPestana(activeTab)),
+        body: JSON.stringify(payload),
       });
 
       const result = await response.json().catch(() => null);
@@ -2705,7 +2715,11 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
           : `Pestaña ${activeTab} guardada correctamente.${esNuevoDocente && activeTab < TAB_TITLES.length ? ` Podés continuar con la pestaña ${activeTab + 1}.` : ''}`
       );
 
-      if (esUltimaNuevo) setTimeout(() => router.push('/docentes'), 1500);
+      if (esUltimaNuevo) {
+        setTimeout(() => router.push('/docentes'), 1500);
+      } else {
+        cargarFicha(true);
+      }
 
     } catch (err) {
       setError((err as Error).message);
@@ -2744,6 +2758,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
       setMostrarFormGrado(false);
       setMostrarFormPosgrado(false);
       setMostrarFormOtroTitulo(false);
+      cargarFicha(true);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -2872,19 +2887,23 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
             </div>
           </div>
 
-          <div className="mt-4 space-y-6">
+          <div
+            className="mt-4 space-y-6"
+            onCompositionStart={() => { isComposingRef.current = true; }}
+            onCompositionEnd={() => { isComposingRef.current = false; }}
+          >
             {activeTab === 1 && (
               <div className="space-y-6">
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
                   <div className="mt-2 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs uppercase text-slate-500">Apellido *</p>
-                      {editMode ? <input value={formData.apellido} onChange={(e) => handleConstrainFieldChange('apellido', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /> : <p className="mt-1 text-sm">{formData.apellido || '-'}</p>}
+                      {editMode ? <input value={formData.apellido} onChange={(e) => handleConstrainFieldChange('apellido', e.target.value)} autoComplete="off" spellCheck={false} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /> : <p className="mt-1 text-sm">{formData.apellido || '-'}</p>}
                       {fieldErrors.apellido ? <p className="mt-1 text-xs text-red-600">{fieldErrors.apellido}</p> : null}
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs uppercase text-slate-500">Nombres *</p>
-                      {editMode ? <input value={formData.nombre} onChange={(e) => handleConstrainFieldChange('nombre', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /> : <p className="mt-1 text-sm">{formData.nombre || '-'}</p>}
+                      {editMode ? <input value={formData.nombre} onChange={(e) => handleConstrainFieldChange('nombre', e.target.value)} autoComplete="off" spellCheck={false} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /> : <p className="mt-1 text-sm">{formData.nombre || '-'}</p>}
                       {fieldErrors.nombre ? <p className="mt-1 text-xs text-red-600">{fieldErrors.nombre}</p> : null}
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { apiFetch as apiFetchBase } from '@/lib/api';
+import { apiFetch as apiFetchBase, mensajeErrorHttp } from '@/lib/api';
 import { getPermisosPlanEstudio } from '@/lib/permisos-plan-estudios';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ export default function InformacionPlanesPage() {
   async function apiFetch(url: string) {
     const res = await apiFetchBase(url);
     const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.message ?? 'Error en la solicitud');
+    if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error en la solicitud'));
     return data;
   }
 
@@ -161,7 +161,7 @@ export default function InformacionPlanesPage() {
       const res = await apiFetchBase(`${API_URL}/plan-estudios/exportar/${formato}?${params}`);
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        setError(data?.message ?? 'No se pudo generar el archivo.');
+        setError(mensajeErrorHttp(res, data, 'No se pudo generar el archivo.'));
         return;
       }
       const blob = await res.blob();

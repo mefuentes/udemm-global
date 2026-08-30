@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, mensajeErrorHttp } from '@/lib/api';
 import Link from 'next/link';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ export function TablaMaestraView({ tipo, titulo, descripcion }: Props) {
       if (buscar.trim()) params.set('buscar', buscar.trim());
       if (filtroActivo !== '') params.set('activo', filtroActivo);
       const res = await apiFetch(`${API}/configuracion/tablas-maestras/${tipo}?${params}`);
-      if (!res.ok) throw new Error('Error al cargar los datos');
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, null, 'Error al cargar los datos'));
       setItems(await res.json());
     } catch (e) {
       setError((e as Error).message);
@@ -150,7 +150,7 @@ export function TablaMaestraView({ tipo, titulo, descripcion }: Props) {
         body: JSON.stringify({ nombre }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message ?? 'Error al guardar');
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error al guardar'));
       cerrarModal();
       flash(modal.id ? 'Registro actualizado' : 'Registro creado');
       cargar();
@@ -168,7 +168,7 @@ export function TablaMaestraView({ tipo, titulo, descripcion }: Props) {
         { method: 'PATCH' },
       );
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message ?? 'Error al cambiar estado');
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error al cambiar estado'));
       flash(item.activo ? 'Desactivado' : 'Activado');
       cargar();
     } catch (e) {
@@ -184,7 +184,7 @@ export function TablaMaestraView({ tipo, titulo, descripcion }: Props) {
         { method: 'DELETE' },
       );
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message ?? 'Error al eliminar');
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error al eliminar'));
       flash('Eliminado correctamente');
       cargar();
     } catch (e) {

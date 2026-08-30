@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { apiFetch as apiFetchBase } from '@/lib/api';
+import { apiFetch as apiFetchBase, mensajeErrorHttp } from '@/lib/api';
 import { getPermisosPlanEstudio } from '@/lib/permisos-plan-estudios';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ export default function CarrerasPage() {
   async function apiFetch(url: string) {
     const res = await apiFetchBase(url);
     const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.message ?? 'Error en la solicitud');
+    if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error en la solicitud'));
     return data;
   }
 

@@ -5,7 +5,7 @@ import { jsPDF } from 'jspdf';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, mensajeErrorHttp } from '@/lib/api';
 
 interface Docente {
   id: string;
@@ -54,7 +54,7 @@ export default function DocentesPage() {
       const response = await apiFetch(url.toString());
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(data?.message ?? response.statusText ?? 'No se pudo cargar el listado');
+        throw new Error(mensajeErrorHttp(response, data, 'No se pudo cargar el listado'));
       }
       setDocentes(data?.data ?? []);
       setTotal(data?.total ?? 0);

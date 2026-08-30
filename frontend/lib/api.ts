@@ -57,3 +57,15 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
 
   return respuesta;
 }
+
+export const MSG_403 = 'Acceso no autorizado. Su usuario no posee permisos para acceder a esta funcionalidad.';
+
+export function mensajeErrorHttp(res: Response, data: unknown, fallback: string): string {
+  if (res.status === 403) return MSG_403;
+  if (data != null && typeof data === 'object') {
+    const m = (data as Record<string, unknown>).message;
+    if (Array.isArray(m)) return (m as string[]).join(' | ');
+    if (m != null) return String(m);
+  }
+  return fallback;
+}

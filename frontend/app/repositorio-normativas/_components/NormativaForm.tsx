@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, mensajeErrorHttp } from '@/lib/api';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
@@ -294,10 +294,8 @@ export function NormativaForm({
         return;
       }
       if (!res.ok) {
-        const msg = Array.isArray(data?.message)
-          ? data.message.join(' | ')
-          : (data?.message ?? (esEditar ? 'Error al actualizar la normativa' : 'Error al registrar la normativa'));
-        const esErrorArchivo = typeof msg === 'string' && (
+        const msg = mensajeErrorHttp(res, data, esEditar ? 'Error al actualizar la normativa' : 'Error al registrar la normativa');
+        const esErrorArchivo = res.status !== 403 && typeof msg === 'string' && (
           msg.includes('FORMATO') || msg.includes('EXCEDE') || msg.includes('PDF ES OBLIGATORIO')
         );
         if (esErrorArchivo) setErrorArchivo(msg);

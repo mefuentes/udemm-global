@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, mensajeErrorHttp } from '@/lib/api';
 import Link from 'next/link';
 
 interface AreaDisciplinar {
@@ -74,7 +74,7 @@ export default function SubareasPage() {
       if (filtroActivo)    params.set('activo', filtroActivo);
       if (filtroArea)      params.set('areaDisciplinarId', filtroArea);
       const res = await apiFetch(`${API}/configuracion/subareas?${params}`);
-      if (!res.ok) throw new Error('Error al cargar los datos');
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, null, 'Error al cargar los datos'));
       setItems(await res.json());
     } catch (e) {
       setError((e as Error).message);
@@ -118,7 +118,7 @@ export default function SubareasPage() {
         body: JSON.stringify({ nombre, areaDisciplinarId: modal.areaDisciplinarId }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message ?? 'Error al guardar');
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error al guardar'));
       cerrarModal();
       flash(modal.id ? 'Subárea actualizada' : 'Subárea creada');
       cargar();
@@ -133,7 +133,7 @@ export default function SubareasPage() {
     try {
       const res = await apiFetch(`${API}/configuracion/subareas/${item.id}/toggle`, { method: 'PATCH' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message ?? 'Error al cambiar estado');
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error al cambiar estado'));
       flash(item.activo ? 'Desactivada' : 'Activada');
       cargar();
     } catch (e) { alert((e as Error).message); }
@@ -144,7 +144,7 @@ export default function SubareasPage() {
     try {
       const res = await apiFetch(`${API}/configuracion/subareas/${item.id}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message ?? 'Error al eliminar');
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error al eliminar'));
       flash('Eliminada correctamente');
       cargar();
     } catch (e) { alert((e as Error).message); }

@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiFetch } from './api';
 
 interface Usuario {
   id: string;
@@ -32,10 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await fetch(`${API_URL}/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
+      await apiFetch('/auth/logout', { method: 'POST' });
     } catch {
       // ignorar errores de red — la sesión local se limpia igual
     }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, MSG_403 } from '@/lib/api';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -222,6 +222,7 @@ export function FormularioVinculacion({ onGuardado, onCerrar }: Props) {
       });
       const data = await r.json().catch(() => null);
       if (!r.ok) {
+        if (r.status === 403) throw new Error(MSG_403);
         const msg = data?.message;
         throw new Error(
           Array.isArray(msg)
