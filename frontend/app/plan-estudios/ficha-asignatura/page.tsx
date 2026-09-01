@@ -279,6 +279,20 @@ function FichaContent() {
   const { usuario } = useAuth();
   const permisos = getPermisosPlanEstudio(usuario?.rol?.nombre ?? '');
   const permisosPrograma = getPermisosPrograma(usuario?.rol?.nombre ?? '');
+  const [puedeEditarPrograma, setPuedeEditarPrograma] = useState(false);
+
+  useEffect(() => {
+    if (!materiaId || usuario?.rol?.nombre !== 'DOCENTE') {
+      setPuedeEditarPrograma(false);
+      return;
+    }
+    apiFetch(`${API_URL}/vinculaciones-catedra?estado=APROBADA`)
+      .then((data: unknown) => {
+        const arr = Array.isArray(data) ? (data as { materia?: { id: string } }[]) : [];
+        setPuedeEditarPrograma(arr.some(v => v.materia?.id === materiaId));
+      })
+      .catch(() => setPuedeEditarPrograma(false));
+  }, [materiaId, usuario?.rol?.nombre]);
 
   // ── API helper ─────────────────────────────────────────────────────────
   async function apiFetch(url: string, opts?: RequestInit) {
@@ -333,7 +347,7 @@ function FichaContent() {
 
       {/* Vista de ficha o selector */}
       {materiaId
-        ? <FichaView materiaId={materiaId} permisos={permisos} permisosPrograma={permisosPrograma} apiFetch={apiFetch} usuario={usuario} router={router} initialTab={initialTab} modoVer={modoVer} />
+        ? <FichaView materiaId={materiaId} permisos={permisos} permisosPrograma={permisosPrograma} puedeEditarPrograma={puedeEditarPrograma} apiFetch={apiFetch} usuario={usuario} router={router} initialTab={initialTab} modoVer={modoVer} />
         : <SelectorView apiFetch={apiFetch} usuario={usuario} router={router} />
       }
     </div>
@@ -582,10 +596,11 @@ function SelectorView({ apiFetch, usuario, router }: {
 
 // ── Vista: Ficha completa ─────────────────────────────────────────────────────
 
-function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, usuario, router, initialTab, modoVer = false }: {
+function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma = false, apiFetch, usuario, router, initialTab, modoVer = false }: {
   materiaId: string;
   permisos: ReturnType<typeof getPermisosPlanEstudio>;
   permisosPrograma: PermisosPrograma;
+  puedeEditarPrograma?: boolean;
   apiFetch: (url: string, opts?: RequestInit) => Promise<any>;
   usuario: unknown;
   router: ReturnType<typeof useRouter>;
@@ -1038,6 +1053,7 @@ function FichaView({ materiaId, permisos, permisosPrograma, apiFetch, usuario, r
             materiaId={ficha.id}
             ficha={ficha}
             permisosPrograma={permisosPrograma}
+            puedeEditarPrograma={puedeEditarPrograma}
             apiFetch={apiFetch}
             onRefreshFicha={fetchFicha}
             modoVer={modoVer}
@@ -1453,11 +1469,12 @@ ${sec(6,'Bibliografía y gestión', s6HTML)}
 }
 
 function ProgramaView({
-  materiaId, ficha, permisosPrograma, apiFetch, onRefreshFicha, modoVer = false
+  materiaId, ficha, permisosPrograma, puedeEditarPrograma = false, apiFetch, onRefreshFicha, modoVer = false
 }: {
   materiaId: string;
   ficha: FichaCompleta;
   permisosPrograma: PermisosPrograma;
+  puedeEditarPrograma?: boolean;
   apiFetch: (url: string, opts?: RequestInit) => Promise<any>;
   onRefreshFicha?: () => void;
   modoVer?: boolean;
@@ -1931,7 +1948,7 @@ function ProgramaView({
               {estadoSeccion === 'COMPLETO' ? '✓ Completo' : '○ Pendiente'}
             </span>
           </div>
-          {permisosPrograma.editar && !editando && !modoVer && (
+          {(permisosPrograma.editar || puedeEditarPrograma) && !editando && !modoVer && (
             <button
               onClick={seccion.renderTipo === 'grids' ? iniciarEdicionGrids : seccion.renderTipo === 'unidades' ? iniciarEdicionUnidades : seccion.renderTipo === 'formacion' ? iniciarEdicionFormacion : iniciarEdicion}
               className="flex items-center gap-1.5 text-[11px] font-semibold text-[#0f4c81] hover:bg-[#0f4c81]/5 px-2.5 py-1.5 rounded-lg transition-colors"

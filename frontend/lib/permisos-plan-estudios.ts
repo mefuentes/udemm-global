@@ -17,7 +17,7 @@ export function getPermisosPrograma(rolNombre: string): PermisosPrograma {
     case 'RECTORADO':
       return { ver: true, editar: false, aprobar: false, exportar: true };
     case 'DOCENTE':
-      return { ver: true, editar: true, aprobar: false, exportar: false };
+      return { ver: true, editar: false, aprobar: false, exportar: false };
     default:
       return { ver: false, editar: false, aprobar: false, exportar: false };
   }
@@ -94,7 +94,7 @@ export function getPermisosPlanEstudio(rolNombre: string): PermisosPlanEstudio {
       return {
         ver: true,
         crear: false,
-        editar: true,
+        editar: false,
         eliminar: false,
         exportar: false,
         gestionarContenido: false

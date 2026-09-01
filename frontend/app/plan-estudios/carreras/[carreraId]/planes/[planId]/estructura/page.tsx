@@ -210,6 +210,7 @@ export default function EstructuraCurricularPage() {
   const [materiaEditar, setMateriaEditar] = useState<Materia | null>(null);
   const [formMateria,   setFormMateria]   = useState<FormMateria>(MATERIA_VACIA);
   const [guardando,     setGuardando]     = useState(false);
+  const [materiasEditables, setMateriasEditables] = useState<Set<string>>(new Set());
 
   // ── API ───────────────────────────────────────────────────────────────────
   async function apiFetch(url: string, opts?: RequestInit) {
@@ -231,6 +232,7 @@ export default function EstructuraCurricularPage() {
         const lista: Materia[] = materiasData ?? [];
         setMaterias(lista);
         if (lista.length > 0) cargarCorrelativas(lista);
+        if (usuario?.rol?.nombre === 'DOCENTE') cargarMateriasEditables();
       })
       .catch(e => setError((e as Error).message))
       .finally(() => setCargando(false));
@@ -247,6 +249,15 @@ export default function EstructuraCurricularPage() {
     });
     setCorrelativasMap(mapa);
     setCargandoCorr(false);
+  }
+
+  async function cargarMateriasEditables() {
+    try {
+      const data: { materia?: { id: string } }[] = await apiFetch(`${API_URL}/vinculaciones-catedra?estado=APROBADA`);
+      setMateriasEditables(new Set(data.map(v => v.materia?.id).filter((id): id is string => !!id)));
+    } catch {
+      // falla segura: sin permisos de edición
+    }
   }
 
   // ── Datos derivados ───────────────────────────────────────────────────────
@@ -739,7 +750,7 @@ export default function EstructuraCurricularPage() {
                                             >
                                               Ver
                                             </Link>
-                                            {permisos.editar && (
+                                            {(permisos.editar || materiasEditables.has(materia.id)) && (
                                               <button onClick={() => abrirEditar(materia)}
                                                 className="p-1.5 rounded text-slate-400 hover:text-[#0f4c81] hover:bg-[#0f4c81]/8 transition-colors"
                                                 title="Editar asignatura">
