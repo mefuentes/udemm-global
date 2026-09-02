@@ -1062,9 +1062,11 @@ export class NormativasService {
     }
 
     const stream = this.storage.crearReadStream(normativa.rutaArchivoOriginal);
-    const nombreDescarga =
+    const nombreRaw =
       normativa.nombreArchivoOriginal ??
       `normativa-${normativa.numeroNorma}-${normativa.anio}.pdf`;
+    // S5-01: sanitizar para prevenir HTTP header injection en Content-Disposition
+    const nombreDescarga = nombreRaw.replace(/[\r\n\t"\\]/g, '_').trim() || 'documento.pdf';
 
     void this.auditoria.registrar({
       accion:          download ? 'DESCARGA_PDF' : 'VER_DOCUMENTO',
