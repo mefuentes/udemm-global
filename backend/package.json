@@ -14,7 +14,11 @@
     "prisma:seed:local": "ts-node --transpile-only prisma/seed.ts"
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
@@ -33,7 +37,7 @@
     "@prisma/client": "^5.13.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/nodemailer": "^8.0.1",
-    "bcrypt": "^5.1.1",
+    "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "cookie-parser": "^1.4.7",
