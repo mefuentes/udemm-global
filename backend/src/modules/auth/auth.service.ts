@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import type { SignOptions } from 'jsonwebtoken';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -46,7 +47,7 @@ export class AuthService {
     if (sesionId) payload.sesionId = sesionId;
 
     return this.jwtService.sign(payload, {
-      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') ?? '3600s'
+      expiresIn: (this.configService.get<string>('JWT_EXPIRES_IN') ?? '3600s') as SignOptions['expiresIn'],
     });
   }
 
