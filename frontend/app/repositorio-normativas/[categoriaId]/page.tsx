@@ -162,6 +162,9 @@ export default function CategoriaDetallePage() {
   const [normativaParaEliminar, setNormativaParaEliminar] = useState<NormativaItem | null>(null);
   const [mensajeExito, setMensajeExito] = useState('');
 
+  const [areasEmisoras, setAreasEmisoras] = useState<{ id: string; nombre: string }[]>([]);
+  const [cargandoAreas, setCargandoAreas] = useState(true);
+
   // ── KPIs ────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!categoriaId) return;
@@ -200,6 +203,15 @@ export default function CategoriaDetallePage() {
         .finally(() => setCargandoKpi(false));
     }
   }, [categoriaId, esDocente, puedeGestionar, triggerRefresh]);
+
+  // ── Áreas emisoras ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    apiFetch(`${API}/configuracion/tablas-maestras/tipos-area-emisora/activos`)
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setAreasEmisoras(Array.isArray(d) ? d : []))
+      .catch(() => {})
+      .finally(() => setCargandoAreas(false));
+  }, []);
 
   // ── Listado ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -481,22 +493,23 @@ export default function CategoriaDetallePage() {
                 onKeyDown={e => e.key === 'Enter' && handleBuscar()}
                 placeholder="Busque por título, palabras clave o área emisora..."
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-[#0f4c81] focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/20 transition-colors"
-                data-no-uppercase="true"
               />
             </div>
 
             {/* Área emisora */}
             <div>
               <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">Área emisora</label>
-              <input
-                type="text"
+              <select
                 value={form.areaEmisora}
                 onChange={e => setForm(prev => ({ ...prev, areaEmisora: e.target.value }))}
-                onKeyDown={e => e.key === 'Enter' && handleBuscar()}
-                placeholder="Área..."
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-[#0f4c81] focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/20 transition-colors"
-                data-no-uppercase="true"
-              />
+                disabled={cargandoAreas}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#0f4c81] focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/20 transition-colors disabled:opacity-60"
+              >
+                <option value="">{cargandoAreas ? 'Cargando...' : 'TODAS LAS ÁREAS'}</option>
+                {areasEmisoras.map(a => (
+                  <option key={a.id} value={a.nombre}>{a.nombre}</option>
+                ))}
+              </select>
             </div>
 
             {/* Vigencia — oculto para DOCENTE y en modo ELIMINADAS */}

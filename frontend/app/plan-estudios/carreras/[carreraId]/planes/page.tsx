@@ -186,10 +186,9 @@ export default function PlanesCarreraPage() {
     }
     setGuardando(true);
     try {
-      const payload: Record<string, unknown> = {
+      const camposEditables: Record<string, unknown> = {
         nombre:  form.nombre.trim(),
         estado:  form.estado,
-        carreraId,
         version:              form.version.trim() || undefined,
         anio:                 form.anio                 ? parseInt(form.anio)                 : undefined,
         duracionCuatrimestres: form.duracionCuatrimestres ? parseInt(form.duracionCuatrimestres) : undefined,
@@ -199,12 +198,12 @@ export default function PlanesCarreraPage() {
 
       if (editando) {
         const saved: Plan = await apiFetch(`${API_URL}/plan-estudios/${editando.id}`, {
-          method: 'PATCH', body: JSON.stringify(payload),
+          method: 'PATCH', body: JSON.stringify(camposEditables),
         });
         setPlanes(prev => prev.map(p => p.id === editando.id ? { ...p, ...saved } : p));
       } else {
         const saved: Plan = await apiFetch(`${API_URL}/plan-estudios`, {
-          method: 'POST', body: JSON.stringify(payload),
+          method: 'POST', body: JSON.stringify({ ...camposEditables, carreraId }),
         });
         setPlanes(prev => [...prev, { ...saved, _count: { materias: 0 } }]);
       }

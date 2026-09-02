@@ -614,7 +614,7 @@ export class NormativasService {
 
       if (esDocente) {
         where.vigencia = 'VIGENTE';
-      } else if (estadoEfectivo === 'ACTIVAS' && vigencia && VIGENCIAS_VALIDAS.includes(vigencia as any)) {
+      } else if (estadoEfectivo !== 'ELIMINADAS' && vigencia && VIGENCIAS_VALIDAS.includes(vigencia as any)) {
         where.vigencia = vigencia;
       }
 
@@ -652,18 +652,18 @@ export class NormativasService {
 
       if (esDocente) {
         conditions.push(Prisma.sql`n."vigencia" = 'VIGENTE'`);
-      } else if (estadoEfectivo === 'ACTIVAS' && vigencia && VIGENCIAS_VALIDAS.includes(vigencia as any)) {
+      } else if (estadoEfectivo !== 'ELIMINADAS' && vigencia && VIGENCIAS_VALIDAS.includes(vigencia as any)) {
         conditions.push(Prisma.sql`n."vigencia" = ${vigencia}`);
       }
 
       if (tipoId) {
-        conditions.push(Prisma.sql`n."tipoNormativaId" = ${tipoId}::uuid`);
+        conditions.push(Prisma.sql`n."tipoNormativaId" = ${tipoId}`);
       }
 
       if (areaEmisora?.trim()) {
         const ae = `%${areaEmisora.trim()}%`;
         conditions.push(
-          Prisma.sql`unaccent(LOWER(n."areaEmisora")) LIKE unaccent(LOWER(${ae}))`,
+          Prisma.sql`public.unaccent(LOWER(n."areaEmisora")) LIKE public.unaccent(LOWER(${ae}))`,
         );
       }
 
@@ -678,16 +678,16 @@ export class NormativasService {
         const param = `%${token}%`;
         if (incluyeEliminadoFields) {
           conditions.push(Prisma.sql`(
-            unaccent(LOWER(n."titulo"))                                    LIKE unaccent(LOWER(${param}))
-            OR unaccent(LOWER(COALESCE(n."palabrasClave", '')))           LIKE unaccent(LOWER(${param}))
-            OR unaccent(LOWER(n."areaEmisora"))                           LIKE unaccent(LOWER(${param}))
-            OR unaccent(LOWER(COALESCE(n."motivoEliminacion", '')))       LIKE unaccent(LOWER(${param}))
+            public.unaccent(LOWER(n."titulo"))                                    LIKE public.unaccent(LOWER(${param}))
+            OR public.unaccent(LOWER(COALESCE(n."palabrasClave", '')))           LIKE public.unaccent(LOWER(${param}))
+            OR public.unaccent(LOWER(n."areaEmisora"))                           LIKE public.unaccent(LOWER(${param}))
+            OR public.unaccent(LOWER(COALESCE(n."motivoEliminacion", '')))       LIKE public.unaccent(LOWER(${param}))
           )`);
         } else {
           conditions.push(Prisma.sql`(
-            unaccent(LOWER(n."titulo"))                          LIKE unaccent(LOWER(${param}))
-            OR unaccent(LOWER(COALESCE(n."palabrasClave", ''))) LIKE unaccent(LOWER(${param}))
-            OR unaccent(LOWER(n."areaEmisora"))                 LIKE unaccent(LOWER(${param}))
+            public.unaccent(LOWER(n."titulo"))                          LIKE public.unaccent(LOWER(${param}))
+            OR public.unaccent(LOWER(COALESCE(n."palabrasClave", ''))) LIKE public.unaccent(LOWER(${param}))
+            OR public.unaccent(LOWER(n."areaEmisora"))                 LIKE public.unaccent(LOWER(${param}))
           )`);
         }
       }
@@ -1129,7 +1129,7 @@ export class NormativasService {
 
       if (esDocente) {
         where.vigencia = 'VIGENTE';
-      } else if (estadoEfectivo === 'ACTIVAS' && vigencia && VIGENCIAS_VALIDAS.includes(vigencia as any)) {
+      } else if (estadoEfectivo !== 'ELIMINADAS' && vigencia && VIGENCIAS_VALIDAS.includes(vigencia as any)) {
         where.vigencia = vigencia;
       }
 
@@ -1162,16 +1162,16 @@ export class NormativasService {
 
       if (esDocente) {
         conditions.push(Prisma.sql`n."vigencia" = 'VIGENTE'`);
-      } else if (estadoEfectivo === 'ACTIVAS' && vigencia && VIGENCIAS_VALIDAS.includes(vigencia as any)) {
+      } else if (estadoEfectivo !== 'ELIMINADAS' && vigencia && VIGENCIAS_VALIDAS.includes(vigencia as any)) {
         conditions.push(Prisma.sql`n."vigencia" = ${vigencia}`);
       }
 
-      if (tipoId) conditions.push(Prisma.sql`n."tipoNormativaId" = ${tipoId}::uuid`);
+      if (tipoId) conditions.push(Prisma.sql`n."tipoNormativaId" = ${tipoId}`);
 
       if (areaEmisora?.trim()) {
         const ae = `%${areaEmisora.trim()}%`;
         conditions.push(
-          Prisma.sql`unaccent(LOWER(n."areaEmisora")) LIKE unaccent(LOWER(${ae}))`,
+          Prisma.sql`public.unaccent(LOWER(n."areaEmisora")) LIKE public.unaccent(LOWER(${ae}))`,
         );
       }
 
@@ -1182,16 +1182,16 @@ export class NormativasService {
         const param = `%${token}%`;
         if (incluyeEliminadoFields) {
           conditions.push(Prisma.sql`(
-            unaccent(LOWER(n."titulo"))                                    LIKE unaccent(LOWER(${param}))
-            OR unaccent(LOWER(COALESCE(n."palabrasClave", '')))           LIKE unaccent(LOWER(${param}))
-            OR unaccent(LOWER(n."areaEmisora"))                           LIKE unaccent(LOWER(${param}))
-            OR unaccent(LOWER(COALESCE(n."motivoEliminacion", '')))       LIKE unaccent(LOWER(${param}))
+            public.unaccent(LOWER(n."titulo"))                                    LIKE public.unaccent(LOWER(${param}))
+            OR public.unaccent(LOWER(COALESCE(n."palabrasClave", '')))           LIKE public.unaccent(LOWER(${param}))
+            OR public.unaccent(LOWER(n."areaEmisora"))                           LIKE public.unaccent(LOWER(${param}))
+            OR public.unaccent(LOWER(COALESCE(n."motivoEliminacion", '')))       LIKE public.unaccent(LOWER(${param}))
           )`);
         } else {
           conditions.push(Prisma.sql`(
-            unaccent(LOWER(n."titulo"))                          LIKE unaccent(LOWER(${param}))
-            OR unaccent(LOWER(COALESCE(n."palabrasClave", ''))) LIKE unaccent(LOWER(${param}))
-            OR unaccent(LOWER(n."areaEmisora"))                 LIKE unaccent(LOWER(${param}))
+            public.unaccent(LOWER(n."titulo"))                          LIKE public.unaccent(LOWER(${param}))
+            OR public.unaccent(LOWER(COALESCE(n."palabrasClave", ''))) LIKE public.unaccent(LOWER(${param}))
+            OR public.unaccent(LOWER(n."areaEmisora"))                 LIKE public.unaccent(LOWER(${param}))
           )`);
         }
       }

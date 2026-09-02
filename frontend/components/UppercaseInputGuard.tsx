@@ -9,7 +9,7 @@ function transformarAMayusculas(element: HTMLInputElement | HTMLTextAreaElement)
   if ('dataset' in element && element.dataset.noUppercase === 'true') return;
 
   const valorActual = element.value;
-  const valorMayuscula = valorActual.toUpperCase();
+  const valorMayuscula = valorActual.normalize('NFC').toLocaleUpperCase('es-AR');
   if (valorActual === valorMayuscula) return;
 
   const inicio = element.selectionStart;
