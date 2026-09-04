@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch } from '@/lib/api';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 interface Docente {
   id: string;
@@ -64,8 +65,10 @@ export default function EditarDocentePage({ params }: EditarPageProps) {
     }
   }
 
+  const CAMPOS_SIN_NORMALIZAR = new Set(['numeroDocumento', 'telefono', 'correoElectronico']);
   function actualizarCampo(campo: string, valor: string) {
-    setFormData((prev) => ({ ...prev, [campo]: valor }));
+    const next = CAMPOS_SIN_NORMALIZAR.has(campo) ? valor : normalizarMayusculas(valor);
+    setFormData((prev) => ({ ...prev, [campo]: next }));
   }
 
   async function guardar(event: React.FormEvent<HTMLFormElement>) {
@@ -180,6 +183,7 @@ export default function EditarDocentePage({ params }: EditarPageProps) {
               <h2 className="text-sm font-semibold text-slate-700 mb-3 border-b border-slate-100 pb-2">Datos personales</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 <input
+                  data-no-uppercase="true"
                   value={formData.nombre ?? ''}
                   onChange={(e) => actualizarCampo('nombre', e.target.value)}
                   placeholder="Nombre"
@@ -187,6 +191,7 @@ export default function EditarDocentePage({ params }: EditarPageProps) {
                   className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                 />
                 <input
+                  data-no-uppercase="true"
                   value={formData.apellido ?? ''}
                   onChange={(e) => actualizarCampo('apellido', e.target.value)}
                   placeholder="Apellido"
@@ -200,6 +205,7 @@ export default function EditarDocentePage({ params }: EditarPageProps) {
               <h2 className="text-sm font-semibold text-slate-700 mb-3 border-b border-slate-100 pb-2">Documento</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 <input
+                  data-no-uppercase="true"
                   value={formData.tipoDocumento ?? ''}
                   onChange={(e) => actualizarCampo('tipoDocumento', e.target.value)}
                   placeholder="Tipo de documento"
@@ -207,6 +213,7 @@ export default function EditarDocentePage({ params }: EditarPageProps) {
                   className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                 />
                 <input
+                  data-no-uppercase="true"
                   value={formData.numeroDocumento ?? ''}
                   onChange={(e) => actualizarCampo('numeroDocumento', e.target.value)}
                   placeholder="Número de documento"
@@ -228,12 +235,14 @@ export default function EditarDocentePage({ params }: EditarPageProps) {
                   className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                 />
                 <input
+                  data-no-uppercase="true"
                   value={formData.telefono ?? ''}
                   onChange={(e) => actualizarCampo('telefono', e.target.value)}
                   placeholder="Teléfono"
                   className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                 />
                 <input
+                  data-no-uppercase="true"
                   value={formData.domicilio ?? ''}
                   onChange={(e) => actualizarCampo('domicilio', e.target.value)}
                   placeholder="Domicilio"
@@ -246,12 +255,14 @@ export default function EditarDocentePage({ params }: EditarPageProps) {
               <h2 className="text-sm font-semibold text-slate-700 mb-3 border-b border-slate-100 pb-2">Formación</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 <input
+                  data-no-uppercase="true"
                   value={formData.tituloGrado ?? ''}
                   onChange={(e) => actualizarCampo('tituloGrado', e.target.value)}
                   placeholder="Título de grado"
                   className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:bg-white focus:ring-1 focus:ring-[#0f4c81]/20 transition"
                 />
                 <input
+                  data-no-uppercase="true"
                   value={formData.tituloPosgrado ?? ''}
                   onChange={(e) => actualizarCampo('tituloPosgrado', e.target.value)}
                   placeholder="Título de posgrado"
@@ -264,6 +275,7 @@ export default function EditarDocentePage({ params }: EditarPageProps) {
               <h2 className="text-sm font-semibold text-slate-700 mb-3 border-b border-slate-100 pb-2">Cargo y trayectoria</h2>
               <div className="grid gap-4">
                 <textarea
+                  data-no-uppercase="true"
                   value={formData.cargoDeclarado ?? ''}
                   onChange={(e) => actualizarCampo('cargoDeclarado', e.target.value)}
                   placeholder="Cargo declarado"
@@ -271,6 +283,7 @@ export default function EditarDocentePage({ params }: EditarPageProps) {
                   rows={2}
                 />
                 <textarea
+                  data-no-uppercase="true"
                   value={formData.justificacionPertinencia ?? ''}
                   onChange={(e) => actualizarCampo('justificacionPertinencia', e.target.value)}
                   placeholder="Justificación de pertinencia"
@@ -278,6 +291,7 @@ export default function EditarDocentePage({ params }: EditarPageProps) {
                   rows={2}
                 />
                 <textarea
+                  data-no-uppercase="true"
                   value={formData.actividadesProfesionales ?? ''}
                   onChange={(e) => actualizarCampo('actividadesProfesionales', e.target.value)}
                   placeholder="Actividades profesionales"
@@ -285,6 +299,7 @@ export default function EditarDocentePage({ params }: EditarPageProps) {
                   rows={2}
                 />
                 <textarea
+                  data-no-uppercase="true"
                   value={formData.antecedentesAcademicos ?? ''}
                   onChange={(e) => actualizarCampo('antecedentesAcademicos', e.target.value)}
                   placeholder="Antecedentes académicos"

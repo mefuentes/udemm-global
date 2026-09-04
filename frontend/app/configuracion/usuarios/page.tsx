@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 interface Rol { id: string; nombre: string; }
 interface Usuario {
@@ -219,7 +220,7 @@ export default function UsuariosPage() {
                   <input
                     data-no-uppercase="true"
                     value={form.nombre}
-                    onChange={e => { const v = e.target.value.toUpperCase(); setForm(p => ({ ...p, nombre: v })); }}
+                    onChange={e => setForm(p => ({ ...p, nombre: normalizarMayusculas(e.target.value) }))}
                     className={INPUT}
                   />
                 </div>
@@ -228,7 +229,7 @@ export default function UsuariosPage() {
                   <input
                     data-no-uppercase="true"
                     value={form.apellido}
-                    onChange={e => { const v = e.target.value.toUpperCase(); setForm(p => ({ ...p, apellido: v })); }}
+                    onChange={e => setForm(p => ({ ...p, apellido: normalizarMayusculas(e.target.value) }))}
                     className={INPUT}
                   />
                 </div>

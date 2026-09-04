@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiFetch, MSG_403 } from '@/lib/api';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -396,6 +397,7 @@ export function FormularioVinculacion({ onGuardado, onCerrar }: Props) {
             <input
               type="text"
               inputMode="numeric"
+              data-no-uppercase="true"
               value={form.anioInicio}
               onChange={e => {
                 const v = e.target.value.replace(/\D/g, '').slice(0, 4);
@@ -425,8 +427,9 @@ export function FormularioVinculacion({ onGuardado, onCerrar }: Props) {
 
           <Campo label="Observaciones">
             <textarea
+              data-no-uppercase="true"
               value={form.observaciones}
-              onChange={e => set('observaciones', e.target.value)}
+              onChange={e => set('observaciones', normalizarMayusculas(e.target.value))}
               rows={3}
               maxLength={500}
               placeholder="Información adicional (opcional)…"

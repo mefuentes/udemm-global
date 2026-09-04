@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 import { FormularioVinculacion } from './_components/FormularioVinculacion';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -577,10 +578,9 @@ export default function VinculacionesCatedraPage() {
                 </label>
                 <textarea
                   value={formDesvincular.motivo}
-                  onChange={e => setFormDesvincular(f => ({ ...f, motivo: e.target.value }))}
+                  onChange={e => setFormDesvincular(f => ({ ...f, motivo: normalizarMayusculas(e.target.value) }))}
                   rows={4}
                   maxLength={2000}
-                  data-no-uppercase="true"
                   placeholder="Describa el motivo de la finalización de la vinculación…"
                   className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white outline-none focus:border-[#0f4c81] focus:ring-2 focus:ring-[#0f4c81]/15 transition resize-none"
                 />

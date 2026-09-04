@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { apiFetch, mensajeErrorHttp } from '@/lib/api';
 import Link from 'next/link';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -137,8 +138,7 @@ export function TablaMaestraView({ tipo, titulo, descripcion }: Props) {
   }
 
   async function guardar() {
-    // Leer desde el DOM directamente: es la fuente de verdad al usar defaultValue
-    const nombre = (inputRef.current?.value ?? '').trim();
+    const nombre = normalizarMayusculas((inputRef.current?.value ?? '').trim());
     if (!nombre) { setModalError('El nombre es obligatorio'); return; }
     setSubmitting(true); setModalError(null);
     try {
@@ -402,6 +402,7 @@ export function TablaMaestraView({ tipo, titulo, descripcion }: Props) {
                   autoComplete="off"
                   autoCorrect="off"
                   spellCheck={false}
+                  data-no-uppercase="true"
                 />
                 {/* Preview uppercase */}
                 {modal.nombre.trim() && modal.nombre !== modal.nombre.toUpperCase() && (

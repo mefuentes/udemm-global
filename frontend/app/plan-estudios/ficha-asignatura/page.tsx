@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch as apiFetchBase, mensajeErrorHttp } from '@/lib/api';
 import { getPermisosPlanEstudio, getPermisosPrograma, PermisosPrograma } from '@/lib/permisos-plan-estudios';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -894,7 +895,7 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
             <div className="divide-y divide-slate-50">
               <CampoFicha label="Código" valor={ficha.codigo} monospace />
               <CampoEditable label="Nombre" valor={ficha.nombre} editar={modoEditar}
-                input={<input value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
+                input={<input data-no-uppercase="true" value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: normalizarMayusculas(e.target.value) }))}
                   className={inputCls} />} />
               <CampoFicha label="Carrera" valor={ficha.planEstudio.carrera.nombre} />
               <CampoFicha label="Plan de Estudio"
@@ -932,7 +933,7 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
                   {REGIMENES.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>} />
               <CampoEditable label="Observaciones" valor={ficha.observaciones ?? '—'} editar={modoEditar}
-                input={<textarea value={form.observaciones} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))}
+                input={<textarea data-no-uppercase="true" value={form.observaciones} onChange={e => setForm(f => ({ ...f, observaciones: normalizarMayusculas(e.target.value) }))}
                   rows={2} className={`${inputCls} resize-none`} placeholder="Notas adicionales..." />} />
             </div>
 

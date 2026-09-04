@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { apiFetch, mensajeErrorHttp } from '@/lib/api';
 import Link from 'next/link';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 interface AreaDisciplinar {
   id: string;
@@ -105,7 +106,7 @@ export default function SubareasPage() {
   }
 
   async function guardar() {
-    const nombre = (inputRef.current?.value ?? modal.nombre).trim();
+    const nombre = normalizarMayusculas((inputRef.current?.value ?? modal.nombre).trim());
     if (!nombre) { setModalError('El nombre es obligatorio'); return; }
     if (!modal.areaDisciplinarId) { setModalError('El área disciplinar es obligatoria'); return; }
     setSubmitting(true); setModalError(null);
@@ -288,6 +289,7 @@ export default function SubareasPage() {
                   autoComplete="off"
                   autoCorrect="off"
                   spellCheck={false}
+                  data-no-uppercase="true"
                 />
                 {modal.nombre.trim() && modal.nombre !== modal.nombre.toUpperCase() && (
                   <p className="mt-1 text-[10px] text-slate-400">Se guardará como: <span className="font-semibold text-slate-600">{modal.nombre.trim().toUpperCase()}</span></p>

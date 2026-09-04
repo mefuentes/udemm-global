@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 interface Rol { id: string; nombre: string; descripcion: string | null; activo: boolean; fechaCreacion: string; cantidadUsuarios: number; }
 
@@ -143,6 +144,7 @@ export default function RolesPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Nombre del Rol *</label>
                 <input
+                  data-no-uppercase="true"
                   value={form.nombre}
                   onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))}
                   placeholder="Ej: COORDINADOR_ACADEMICO"
@@ -153,8 +155,9 @@ export default function RolesPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Descripción</label>
                 <textarea
+                  data-no-uppercase="true"
                   value={form.descripcion}
-                  onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))}
+                  onChange={e => setForm(p => ({ ...p, descripcion: normalizarMayusculas(e.target.value) }))}
                   rows={3}
                   className={INPUT}
                 />

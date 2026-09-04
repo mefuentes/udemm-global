@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { apiFetch, mensajeErrorHttp } from '@/lib/api';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
@@ -361,10 +362,11 @@ export function NormativaForm({
           {campo('Título', true, errors.titulo,
             <input
               type="text"
+              data-no-uppercase="true"
               className={inputCls(errors.titulo)}
               placeholder="Ej: REGLAMENTO DE GESTIÓN ACADÉMICA"
               value={form.titulo}
-              onChange={e => handleChange('titulo', e.target.value)}
+              onChange={e => handleChange('titulo', normalizarMayusculas(e.target.value))}
               disabled={disabled}
               maxLength={200}
             />

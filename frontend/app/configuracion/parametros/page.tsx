@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 interface Parametro { id: string; clave: string; valor: string; descripcion: string | null; }
 
@@ -52,6 +53,7 @@ export default function ParametrosPage() {
   }
 
   const esColor = (clave: string) => clave.toLowerCase().includes('color');
+  const CLAVES_NORMALIZAR = new Set(['nombreInstitucion', 'siglaInstitucion']);
 
   return (
     <div className="max-w-4xl mx-auto space-y-5">
@@ -82,14 +84,18 @@ export default function ParametrosPage() {
                       onChange={e => setValores(v => ({ ...v, [p.clave]: e.target.value }))}
                       className="h-9 w-14 cursor-pointer rounded border border-slate-300 p-0.5" />
                     <input type="text" value={valores[p.clave] ?? ''}
+                      data-no-uppercase="true"
                       onChange={e => setValores(v => ({ ...v, [p.clave]: e.target.value }))}
                       className={INPUT + ' flex-1'} placeholder="#000000" />
                   </div>
                 ) : (
                   <input type={p.clave === 'correoSoporte' ? 'email' : 'text'}
-                    data-no-uppercase={p.clave === 'correoSoporte' ? 'true' : undefined}
+                    data-no-uppercase="true"
                     value={valores[p.clave] ?? ''}
-                    onChange={e => setValores(v => ({ ...v, [p.clave]: e.target.value }))}
+                    onChange={e => setValores(v => ({
+                      ...v,
+                      [p.clave]: CLAVES_NORMALIZAR.has(p.clave) ? normalizarMayusculas(e.target.value) : e.target.value
+                    }))}
                     className={INPUT} />
                 )}
               </div>

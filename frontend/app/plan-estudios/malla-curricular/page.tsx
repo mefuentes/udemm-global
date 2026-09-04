@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch as apiFetchBase, mensajeErrorHttp } from '@/lib/api';
 import { getPermisosPlanEstudio } from '@/lib/permisos-plan-estudios';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -813,13 +814,13 @@ export default function MallaCurricularPage() {
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Código <span className="text-red-500">*</span></label>
                   <input value={formMateria.codigo} onChange={e => setField('codigo', e.target.value)}
-                    placeholder="Ej: MAT-101"
+                    placeholder="Ej: MAT-101" data-no-uppercase="true"
                     className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] font-mono" />
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Nombre <span className="text-red-500">*</span></label>
-                  <input value={formMateria.nombre} onChange={e => setField('nombre', e.target.value)}
-                    placeholder="Nombre de la asignatura"
+                  <input value={formMateria.nombre} onChange={e => setField('nombre', normalizarMayusculas(e.target.value))}
+                    placeholder="Nombre de la asignatura" data-no-uppercase="true"
                     className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]" />
                 </div>
               </div>
@@ -907,8 +908,8 @@ export default function MallaCurricularPage() {
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Observaciones</label>
-                <textarea value={formMateria.observaciones} onChange={e => setField('observaciones', e.target.value)}
-                  rows={2} placeholder="Notas adicionales..."
+                <textarea value={formMateria.observaciones} onChange={e => setField('observaciones', normalizarMayusculas(e.target.value))}
+                  rows={2} placeholder="Notas adicionales..." data-no-uppercase="true"
                   className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] resize-none" />
               </div>
             </div>
@@ -939,8 +940,8 @@ export default function MallaCurricularPage() {
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Nombre del Plan <span className="text-red-500">*</span></label>
-                <input value={formPlan.nombre} onChange={e => setFieldPlan('nombre', e.target.value)}
-                  placeholder="Ej: Plan de Estudios 2024"
+                <input value={formPlan.nombre} onChange={e => setFieldPlan('nombre', normalizarMayusculas(e.target.value))}
+                  placeholder="Ej: Plan de Estudios 2024" data-no-uppercase="true"
                   className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]" />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -953,7 +954,7 @@ export default function MallaCurricularPage() {
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Versión</label>
                   <input value={formPlan.version} onChange={e => setFieldPlan('version', e.target.value)}
-                    placeholder="Ej: 1.0"
+                    placeholder="Ej: 1.0" data-no-uppercase="true"
                     className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]" />
                 </div>
               </div>

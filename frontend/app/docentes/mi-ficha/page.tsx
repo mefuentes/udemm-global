@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { jsPDF } from 'jspdf';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch } from '@/lib/api';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 interface FormData {
   nombre: string;
@@ -1105,7 +1106,7 @@ export default function MiFichaPage() {
     let nextValue = nfc;
 
     if (['apellido', 'nombre', 'residencia', 'provincia', 'localidad'].includes(field)) {
-      nextValue = nfc.replace(/[^\p{L}\s'\-]/gu, '');
+      nextValue = normalizarMayusculas(nfc.replace(/[^\p{L}\s'\-]/gu, ''));
     }
 
     if (field === 'numeroDocumento' || field === 'telefono' || field === 'numero') {
@@ -1128,14 +1129,14 @@ export default function MiFichaPage() {
     }
 
     if (field === 'calle' || field === 'pisoDepto') {
-      nextValue = nfc.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, '');
+      nextValue = normalizarMayusculas(nfc.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, ''));
     }
 
     if (field === 'unidadAcademica') {
-      nextValue = nfc.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, '');
+      nextValue = normalizarMayusculas(nfc.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, ''));
     }
     if (field === 'unidadAcademicaGestion' || field === 'carreraAsociadaGestion') {
-      nextValue = nfc.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, '');
+      nextValue = normalizarMayusculas(nfc.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, ''));
     }
 
     handleFieldChange(field, nextValue);
@@ -1210,7 +1211,8 @@ export default function MiFichaPage() {
   }
 
   function actualizarCampoTitulo(field: keyof TituloGradoForm, value: string) {
-    setTituloForm((prev) => ({ ...prev, [field]: value }));
+    const nextValue = field !== 'anio' ? normalizarMayusculas(value) : value;
+    setTituloForm((prev) => ({ ...prev, [field]: nextValue }));
     setTituloErrors((prev) => {
       if (!prev[field]) return prev;
       const next = { ...prev };
@@ -1243,7 +1245,8 @@ export default function MiFichaPage() {
   }
 
   function actualizarCampoPosgrado(field: keyof TituloPosgradoForm, value: string) {
-    setPosgradoForm((prev) => ({ ...prev, [field]: value }));
+    const nextValue = field !== 'tipoId' ? normalizarMayusculas(value) : value;
+    setPosgradoForm((prev) => ({ ...prev, [field]: nextValue }));
     setPosgradoErrors((prev) => {
       if (!prev[field]) return prev;
       const next = { ...prev };
@@ -1274,7 +1277,8 @@ export default function MiFichaPage() {
   }
 
   function actualizarCampoOtroTitulo(field: keyof OtroTituloForm, value: string) {
-    setOtroTituloForm((prev) => ({ ...prev, [field]: value }));
+    const nextValue = field !== 'anio' ? normalizarMayusculas(value) : value;
+    setOtroTituloForm((prev) => ({ ...prev, [field]: nextValue }));
     setOtroTituloErrors((prev) => {
       if (!prev[field]) return prev;
       const next = { ...prev };
@@ -1336,7 +1340,8 @@ export default function MiFichaPage() {
   }
 
   function actualizarCampoCarreraFormDoc(field: keyof CarreraFormacionDocenteForm, value: string) {
-    setCarreraFormDoc((prev) => ({ ...prev, [field]: value }));
+    const nextValue = field !== 'anio' ? normalizarMayusculas(value) : value;
+    setCarreraFormDoc((prev) => ({ ...prev, [field]: nextValue }));
     setCarreraFormDocErrors((prev) => {
       if (!prev[field]) return prev;
       const next = { ...prev };
@@ -1962,7 +1967,8 @@ export default function MiFichaPage() {
   }
 
   function actualizarCampoActPosgrado<K extends keyof ActividadPosgradoForm>(campo: K, valor: ActividadPosgradoForm[K]) {
-    setActividadPosgradoForm((prev) => ({ ...prev, [campo]: valor }));
+    const valorNorm = normalizarMayusculas(valor as string) as ActividadPosgradoForm[K];
+    setActividadPosgradoForm((prev) => ({ ...prev, [campo]: valorNorm }));
     if (actividadPosgradoErrors[campo]) setActividadPosgradoErrors((prev) => ({ ...prev, [campo]: undefined }));
   }
 
@@ -2898,12 +2904,12 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                   <div className="mt-2 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs uppercase text-slate-500">Apellido *</p>
-                      {editMode ? <input value={formData.apellido} onChange={(e) => handleConstrainFieldChange('apellido', e.target.value)} autoComplete="off" spellCheck={false} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /> : <p className="mt-1 text-sm">{formData.apellido || '-'}</p>}
+                      {editMode ? <input data-no-uppercase="true" value={formData.apellido} onChange={(e) => handleConstrainFieldChange('apellido', e.target.value)} autoComplete="off" spellCheck={false} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /> : <p className="mt-1 text-sm">{formData.apellido || '-'}</p>}
                       {fieldErrors.apellido ? <p className="mt-1 text-xs text-red-600">{fieldErrors.apellido}</p> : null}
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs uppercase text-slate-500">Nombres *</p>
-                      {editMode ? <input value={formData.nombre} onChange={(e) => handleConstrainFieldChange('nombre', e.target.value)} autoComplete="off" spellCheck={false} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /> : <p className="mt-1 text-sm">{formData.nombre || '-'}</p>}
+                      {editMode ? <input data-no-uppercase="true" value={formData.nombre} onChange={(e) => handleConstrainFieldChange('nombre', e.target.value)} autoComplete="off" spellCheck={false} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /> : <p className="mt-1 text-sm">{formData.nombre || '-'}</p>}
                       {fieldErrors.nombre ? <p className="mt-1 text-xs text-red-600">{fieldErrors.nombre}</p> : null}
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -2986,11 +2992,11 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs uppercase text-slate-500">Departamento/Partido</p>
-                      {editMode ? <input value={formData.pisoDepto} onChange={(e) => handleConstrainFieldChange('pisoDepto', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /> : <p className="mt-1 text-sm">{formData.pisoDepto || '-'}</p>}
+                      {editMode ? <input data-no-uppercase="true" value={formData.pisoDepto} onChange={(e) => handleConstrainFieldChange('pisoDepto', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /> : <p className="mt-1 text-sm">{formData.pisoDepto || '-'}</p>}
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs uppercase text-slate-500">Localidad</p>
-                      {editMode ? <input value={formData.localidad} onChange={(e) => handleConstrainFieldChange('localidad', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /> : <p className="mt-1 text-sm">{formData.localidad || '-'}</p>}
+                      {editMode ? <input data-no-uppercase="true" value={formData.localidad} onChange={(e) => handleConstrainFieldChange('localidad', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /> : <p className="mt-1 text-sm">{formData.localidad || '-'}</p>}
                       {fieldErrors.localidad ? <p className="mt-1 text-xs text-red-600">{fieldErrors.localidad}</p> : null}
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -3014,10 +3020,10 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                   {editMode && mostrarFormGrado ? (
                     <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                       <div className="grid gap-3 sm:grid-cols-2">
-                        <div><label className="text-xs uppercase text-slate-500">Titulo *</label><input value={tituloForm.denominacion} onChange={(e) => actualizarCampoTitulo('denominacion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{tituloErrors.denominacion ? <p className="mt-1 text-xs text-red-600">{tituloErrors.denominacion}</p> : null}</div>
+                        <div><label className="text-xs uppercase text-slate-500">Titulo *</label><input data-no-uppercase="true" value={tituloForm.denominacion} onChange={(e) => actualizarCampoTitulo('denominacion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{tituloErrors.denominacion ? <p className="mt-1 text-xs text-red-600">{tituloErrors.denominacion}</p> : null}</div>
                         <div><label className="text-xs uppercase text-slate-500">Año *</label><input value={tituloForm.anio} onChange={(e) => actualizarCampoTitulo('anio', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{tituloErrors.anio ? <p className="mt-1 text-xs text-red-600">{tituloErrors.anio}</p> : null}</div>
-                        <div><label className="text-xs uppercase text-slate-500">Pais *</label><input value={tituloForm.pais} onChange={(e) => actualizarCampoTitulo('pais', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{tituloErrors.pais ? <p className="mt-1 text-xs text-red-600">{tituloErrors.pais}</p> : null}</div>
-                        <div><label className="text-xs uppercase text-slate-500">Institucion *</label><input value={tituloForm.institucion} onChange={(e) => actualizarCampoTitulo('institucion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{tituloErrors.institucion ? <p className="mt-1 text-xs text-red-600">{tituloErrors.institucion}</p> : null}</div>
+                        <div><label className="text-xs uppercase text-slate-500">Pais *</label><input data-no-uppercase="true" value={tituloForm.pais} onChange={(e) => actualizarCampoTitulo('pais', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{tituloErrors.pais ? <p className="mt-1 text-xs text-red-600">{tituloErrors.pais}</p> : null}</div>
+                        <div><label className="text-xs uppercase text-slate-500">Institucion *</label><input data-no-uppercase="true" value={tituloForm.institucion} onChange={(e) => actualizarCampoTitulo('institucion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{tituloErrors.institucion ? <p className="mt-1 text-xs text-red-600">{tituloErrors.institucion}</p> : null}</div>
                       </div>
                       <div className="mt-4 flex justify-end gap-2">
                         <button type="button" onClick={guardarTituloGrado} className="rounded-md bg-[#0f4c81] px-3 py-1.5 text-xs font-medium text-white">Guardar</button>
@@ -3041,10 +3047,10 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                   {editMode && mostrarFormPosgrado ? (
                     <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                       <div className="grid gap-3 sm:grid-cols-2">
-                        <div><label className="text-xs uppercase text-slate-500">Titulo *</label><input value={posgradoForm.denominacion} onChange={(e) => actualizarCampoPosgrado('denominacion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{posgradoErrors.denominacion ? <p className="mt-1 text-xs text-red-600">{posgradoErrors.denominacion}</p> : null}</div>
+                        <div><label className="text-xs uppercase text-slate-500">Titulo *</label><input data-no-uppercase="true" value={posgradoForm.denominacion} onChange={(e) => actualizarCampoPosgrado('denominacion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{posgradoErrors.denominacion ? <p className="mt-1 text-xs text-red-600">{posgradoErrors.denominacion}</p> : null}</div>
                         <div><label className="text-xs uppercase text-slate-500">Tipo *</label><select value={posgradoForm.tipoId} onChange={(e) => { const sel = tiposPosgrado.find(t => t.id === e.target.value); setPosgradoForm(prev => ({ ...prev, tipoId: e.target.value, tipo: sel?.nombre ?? '' })); setPosgradoErrors(prev => { const n = { ...prev }; delete n.tipo; return n; }); }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">Seleccionar</option>{tiposPosgrado.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}</select>{posgradoErrors.tipo ? <p className="mt-1 text-xs text-red-600">{posgradoErrors.tipo}</p> : null}</div>
                         <div><label className="text-xs uppercase text-slate-500">Año *</label><input value={posgradoForm.anio} onChange={(e) => actualizarCampoPosgrado('anio', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{posgradoErrors.anio ? <p className="mt-1 text-xs text-red-600">{posgradoErrors.anio}</p> : null}</div>
-                        <div><label className="text-xs uppercase text-slate-500">Institucion *</label><input value={posgradoForm.institucion} onChange={(e) => actualizarCampoPosgrado('institucion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{posgradoErrors.institucion ? <p className="mt-1 text-xs text-red-600">{posgradoErrors.institucion}</p> : null}</div>
+                        <div><label className="text-xs uppercase text-slate-500">Institucion *</label><input data-no-uppercase="true" value={posgradoForm.institucion} onChange={(e) => actualizarCampoPosgrado('institucion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{posgradoErrors.institucion ? <p className="mt-1 text-xs text-red-600">{posgradoErrors.institucion}</p> : null}</div>
                       </div>
                       <div className="mt-4 flex justify-end gap-2">
                         <button type="button" onClick={guardarTituloPosgrado} className="rounded-md bg-[#0f4c81] px-3 py-1.5 text-xs font-medium text-white">Guardar</button>
@@ -3068,9 +3074,9 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                   {editMode && mostrarFormOtroTitulo ? (
                     <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                       <div className="grid gap-3 sm:grid-cols-2">
-                        <div><label className="text-xs uppercase text-slate-500">Titulo *</label><input value={otroTituloForm.denominacion} onChange={(e) => actualizarCampoOtroTitulo('denominacion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{otroTituloErrors.denominacion ? <p className="mt-1 text-xs text-red-600">{otroTituloErrors.denominacion}</p> : null}</div>
+                        <div><label className="text-xs uppercase text-slate-500">Titulo *</label><input data-no-uppercase="true" value={otroTituloForm.denominacion} onChange={(e) => actualizarCampoOtroTitulo('denominacion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{otroTituloErrors.denominacion ? <p className="mt-1 text-xs text-red-600">{otroTituloErrors.denominacion}</p> : null}</div>
                         <div><label className="text-xs uppercase text-slate-500">Año *</label><input value={otroTituloForm.anio} onChange={(e) => actualizarCampoOtroTitulo('anio', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{otroTituloErrors.anio ? <p className="mt-1 text-xs text-red-600">{otroTituloErrors.anio}</p> : null}</div>
-                        <div className="sm:col-span-2"><label className="text-xs uppercase text-slate-500">Institucion *</label><input value={otroTituloForm.institucion} onChange={(e) => actualizarCampoOtroTitulo('institucion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{otroTituloErrors.institucion ? <p className="mt-1 text-xs text-red-600">{otroTituloErrors.institucion}</p> : null}</div>
+                        <div className="sm:col-span-2"><label className="text-xs uppercase text-slate-500">Institucion *</label><input data-no-uppercase="true" value={otroTituloForm.institucion} onChange={(e) => actualizarCampoOtroTitulo('institucion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{otroTituloErrors.institucion ? <p className="mt-1 text-xs text-red-600">{otroTituloErrors.institucion}</p> : null}</div>
                       </div>
                       <div className="mt-4 flex justify-end gap-2">
                         <button type="button" onClick={guardarOtroTitulo} className="rounded-md bg-[#0f4c81] px-3 py-1.5 text-xs font-medium text-white">Guardar</button>
@@ -3094,9 +3100,9 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                   {editMode && mostrarFormCarreraFormDoc ? (
                     <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                       <div className="grid gap-3 sm:grid-cols-2">
-                        <div><label className="text-xs uppercase text-slate-500">Titulo *</label><input value={carreraFormDoc.denominacion} onChange={(e) => actualizarCampoCarreraFormDoc('denominacion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{carreraFormDocErrors.denominacion ? <p className="mt-1 text-xs text-red-600">{carreraFormDocErrors.denominacion}</p> : null}</div>
-                        <div><label className="text-xs uppercase text-slate-500">Institución *</label><input value={carreraFormDoc.institucion} onChange={(e) => actualizarCampoCarreraFormDoc('institucion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{carreraFormDocErrors.institucion ? <p className="mt-1 text-xs text-red-600">{carreraFormDocErrors.institucion}</p> : null}</div>
-                        <div><label className="text-xs uppercase text-slate-500">Unidad Académica</label><input value={carreraFormDoc.unidadAcademica} onChange={(e) => actualizarCampoCarreraFormDoc('unidadAcademica', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /></div>
+                        <div><label className="text-xs uppercase text-slate-500">Titulo *</label><input data-no-uppercase="true" value={carreraFormDoc.denominacion} onChange={(e) => actualizarCampoCarreraFormDoc('denominacion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{carreraFormDocErrors.denominacion ? <p className="mt-1 text-xs text-red-600">{carreraFormDocErrors.denominacion}</p> : null}</div>
+                        <div><label className="text-xs uppercase text-slate-500">Institución *</label><input data-no-uppercase="true" value={carreraFormDoc.institucion} onChange={(e) => actualizarCampoCarreraFormDoc('institucion', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{carreraFormDocErrors.institucion ? <p className="mt-1 text-xs text-red-600">{carreraFormDocErrors.institucion}</p> : null}</div>
+                        <div><label className="text-xs uppercase text-slate-500">Unidad Académica</label><input data-no-uppercase="true" value={carreraFormDoc.unidadAcademica} onChange={(e) => actualizarCampoCarreraFormDoc('unidadAcademica', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /></div>
                         <div><label className="text-xs uppercase text-slate-500">Año *</label><input value={carreraFormDoc.anio} onChange={(e) => actualizarCampoCarreraFormDoc('anio', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />{carreraFormDocErrors.anio ? <p className="mt-1 text-xs text-red-600">{carreraFormDocErrors.anio}</p> : null}</div>
                       </div>
                       <div className="mt-4 flex justify-end gap-2">
@@ -3174,7 +3180,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
                       <p className="text-xs uppercase text-slate-500">Observaciones</p>
                       {editMode ? (
-                        <textarea value={formData.observacionesArea} onChange={(e) => handleFieldChange('observacionesArea', e.target.value)} rows={6} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm resize-y" />
+                        <textarea data-no-uppercase="true" value={formData.observacionesArea} onChange={(e) => handleFieldChange('observacionesArea', normalizarMayusculas(e.target.value))} rows={6} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm resize-y" />
                       ) : <p className="mt-1 whitespace-pre-wrap break-words text-sm">{formData.observacionesArea || '-'}</p>}
                     </div>
                   </div>
@@ -3330,12 +3336,12 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Institución *</p>
-                        <input data-no-uppercase="true" value={trayectoriaCargoForm.institucion} onChange={(e) => actualizarCampoTrayectoria('institucion', e.target.value)} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${trayectoriaCargoErrors.institucion ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <input data-no-uppercase="true" value={trayectoriaCargoForm.institucion} onChange={(e) => actualizarCampoTrayectoria('institucion', normalizarMayusculas(e.target.value))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${trayectoriaCargoErrors.institucion ? 'border-red-400' : 'border-slate-200'} bg-white`} />
                         {trayectoriaCargoErrors.institucion && <p className="mt-1 text-xs text-red-500">{trayectoriaCargoErrors.institucion}</p>}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Unidad académica</p>
-                        <input data-no-uppercase="true" value={trayectoriaCargoForm.unidadAcademica} onChange={(e) => actualizarCampoTrayectoria('unidadAcademica', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
+                        <input data-no-uppercase="true" value={trayectoriaCargoForm.unidadAcademica} onChange={(e) => actualizarCampoTrayectoria('unidadAcademica', normalizarMayusculas(e.target.value))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Cargo *</p>
@@ -3472,9 +3478,8 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                   <div className="mt-3">
                     {editMode ? (
                       <textarea
-                        data-no-uppercase="true"
                         value={formData.experienciaDistancia}
-                        onChange={(e) => handleFieldChange('experienciaDistancia', e.target.value)}
+                        onChange={(e) => handleFieldChange('experienciaDistancia', normalizarMayusculas(e.target.value))}
                         rows={5}
                         placeholder="Describa su experiencia si es docente de carreras semipresenciales o a distancia"
                         className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm resize-none placeholder:text-slate-400"
@@ -3494,12 +3499,12 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Cargo *</p>
-                        <input value={cargoForm.cargo} onChange={(e) => setCargoForm((prev) => ({ ...prev, cargo: e.target.value }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${cargoErrors.cargo ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <input data-no-uppercase="true" value={cargoForm.cargo} onChange={(e) => setCargoForm((prev) => ({ ...prev, cargo: normalizarMayusculas(e.target.value) }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${cargoErrors.cargo ? 'border-red-400' : 'border-slate-200'} bg-white`} />
                         {cargoErrors.cargo && <p className="mt-1 text-xs text-red-500">{cargoErrors.cargo}</p>}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Institución *</p>
-                        <input value={cargoForm.institucion} onChange={(e) => setCargoForm((prev) => ({ ...prev, institucion: e.target.value }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${cargoErrors.institucion ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <input data-no-uppercase="true" value={cargoForm.institucion} onChange={(e) => setCargoForm((prev) => ({ ...prev, institucion: normalizarMayusculas(e.target.value) }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${cargoErrors.institucion ? 'border-red-400' : 'border-slate-200'} bg-white`} />
                         {cargoErrors.institucion && <p className="mt-1 text-xs text-red-500">{cargoErrors.institucion}</p>}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
@@ -3584,7 +3589,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5 sm:col-span-2">
                         <p className="text-xs uppercase text-slate-500">Concepto *</p>
-                        <input value={otraDedicacionForm.concepto} onChange={(e) => setOtraDedicacionForm((prev) => ({ ...prev, concepto: e.target.value }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${otraDedicacionErrors.concepto ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <input data-no-uppercase="true" value={otraDedicacionForm.concepto} onChange={(e) => setOtraDedicacionForm((prev) => ({ ...prev, concepto: normalizarMayusculas(e.target.value) }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${otraDedicacionErrors.concepto ? 'border-red-400' : 'border-slate-200'} bg-white`} />
                         {otraDedicacionErrors.concepto && <p className="mt-1 text-xs text-red-500">{otraDedicacionErrors.concepto}</p>}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
@@ -3655,12 +3660,12 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Institución *</p>
-                        <input value={desempenoActualForm.institucion} onChange={(e) => setDesempenoActualForm((prev) => ({ ...prev, institucion: e.target.value }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${desempenoActualErrors.institucion ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <input data-no-uppercase="true" value={desempenoActualForm.institucion} onChange={(e) => setDesempenoActualForm((prev) => ({ ...prev, institucion: normalizarMayusculas(e.target.value) }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${desempenoActualErrors.institucion ? 'border-red-400' : 'border-slate-200'} bg-white`} />
                         {desempenoActualErrors.institucion && <p className="mt-1 text-xs text-red-500">{desempenoActualErrors.institucion}</p>}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Cargo *</p>
-                        <input value={desempenoActualForm.cargo} onChange={(e) => setDesempenoActualForm((prev) => ({ ...prev, cargo: e.target.value }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${desempenoActualErrors.cargo ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <input data-no-uppercase="true" value={desempenoActualForm.cargo} onChange={(e) => setDesempenoActualForm((prev) => ({ ...prev, cargo: normalizarMayusculas(e.target.value) }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${desempenoActualErrors.cargo ? 'border-red-400' : 'border-slate-200'} bg-white`} />
                         {desempenoActualErrors.cargo && <p className="mt-1 text-xs text-red-500">{desempenoActualErrors.cargo}</p>}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
@@ -3745,12 +3750,12 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Institución *</p>
-                        <input value={desempenoPasadoForm.institucion} onChange={(e) => setDesempenoPasadoForm((prev) => ({ ...prev, institucion: e.target.value }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${desempenoPasadoErrors.institucion ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <input data-no-uppercase="true" value={desempenoPasadoForm.institucion} onChange={(e) => setDesempenoPasadoForm((prev) => ({ ...prev, institucion: normalizarMayusculas(e.target.value) }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${desempenoPasadoErrors.institucion ? 'border-red-400' : 'border-slate-200'} bg-white`} />
                         {desempenoPasadoErrors.institucion && <p className="mt-1 text-xs text-red-500">{desempenoPasadoErrors.institucion}</p>}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Cargo *</p>
-                        <input value={desempenoPasadoForm.cargo} onChange={(e) => setDesempenoPasadoForm((prev) => ({ ...prev, cargo: e.target.value }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${desempenoPasadoErrors.cargo ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <input data-no-uppercase="true" value={desempenoPasadoForm.cargo} onChange={(e) => setDesempenoPasadoForm((prev) => ({ ...prev, cargo: normalizarMayusculas(e.target.value) }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${desempenoPasadoErrors.cargo ? 'border-red-400' : 'border-slate-200'} bg-white`} />
                         {desempenoPasadoErrors.cargo && <p className="mt-1 text-xs text-red-500">{desempenoPasadoErrors.cargo}</p>}
                       </div>
                     </div>
@@ -3840,7 +3845,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5 sm:col-span-2">
                         <p className="text-xs uppercase text-slate-500">Detalle</p>
-                        <input value={sistemaPromocionInvForm.detalle} onChange={(e) => setSistemaPromocionInvForm((prev) => ({ ...prev, detalle: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
+                        <input data-no-uppercase="true" value={sistemaPromocionInvForm.detalle} onChange={(e) => setSistemaPromocionInvForm((prev) => ({ ...prev, detalle: normalizarMayusculas(e.target.value) }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Período desde</p>
@@ -3923,7 +3928,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5 sm:col-span-2">
                         <p className="text-xs uppercase text-slate-500">Título del proyecto *</p>
-                        <input value={proyectoForm.titulo} onChange={(e) => setProyectoForm((prev) => ({ ...prev, titulo: e.target.value }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${proyectoErrors.titulo ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <input data-no-uppercase="true" value={proyectoForm.titulo} onChange={(e) => setProyectoForm((prev) => ({ ...prev, titulo: normalizarMayusculas(e.target.value) }))} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${proyectoErrors.titulo ? 'border-red-400' : 'border-slate-200'} bg-white`} />
                         {proyectoErrors.titulo && <p className="mt-1 text-xs text-red-500">{proyectoErrors.titulo}</p>}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
@@ -4001,7 +4006,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5 sm:col-span-2">
                         <p className="text-xs uppercase text-slate-500">Actividad *</p>
-                        <input value={participacionVinculacionForm.actividad} onChange={(e) => setParticipacionVinculacionForm((prev) => ({ ...prev, actividad: e.target.value }))} placeholder="Titulo de la actividad" className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${participacionVinculacionErrors.actividad ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <input data-no-uppercase="true" value={participacionVinculacionForm.actividad} onChange={(e) => setParticipacionVinculacionForm((prev) => ({ ...prev, actividad: normalizarMayusculas(e.target.value) }))} placeholder="Titulo de la actividad" className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${participacionVinculacionErrors.actividad ? 'border-red-400' : 'border-slate-200'} bg-white`} />
                         {participacionVinculacionErrors.actividad && <p className="mt-1 text-xs text-red-500">{participacionVinculacionErrors.actividad}</p>}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
@@ -4082,7 +4087,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5 sm:col-span-2">
                         <p className="text-xs uppercase text-slate-500">Referencia bibliográfica *</p>
-                        <input value={produccionCientificaForm.referenciaBibliografica} onChange={(e) => setProduccionCientificaForm((prev) => ({ ...prev, referenciaBibliografica: e.target.value }))} placeholder="Autores, titulo, medio ..." className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${produccionCientificaErrors.referenciaBibliografica ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <input data-no-uppercase="true" value={produccionCientificaForm.referenciaBibliografica} onChange={(e) => setProduccionCientificaForm((prev) => ({ ...prev, referenciaBibliografica: normalizarMayusculas(e.target.value) }))} placeholder="Autores, titulo, medio ..." className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${produccionCientificaErrors.referenciaBibliografica ? 'border-red-400' : 'border-slate-200'} bg-white`} />
                         {produccionCientificaErrors.referenciaBibliografica && <p className="mt-1 text-xs text-red-500">{produccionCientificaErrors.referenciaBibliografica}</p>}
                       </div>
                     </div>
@@ -4145,12 +4150,12 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5 sm:col-span-2">
                         <p className="text-xs uppercase text-slate-500">Título *</p>
-                        <input value={reunionCientificaForm.titulo} onChange={(e) => setReunionCientificaForm((prev) => ({ ...prev, titulo: e.target.value }))} placeholder="Nombre del Evento" className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${reunionCientificaErrors.titulo ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <input data-no-uppercase="true" value={reunionCientificaForm.titulo} onChange={(e) => setReunionCientificaForm((prev) => ({ ...prev, titulo: normalizarMayusculas(e.target.value) }))} placeholder="Nombre del Evento" className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${reunionCientificaErrors.titulo ? 'border-red-400' : 'border-slate-200'} bg-white`} />
                         {reunionCientificaErrors.titulo && <p className="mt-1 text-xs text-red-500">{reunionCientificaErrors.titulo}</p>}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Lugar</p>
-                        <input value={reunionCientificaForm.lugar} onChange={(e) => setReunionCientificaForm((prev) => ({ ...prev, lugar: e.target.value }))} placeholder="Ciudad" className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
+                        <input data-no-uppercase="true" value={reunionCientificaForm.lugar} onChange={(e) => setReunionCientificaForm((prev) => ({ ...prev, lugar: normalizarMayusculas(e.target.value) }))} placeholder="Ciudad" className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Período</p>
@@ -4241,12 +4246,12 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5 sm:col-span-2">
                         <p className="text-xs uppercase text-slate-500">Organismo convocante *</p>
-                        <input value={comiteJuradoForm.organismoConvocante} onChange={(e) => setComiteJuradoForm((prev) => ({ ...prev, organismoConvocante: e.target.value }))} placeholder="Organismo" className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${comiteJuradoErrors.organismoConvocante ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        <input data-no-uppercase="true" value={comiteJuradoForm.organismoConvocante} onChange={(e) => setComiteJuradoForm((prev) => ({ ...prev, organismoConvocante: normalizarMayusculas(e.target.value) }))} placeholder="Organismo" className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${comiteJuradoErrors.organismoConvocante ? 'border-red-400' : 'border-slate-200'} bg-white`} />
                         {comiteJuradoErrors.organismoConvocante && <p className="mt-1 text-xs text-red-500">{comiteJuradoErrors.organismoConvocante}</p>}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Lugar</p>
-                        <input value={comiteJuradoForm.lugar} onChange={(e) => setComiteJuradoForm((prev) => ({ ...prev, lugar: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
+                        <input data-no-uppercase="true" value={comiteJuradoForm.lugar} onChange={(e) => setComiteJuradoForm((prev) => ({ ...prev, lugar: normalizarMayusculas(e.target.value) }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Fecha</p>
@@ -4322,8 +4327,9 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                   <p className="mb-2 text-sm font-semibold text-slate-700">10.1 Carrera docente o de posgrado en curso</p>
                   {editMode ? (
                     <textarea
+                      data-no-uppercase="true"
                       value={formData?.carreraDocentePosgrado ?? ''}
-                      onChange={(e) => { const val = e.target.value; setFormData((prev) => prev ? { ...prev, carreraDocentePosgrado: val } : prev); }}
+                      onChange={(e) => { const val = normalizarMayusculas(e.target.value); setFormData((prev) => prev ? { ...prev, carreraDocentePosgrado: val } : prev); }}
                       placeholder="Especialización, Maestría o Doctorado que está cursando"
                       rows={4}
                       className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm resize-none focus:border-sky-400 focus:outline-none"
@@ -4337,8 +4343,9 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                   <p className="mb-2 text-sm font-semibold text-slate-700">10.2 Actividades de transferencia o extensión a la comunidad</p>
                   {editMode ? (
                     <textarea
+                      data-no-uppercase="true"
                       value={formData?.actividadesTransferenciaExtension ?? ''}
-                      onChange={(e) => { const val = e.target.value; setFormData((prev) => prev ? { ...prev, actividadesTransferenciaExtension: val } : prev); }}
+                      onChange={(e) => { const val = normalizarMayusculas(e.target.value); setFormData((prev) => prev ? { ...prev, actividadesTransferenciaExtension: val } : prev); }}
                       placeholder="Descripción de la actividad"
                       rows={4}
                       className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm resize-none focus:border-sky-400 focus:outline-none"
@@ -4352,8 +4359,9 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                   <p className="mb-2 text-sm font-semibold text-slate-700">10.3 Premios y distinciones</p>
                   {editMode ? (
                     <textarea
+                      data-no-uppercase="true"
                       value={formData?.premiosDistinciones ?? ''}
-                      onChange={(e) => { const val = e.target.value; setFormData((prev) => prev ? { ...prev, premiosDistinciones: val } : prev); }}
+                      onChange={(e) => { const val = normalizarMayusculas(e.target.value); setFormData((prev) => prev ? { ...prev, premiosDistinciones: val } : prev); }}
                       placeholder="Trabajos en Congresos, trayectoria profesional o de investigación"
                       rows={4}
                       className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm resize-none focus:border-sky-400 focus:outline-none"
@@ -4367,8 +4375,9 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                   <p className="mb-2 text-sm font-semibold text-slate-700">10.4 Estancias o cursos en el exterior</p>
                   {editMode ? (
                     <textarea
+                      data-no-uppercase="true"
                       value={formData?.estanciasCursosExterior ?? ''}
-                      onChange={(e) => { const val = e.target.value; setFormData((prev) => prev ? { ...prev, estanciasCursosExterior: val } : prev); }}
+                      onChange={(e) => { const val = normalizarMayusculas(e.target.value); setFormData((prev) => prev ? { ...prev, estanciasCursosExterior: val } : prev); }}
                       placeholder="Institución, país, periodo, motivo"
                       rows={4}
                       className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm resize-none focus:border-sky-400 focus:outline-none"
@@ -4382,8 +4391,9 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                   <p className="mb-2 text-sm font-semibold text-slate-700">10.5 Membresías en instituciones científicas o profesionales</p>
                   {editMode ? (
                     <textarea
+                      data-no-uppercase="true"
                       value={formData?.membresiasInstituciones ?? ''}
-                      onChange={(e) => { const val = e.target.value; setFormData((prev) => prev ? { ...prev, membresiasInstituciones: val } : prev); }}
+                      onChange={(e) => { const val = normalizarMayusculas(e.target.value); setFormData((prev) => prev ? { ...prev, membresiasInstituciones: val } : prev); }}
                       placeholder="Institución, tipo de membresía, periodo"
                       rows={4}
                       className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm resize-none focus:border-sky-400 focus:outline-none"

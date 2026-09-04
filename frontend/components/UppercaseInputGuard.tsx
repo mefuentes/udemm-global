@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 
-const INPUT_TYPES_PERMITIDOS = new Set(['text', 'search', 'tel', 'url', 'email']);
+const INPUT_TYPES_PERMITIDOS = new Set(['text', 'search', 'tel']);
 
 function transformarAMayusculas(element: HTMLInputElement | HTMLTextAreaElement) {
   if (element.disabled || element.readOnly) return;

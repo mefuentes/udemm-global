@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch as apiFetchBase, mensajeErrorHttp } from '@/lib/api';
 import { getPermisosGestionAcademica } from '@/lib/permisos-gestion-academica';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -482,7 +483,7 @@ export default function CarrerasPage() {
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Código</label>
                   <input value={form.codigo} onChange={e => setF('codigo', e.target.value)}
-                    placeholder="Ej: ING-IND"
+                    placeholder="Ej: ING-IND" data-no-uppercase="true"
                     className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] font-mono" />
                 </div>
                 <div>
@@ -508,8 +509,8 @@ export default function CarrerasPage() {
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Título Otorgado</label>
-                <input value={form.tituloOtorgado} onChange={e => setF('tituloOtorgado', e.target.value)}
-                  placeholder="Ej: Ingeniero/a Industrial"
+                <input value={form.tituloOtorgado} onChange={e => setF('tituloOtorgado', normalizarMayusculas(e.target.value))}
+                  placeholder="Ej: Ingeniero/a Industrial" data-no-uppercase="true"
                   className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]" />
               </div>
 

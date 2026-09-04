@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch as apiFetchBase, mensajeErrorHttp } from '@/lib/api';
 import { getPermisosPlanEstudio } from '@/lib/permisos-plan-estudios';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -846,7 +847,7 @@ function ModalMateria({ editando, form, setF, guardando, onGuardar, onCerrar }: 
             <div>
               <label className={lbl}>Código <span className="text-red-500">*</span></label>
               <input value={form.codigo} onChange={e => setF('codigo', e.target.value)}
-                placeholder="Ej: MAT-101" className={`${inp} font-mono`} />
+                placeholder="Ej: MAT-101" data-no-uppercase="true" className={`${inp} font-mono`} />
             </div>
             <div>
               <label className={lbl}>Estado</label>
@@ -857,8 +858,8 @@ function ModalMateria({ editando, form, setF, guardando, onGuardar, onCerrar }: 
           </div>
           <div>
             <label className={lbl}>Nombre <span className="text-red-500">*</span></label>
-            <input value={form.nombre} onChange={e => setF('nombre', e.target.value)}
-              placeholder="Ej: Matemática I" className={inp} />
+            <input value={form.nombre} onChange={e => setF('nombre', normalizarMayusculas(e.target.value))}
+              placeholder="Ej: Matemática I" data-no-uppercase="true" className={inp} />
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div>
@@ -913,8 +914,8 @@ function ModalMateria({ editando, form, setF, guardando, onGuardar, onCerrar }: 
           </div>
           <div>
             <label className={lbl}>Descripción</label>
-            <textarea value={form.descripcion} onChange={e => setF('descripcion', e.target.value)}
-              placeholder="Descripción breve de la asignatura..." rows={2} className={`${inp} resize-none`} />
+            <textarea value={form.descripcion} onChange={e => setF('descripcion', normalizarMayusculas(e.target.value))}
+              placeholder="Descripción breve de la asignatura..." rows={2} data-no-uppercase="true" className={`${inp} resize-none`} />
           </div>
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-slate-100">

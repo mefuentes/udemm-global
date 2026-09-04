@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch as apiFetchBase, mensajeErrorHttp } from '@/lib/api';
 import { getPermisosGestionAcademica } from '@/lib/permisos-gestion-academica';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -421,7 +422,7 @@ export default function FacultadesPage() {
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Código</label>
                   <input value={form.codigo} onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))}
-                    placeholder="Ej: FAC-ING"
+                    placeholder="Ej: FAC-ING" data-no-uppercase="true"
                     className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] font-mono" />
                 </div>
                 <div>
@@ -436,15 +437,15 @@ export default function FacultadesPage() {
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Nombre <span className="text-red-500">*</span></label>
-                <input value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
-                  placeholder="Ej: Facultad de Ingeniería"
+                <input value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: normalizarMayusculas(e.target.value) }))}
+                  placeholder="Ej: Facultad de Ingeniería" data-no-uppercase="true"
                   className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]" />
               </div>
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Descripción</label>
-                <textarea value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))}
-                  rows={3} placeholder="Descripción de la facultad..."
+                <textarea value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: normalizarMayusculas(e.target.value) }))}
+                  rows={3} placeholder="Descripción de la facultad..." data-no-uppercase="true"
                   className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] resize-none" />
               </div>
             </div>

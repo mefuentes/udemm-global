@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 interface FormData {
   nombre: string;
@@ -65,7 +66,7 @@ export default function NuevoDocentePage() {
   }, []);
 
   function sanitizeTexto(valor: string) {
-    return valor.replace(/[^A-Za-zÀ-ÿ\s]/g, '').toUpperCase();
+    return normalizarMayusculas(valor.replace(/[^A-Za-zÀ-ÿ\s]/g, ''));
   }
 
   function sanitizeNumero(valor: string) {
@@ -83,12 +84,8 @@ export default function NuevoDocentePage() {
       actual = sanitizeNumero(actual);
     }
 
-    if (campo !== 'correoElectronico' && campo !== 'tipoDocumento') {
-      actual = actual.toUpperCase();
-    }
-
-    if (campo === 'tipoDocumento') {
-      actual = actual.toUpperCase();
+    if (campo !== 'correoElectronico') {
+      actual = normalizarMayusculas(actual);
     }
 
     setFormData((prev) => ({ ...prev, [campo]: actual }));

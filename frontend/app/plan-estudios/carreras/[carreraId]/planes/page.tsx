@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch as apiFetchBase, mensajeErrorHttp } from '@/lib/api';
 import { getPermisosPlanEstudio } from '@/lib/permisos-plan-estudios';
+import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -390,8 +391,9 @@ export default function PlanesCarreraPage() {
                   Nombre <span className="text-red-500">*</span>
                 </label>
                 <input
+                  data-no-uppercase="true"
                   value={form.nombre}
-                  onChange={e => setF('nombre', e.target.value)}
+                  onChange={e => setF('nombre', normalizarMayusculas(e.target.value))}
                   placeholder="Ej: Plan de Estudios 2024"
                   className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]"
                 />
@@ -414,6 +416,7 @@ export default function PlanesCarreraPage() {
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Versión</label>
                   <input
+                    data-no-uppercase="true"
                     value={form.version}
                     onChange={e => setF('version', e.target.value)}
                     placeholder="Ej: 1.0"
@@ -461,8 +464,9 @@ export default function PlanesCarreraPage() {
               <div>
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Resolución de Aprobación</label>
                 <input
+                  data-no-uppercase="true"
                   value={form.resolucionAprobacion}
-                  onChange={e => setF('resolucionAprobacion', e.target.value)}
+                  onChange={e => setF('resolucionAprobacion', normalizarMayusculas(e.target.value))}
                   placeholder="Ej: Res. 1234/2024"
                   className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]"
                 />
