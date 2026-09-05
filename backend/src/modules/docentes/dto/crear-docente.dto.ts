@@ -41,11 +41,6 @@ export class CrearDocenteDto {
 
   @IsString()
   @IsOptional()
-  @Matches(SOLO_NUMEROS_REGEX, { message: 'El teléfono solo puede contener números' })
-  telefono?: string;
-
-  @IsString()
-  @IsOptional()
   sexo?: string;
 
   @IsOptional()
@@ -56,16 +51,6 @@ export class CrearDocenteDto {
   @IsOptional()
   @Matches(/^\d{11}$/, { message: 'El CUIT debe tener exactamente 11 dígitos numéricos' })
   cuit?: string;
-
-  @IsString()
-  @IsOptional()
-  @Matches(SOLO_CARACTERES_REGEX, { message: 'La calle solo puede contener letras' })
-  calle?: string;
-
-  @IsString()
-  @IsOptional()
-  @Matches(SOLO_NUMEROS_REGEX, { message: 'El número de calle solo puede contener números' })
-  numero?: string;
 
   @IsString()
   @IsOptional()
@@ -89,10 +74,6 @@ export class CrearDocenteDto {
   @IsOptional()
   @Matches(SOLO_NUMEROS_REGEX, { message: 'El código postal solo puede contener números' })
   codigoPostal?: string;
-
-  @IsString()
-  @IsOptional()
-  domicilio?: string;
 
   @IsString()
   @IsOptional()

@@ -1,4 +1,4 @@
-﻿import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, IsUUID, Matches } from 'class-validator';
+﻿import { IsBoolean, IsIn, IsOptional, IsString, IsUUID, Matches } from 'class-validator';
 
 const SOLO_CARACTERES_REGEX = /^[\p{L}\s'\-]+$/u;
 const SOLO_NUMEROS_REGEX = /^\d+$/;
@@ -40,25 +40,6 @@ export class ActualizarDocenteDto {
   @Matches(/^\d{11}$/, { message: 'El CUIT debe tener exactamente 11 dígitos numéricos' })
   cuit?: string;
 
-  @IsEmail({}, { message: 'El correo electrónico debe tener un formato válido' })
-  @IsOptional()
-  correoElectronico?: string;
-
-  @IsString()
-  @IsOptional()
-  @Matches(SOLO_NUMEROS_REGEX, { message: 'El teléfono solo puede contener números' })
-  telefono?: string;
-
-  @IsString()
-  @IsOptional()
-  @Matches(SOLO_ALFANUMERICO_REGEX, { message: 'La calle contiene caracteres no permitidos' })
-  calle?: string;
-
-  @IsString()
-  @IsOptional()
-  @Matches(SOLO_NUMEROS_REGEX, { message: 'El número de calle solo puede contener números' })
-  numero?: string;
-
   @IsString()
   @IsOptional()
   pisoDepto?: string;
@@ -81,10 +62,6 @@ export class ActualizarDocenteDto {
   @IsOptional()
   @Matches(SOLO_NUMEROS_REGEX, { message: 'El código postal solo puede contener números' })
   codigoPostal?: string;
-
-  @IsString()
-  @IsOptional()
-  domicilio?: string;
 
   @IsString()
   @IsOptional()

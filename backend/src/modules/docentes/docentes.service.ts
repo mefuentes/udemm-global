@@ -35,8 +35,13 @@ export class DocentesService {
       return;
     }
 
-    if (tipoDocumento === 'DNI' && !/^\d+$/.test(numeroDocumento)) {
-      throw new BadRequestException('El número de documento para DNI debe contener solo números');
+    if (tipoDocumento === 'DNI') {
+      if (!/^\d+$/.test(numeroDocumento)) {
+        throw new BadRequestException('El número de documento para DNI debe contener solo números');
+      }
+      if (!/^\d{7,8}$/.test(numeroDocumento)) {
+        throw new BadRequestException('El número de documento DNI debe tener 7 u 8 dígitos');
+      }
     }
 
     if (tipoDocumento === 'PASAPORTE' && !/^[A-Za-z0-9-]+$/.test(numeroDocumento)) {
@@ -62,15 +67,11 @@ export class DocentesService {
         ]
       }
     });
-
     if (existe) {
       if (existe.correoElectronico === data.correoElectronico) {
         throw new BadRequestException('El correo electrónico ya está registrado para otro docente');
       }
-      if (existe.numeroDocumento === data.numeroDocumento) {
-        throw new BadRequestException('El número de documento ya está registrado para otro docente');
-      }
-      throw new BadRequestException('El docente ya existe con el correo o número de documento proporcionado');
+      throw new BadRequestException('El número de documento ya está registrado para otro docente');
     }
 
     try {
@@ -240,15 +241,11 @@ export class DocentesService {
       sexo: '',
       fechaNacimiento: null,
       cuit: '',
-      telefono: '',
-      calle: '',
-      numero: '',
       pisoDepto: '',
       residencia: '',
       provincia: '',
       localidad: '',
       codigoPostal: '',
-      domicilio: '',
       tituloGrado: '',
       tituloPosgrado: '',
       cargoDeclarado: '',
@@ -304,7 +301,7 @@ export class DocentesService {
 
   private normalizarTexto(dto: ActualizarDocenteDto): void {
     const camposTexto: (keyof ActualizarDocenteDto)[] = [
-      'nombre', 'apellido', 'residencia', 'provincia', 'localidad', 'calle', 'pisoDepto',
+      'nombre', 'apellido', 'residencia', 'provincia', 'localidad', 'pisoDepto',
       'unidadAcademica', 'categoriaDocente', 'cargoDeclarado', 'designacion', 'disciplinaCargo',
       'justificacionPertinencia', 'actividadesProfesionales', 'antecedentesAcademicos',
       'funcionGestion', 'unidadAcademicaGestion', 'carreraAsociadaGestion', 'normativaDesignacionGestion',
@@ -328,33 +325,17 @@ export class DocentesService {
     this.normalizarTexto(data);
     const docenteExistente = await this.obtenerDocentePorId(id);
 
-    if (data.correoElectronico || data.numeroDocumento) {
-      const condiciones: any[] = [];
-      if (data.correoElectronico) {
-        condiciones.push({ correoElectronico: data.correoElectronico });
-      }
-      if (data.numeroDocumento) {
-        condiciones.push({ numeroDocumento: data.numeroDocumento });
-      }
-
-      if (condiciones.length > 0) {
-        const conflicto = await this.prisma.docente.findFirst({
-          where: {
-            AND: [
-              { id: { not: id } },
-              { OR: condiciones }
-            ]
-          }
-        });
-
-        if (conflicto) {
-          if (data.correoElectronico && conflicto.correoElectronico === data.correoElectronico) {
-            throw new BadRequestException('El correo electrónico ya está registrado para otro docente');
-          }
-          if (data.numeroDocumento && conflicto.numeroDocumento === data.numeroDocumento) {
-            throw new BadRequestException('El número de documento ya está registrado para otro docente');
-          }
+    if (data.numeroDocumento) {
+      const conflicto = await this.prisma.docente.findFirst({
+        where: {
+          AND: [
+            { id: { not: id } },
+            { numeroDocumento: data.numeroDocumento }
+          ]
         }
+      });
+      if (conflicto) {
+        throw new BadRequestException('El número de documento ya está registrado para otro docente');
       }
     }
 
@@ -432,21 +413,17 @@ export class DocentesService {
       usuarioId,
       nombre: data.nombre ?? usuario.nombre,
       apellido: data.apellido ?? usuario.apellido,
-      correoElectronico: data.correoElectronico ?? usuario.correoElectronico,
+      correoElectronico: usuario.correoElectronico,
       tipoDocumento: data.tipoDocumento ?? 'DNI',
       numeroDocumento: data.numeroDocumento ?? '',
       sexo: data.sexo ?? null,
       fechaNacimiento: data.fechaNacimiento ? this.parseFechaNacimiento(data.fechaNacimiento) : null,
       cuit: data.cuit ?? null,
-      telefono: data.telefono ?? null,
-      calle: data.calle ?? null,
-      numero: data.numero ?? null,
       pisoDepto: data.pisoDepto ?? null,
       residencia: data.residencia ?? null,
       provincia: data.provincia ?? null,
       localidad: data.localidad ?? null,
       codigoPostal: data.codigoPostal ?? null,
-      domicilio: data.domicilio ?? null,
       tituloGrado: data.tituloGrado ?? null,
       tituloPosgrado: data.tituloPosgrado ?? null,
       cargoDeclarado: data.cargoDeclarado ?? null,

@@ -340,8 +340,6 @@ model Docente {
   tipoDocumento                                String
   numeroDocumento                              String               @unique
   correoElectronico                            String               @unique
-  telefono                                     String?
-  domicilio                                    String?
   tituloGrado                                  String?
   tituloPosgrado                               String?
   cargoDeclarado                               String?
@@ -352,12 +350,10 @@ model Docente {
   fechaCreacion                                DateTime             @default(now())
   fechaActualizacion                           DateTime             @updatedAt
   usuarioId                                    String?              @unique
-  calle                                        String?
   codigoPostal                                 String?
   cuit                                         String?
   fechaNacimiento                              DateTime?
   localidad                                    String?
-  numero                                       String?
   pisoDepto                                    String?
   provincia                                    String?
   residencia                                   String?

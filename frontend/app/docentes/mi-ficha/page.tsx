@@ -15,10 +15,6 @@ interface FormData {
   tipoDocumento: string;
   numeroDocumento: string;
   cuit: string;
-  correoElectronico: string;
-  telefono: string;
-  calle: string;
-  numero: string;
   pisoDepto: string;
   residencia: string;
   provincia: string;
@@ -873,8 +869,7 @@ export default function MiFichaPage() {
       setFormData({
         nombre: '', apellido: '', sexo: '', fechaNacimiento: '',
         tipoDocumento: 'DNI', numeroDocumento: '', cuit: '',
-        correoElectronico: '', telefono: '',
-        calle: '', numero: '', pisoDepto: '', residencia: 'Argentina',
+        pisoDepto: '', residencia: 'ARGENTINA',
         provincia: '', localidad: '', codigoPostal: '',
         tituloGrado: '', tituloPosgrado: '', otrosTitulos: '', carreraFormacionDocenteJson: '',
         cargoDeclarado: '', justificacionPertinencia: '',
@@ -963,14 +958,10 @@ export default function MiFichaPage() {
         sexo: data.sexo ?? '',
         fechaNacimiento: data.fechaNacimiento ? normalizarFechaSoloDia(String(data.fechaNacimiento)) : '',
         tipoDocumento: data.tipoDocumento ?? 'DNI',
-        numeroDocumento: data.numeroDocumento ?? '',
+        numeroDocumento: ((d) => d.length <= 8 ? d : '')((data.numeroDocumento ?? '').replace(/\D/g, '')),
         cuit: data.cuit ?? '',
-        correoElectronico: data.correoElectronico ?? usuario?.correoElectronico ?? '',
-        telefono: data.telefono ?? '',
-        calle: data.calle ?? '',
-        numero: data.numero ?? '',
         pisoDepto: data.pisoDepto ?? '',
-        residencia: 'Argentina',
+        residencia: data.residencia ? normalizarMayusculas(data.residencia) : 'ARGENTINA',
         provincia: data.provincia ?? '',
         localidad: data.localidad ?? '',
         codigoPostal: data.codigoPostal ?? '',
@@ -1109,7 +1100,10 @@ export default function MiFichaPage() {
       nextValue = normalizarMayusculas(nfc.replace(/[^\p{L}\s'\-]/gu, ''));
     }
 
-    if (field === 'numeroDocumento' || field === 'telefono' || field === 'numero') {
+    if (field === 'numeroDocumento') {
+      nextValue = nfc.replace(/\D/g, '').slice(0, 8);
+    }
+    if (field === 'codigoPostal') {
       nextValue = nfc.replace(/\D/g, '');
     }
 
@@ -1128,7 +1122,7 @@ export default function MiFichaPage() {
       nextValue = nfc.replace(/\D/g, '').slice(0, 11);
     }
 
-    if (field === 'calle' || field === 'pisoDepto') {
+    if (field === 'pisoDepto') {
       nextValue = normalizarMayusculas(nfc.replace(/[^\p{L}\p{N}\s'.,\-()\/:;°+&#º]/gu, ''));
     }
 
@@ -1160,8 +1154,8 @@ export default function MiFichaPage() {
     if (formData.nombre && !SOLO_CARACTERES_REGEX.test(formData.nombre.trim())) {
       errors.nombre = 'Solo acepta caracteres';
     }
-    if (formData.numeroDocumento && !SOLO_NUMEROS_REGEX.test(formData.numeroDocumento.trim())) {
-      errors.numeroDocumento = 'Solo acepta numeros';
+    if (formData.numeroDocumento && !/^\d{7,8}$/.test(formData.numeroDocumento.trim())) {
+      errors.numeroDocumento = 'Debe tener 7 u 8 dígitos numéricos';
     }
     if (formData.cuit && !/^\d{11}$/.test(formData.cuit.trim())) {
       errors.cuit = 'Debe tener 11 valores numericos';
@@ -1866,6 +1860,7 @@ export default function MiFichaPage() {
     const errors: Partial<Record<keyof ProduccionCientificaForm, string>> = {};
     if (!produccionCientificaForm.tipo.trim()) errors.tipo = 'Campo requerido';
     if (!produccionCientificaForm.referenciaBibliografica.trim()) errors.referenciaBibliografica = 'Campo requerido';
+    if (produccionCientificaForm.anio.trim() && !ANIO_REGEX.test(produccionCientificaForm.anio.trim())) errors.anio = 'Debe tener 4 valores numericos';
     setProduccionCientificaErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -1962,6 +1957,7 @@ export default function MiFichaPage() {
   function validarActividadPosgrado(): boolean {
     const errors: Partial<Record<keyof ActividadPosgradoForm, string>> = {};
     if (!actividadPosgradoForm.carrerasPosgrado.trim()) errors.carrerasPosgrado = 'Campo requerido';
+    if (actividadPosgradoForm.anioInicio.trim() && !ANIO_REGEX.test(actividadPosgradoForm.anioInicio.trim())) errors.anioInicio = 'Debe tener 4 valores numericos';
     setActividadPosgradoErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -2617,8 +2613,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
         nombre: formData.nombre, apellido: formData.apellido,
         sexo: formData.sexo, fechaNacimiento: formData.fechaNacimiento,
         tipoDocumento: formData.tipoDocumento, numeroDocumento: formData.numeroDocumento,
-        cuit: formData.cuit, correoElectronico: formData.correoElectronico,
-        telefono: formData.telefono, calle: formData.calle, numero: formData.numero,
+        cuit: formData.cuit,
         pisoDepto: formData.pisoDepto, residencia: formData.residencia,
         provincia: formData.provincia, localidad: formData.localidad,
         codigoPostal: formData.codigoPostal,
@@ -2951,11 +2946,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs uppercase text-slate-500">Pais de Residencia</p>
-                      {editMode ? (
-                        <select value="Argentina" disabled className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-500 cursor-not-allowed">
-                          <option value="Argentina">Argentina</option>
-                        </select>
-                      ) : <p className="mt-1 text-sm">Argentina</p>}
+                      {editMode ? <input data-no-uppercase="true" value={formData.residencia} onChange={(e) => handleConstrainFieldChange('residencia', e.target.value)} autoComplete="off" spellCheck={false} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /> : <p className="mt-1 text-sm">{formData.residencia || 'ARGENTINA'}</p>}
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs uppercase text-slate-500">Provincia</p>
@@ -3001,7 +2992,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs uppercase text-slate-500">Codigo Postal</p>
-                      {editMode ? <input value={formData.codigoPostal} onChange={(e) => handleFieldChange('codigoPostal', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /> : <p className="mt-1 text-sm">{formData.codigoPostal || '-'}</p>}
+                      {editMode ? <input value={formData.codigoPostal} onChange={(e) => handleConstrainFieldChange('codigoPostal', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /> : <p className="mt-1 text-sm">{formData.codigoPostal || '-'}</p>}
                       {fieldErrors.codigoPostal ? <p className="mt-1 text-xs text-red-600">{fieldErrors.codigoPostal}</p> : null}
                     </div>
                   </div>
@@ -3270,7 +3261,8 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Año inicio</p>
-                        <input value={actividadPosgradoForm.anioInicio} onChange={(e) => actualizarCampoActPosgrado('anioInicio', e.target.value.replace(/\D/g, '').slice(0, 4))} maxLength={4} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
+                        <input value={actividadPosgradoForm.anioInicio} onChange={(e) => actualizarCampoActPosgrado('anioInicio', e.target.value.replace(/\D/g, '').slice(0, 4))} maxLength={4} className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${actividadPosgradoErrors.anioInicio ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        {actividadPosgradoErrors.anioInicio && <p className="mt-1 text-xs text-red-500">{actividadPosgradoErrors.anioInicio}</p>}
                       </div>
                     </div>
                     <div className="mt-3 flex gap-2">
@@ -4083,7 +4075,8 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-xs uppercase text-slate-500">Año</p>
-                        <input value={produccionCientificaForm.anio} onChange={(e) => setProduccionCientificaForm((prev) => ({ ...prev, anio: e.target.value.replace(/\D/g, '').slice(0, 4) }))} maxLength={4} placeholder="aaaa" className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
+                        <input value={produccionCientificaForm.anio} onChange={(e) => setProduccionCientificaForm((prev) => ({ ...prev, anio: e.target.value.replace(/\D/g, '').slice(0, 4) }))} maxLength={4} placeholder="aaaa" className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${produccionCientificaErrors.anio ? 'border-red-400' : 'border-slate-200'} bg-white`} />
+                        {produccionCientificaErrors.anio && <p className="mt-1 text-xs text-red-500">{produccionCientificaErrors.anio}</p>}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2.5 sm:col-span-2">
                         <p className="text-xs uppercase text-slate-500">Referencia bibliográfica *</p>

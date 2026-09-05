@@ -165,22 +165,28 @@ export default function FacultadesPage() {
 
   async function guardar() {
     if (!form.nombre.trim()) { alert('El nombre es obligatorio.'); return; }
-    if (!universidadId) { alert('Seleccioná una universidad.'); return; }
+    if (!editando && !universidadId) { alert('Seleccioná una universidad.'); return; }
     setGuardando(true);
     try {
-      const payload = {
-        nombre: form.nombre.trim(),
-        codigo: form.codigo.trim() || undefined,
-        descripcion: form.descripcion.trim() || undefined,
-        estado: form.estado,
-        universidadId
-      };
       if (editando) {
+        const payload = {
+          nombre: form.nombre.trim(),
+          codigo: form.codigo.trim() || undefined,
+          descripcion: form.descripcion.trim() || undefined,
+          estado: form.estado,
+        };
         const updated = await apiFetch(`${API_URL}/facultades/${editando.id}`, {
           method: 'PATCH', body: JSON.stringify(payload)
         });
         setFacultades(prev => prev.map(f => f.id === editando.id ? { ...f, ...updated } : f));
       } else {
+        const payload = {
+          nombre: form.nombre.trim(),
+          codigo: form.codigo.trim() || undefined,
+          descripcion: form.descripcion.trim() || undefined,
+          estado: form.estado,
+          universidadId,
+        };
         const created = await apiFetch(`${API_URL}/facultades`, {
           method: 'POST', body: JSON.stringify(payload)
         });
@@ -410,11 +416,17 @@ export default function FacultadesPage() {
               {universidades.length > 0 && (
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Universidad</label>
-                  <select value={universidadId} onChange={e => setUniversidadId(e.target.value)}
-                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]">
-                    <option value="">-- Seleccionar --</option>
-                    {universidades.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
-                  </select>
+                  {editando ? (
+                    <p className="w-full text-sm border border-slate-100 rounded-lg px-3 py-2 bg-slate-50 text-slate-600">
+                      {editando.universidad?.nombre ?? universidades.find(u => u.id === editando.universidadId)?.nombre ?? editando.universidadId}
+                    </p>
+                  ) : (
+                    <select value={universidadId} onChange={e => setUniversidadId(e.target.value)}
+                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]">
+                      <option value="">-- Seleccionar --</option>
+                      {universidades.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                    </select>
+                  )}
                 </div>
               )}
 
