@@ -26,7 +26,7 @@ function baseCookieOpts(isProd: boolean) {
   return {
     httpOnly: true,
     secure: isProd,
-    sameSite: 'none' as const,
+    sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
   };
 }
 
