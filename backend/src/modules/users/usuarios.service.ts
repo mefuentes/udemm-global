@@ -1,6 +1,19 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+
+interface RawUsuarioRow {
+  id: string;
+  nombre: string;
+  apellido: string;
+  correoElectronico: string;
+  activo: boolean;
+  fechaCreacion: Date;
+  fechaActualizacion: Date;
+  rolId: string;
+  rolNombre: string;
+}
 
 const SELECT_USUARIO = {
   id: true,
@@ -132,21 +145,98 @@ export class UsuariosService {
     return usuario;
   }
 
-  async obtenerUsuarios(buscar?: string, activo?: boolean) {
-    const where: any = {};
-    if (buscar) {
-      where.OR = [
-        { nombre: { contains: buscar, mode: 'insensitive' } },
-        { apellido: { contains: buscar, mode: 'insensitive' } },
-        { correoElectronico: { contains: buscar, mode: 'insensitive' } }
-      ];
-    }
-    if (activo !== undefined) where.activo = activo;
+  async obtenerUsuarios(
+    buscar?: string,
+    activo?: boolean,
+    page?: number,
+    limit?: number,
+    rolId?: string,
+  ) {
+    // Sin término de búsqueda: Prisma client tipado (ruta existente sin cambios)
+    if (!buscar) {
+      const where: any = {};
+      if (activo !== undefined) where.activo = activo;
+      if (rolId) where.rolId = rolId;
 
-    const [data, total] = await Promise.all([
-      this.prisma.usuario.findMany({ where, select: SELECT_USUARIO, orderBy: { apellido: 'asc' } }),
-      this.prisma.usuario.count({ where })
+      const [data, total] = await Promise.all([
+        this.prisma.usuario.findMany({
+          where,
+          select:  SELECT_USUARIO,
+          orderBy: { apellido: 'asc' },
+          ...(page !== undefined && limit !== undefined
+            ? { take: limit, skip: (page - 1) * limit }
+            : {}),
+        }),
+        this.prisma.usuario.count({ where }),
+      ]);
+
+      if (page !== undefined && limit !== undefined) {
+        return { data, total, pagina: page, limite: limit, totalPaginas: Math.max(1, Math.ceil(total / limit)) };
+      }
+      return { data, total };
+    }
+
+    // Con término de búsqueda: raw SQL con unaccent() para coincidencias
+    // sin distinción de mayúsculas NI de acentos (ej: "JOSE" encuentra "JOSÉ").
+    // Todos los valores son parámetros Prisma.sql — no hay riesgo de SQL injection.
+    const searchPattern = `%${buscar}%`;
+
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`(
+        unaccent(u.nombre) ILIKE unaccent(${searchPattern})
+        OR unaccent(u.apellido) ILIKE unaccent(${searchPattern})
+        OR u."correoElectronico" ILIKE ${searchPattern}
+      )`,
+    ];
+    if (activo !== undefined) conditions.push(Prisma.sql`u.activo = ${activo}`);
+    if (rolId) conditions.push(Prisma.sql`u."rolId"::text = ${rolId}`);
+
+    const whereClause = Prisma.join(conditions, ' AND ');
+    const paginacion =
+      page !== undefined && limit !== undefined
+        ? Prisma.sql`LIMIT ${limit} OFFSET ${(page - 1) * limit}`
+        : Prisma.empty;
+
+    const [rows, countResult] = await Promise.all([
+      this.prisma.$queryRaw<RawUsuarioRow[]>(Prisma.sql`
+        SELECT
+          u.id,
+          u.nombre,
+          u.apellido,
+          u."correoElectronico",
+          u.activo,
+          u."fechaCreacion",
+          u."fechaActualizacion",
+          r.id     AS "rolId",
+          r.nombre AS "rolNombre"
+        FROM "Usuario" u
+        JOIN "Rol" r ON r.id = u."rolId"
+        WHERE ${whereClause}
+        ORDER BY u.apellido ASC
+        ${paginacion}
+      `),
+      this.prisma.$queryRaw<[{ count: bigint }]>(Prisma.sql`
+        SELECT COUNT(*) AS count
+        FROM "Usuario" u
+        WHERE ${whereClause}
+      `),
     ]);
+
+    const data = rows.map((r) => ({
+      id:                r.id,
+      nombre:            r.nombre,
+      apellido:          r.apellido,
+      correoElectronico: r.correoElectronico,
+      activo:            r.activo,
+      fechaCreacion:     r.fechaCreacion,
+      fechaActualizacion: r.fechaActualizacion,
+      rol: { id: r.rolId, nombre: r.rolNombre },
+    }));
+    const total = Number(countResult[0].count);
+
+    if (page !== undefined && limit !== undefined) {
+      return { data, total, pagina: page, limite: limit, totalPaginas: Math.max(1, Math.ceil(total / limit)) };
+    }
     return { data, total };
   }
 

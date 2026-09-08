@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
@@ -14,42 +14,126 @@ interface Usuario {
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 const INPUT = 'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:ring-1 focus:ring-[#0f4c81]/20 transition';
 const EMPTY_FORM = { nombre: '', apellido: '', correoElectronico: '', contrasena: '', rolId: '' };
+const ITEMS_POR_PAGINA = 10;
 
 export default function UsuariosPage() {
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  const [roles, setRoles] = useState<Rol[]>([]);
-  const [buscar, setBuscar] = useState('');
-  const [filtroActivo, setFiltroActivo] = useState('');
-  const [filtroRol, setFiltroRol] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [exito, setExito] = useState<string | null>(null);
-  const [mostrarForm, setMostrarForm] = useState(false);
-  const [editandoId, setEditandoId] = useState<string | null>(null);
-  const [form, setForm] = useState({ ...EMPTY_FORM });
-  const [formError, setFormError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [usuarios, setUsuarios]         = useState<Usuario[]>([]);
+  const [roles, setRoles]               = useState<Rol[]>([]);
+  const [total, setTotal]               = useState(0);
+  const [totalPaginas, setTotalPaginas] = useState(1);
 
-  async function cargar() {
-    setLoading(true); setError(null);
+  // ── Filtros (estado: controla el render; ref: controla cargar sin closures) ─
+  const [buscar, setBuscar]             = useState('');
+  const [filtroActivo, setFiltroActivo] = useState('');
+  const [filtroRol, setFiltroRol]       = useState('');
+  const [pagina, setPagina]             = useState(1);
+
+  const buscarRef       = useRef('');
+  const filtroActivoRef = useRef('');
+  const filtroRolRef    = useRef('');
+
+  // ── UI ─────────────────────────────────────────────────────────────────────
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState<string | null>(null);
+  const [exito, setExito]               = useState<string | null>(null);
+  const [mostrarForm, setMostrarForm]   = useState(false);
+  const [editandoId, setEditandoId]     = useState<string | null>(null);
+  const [form, setForm]                 = useState({ ...EMPTY_FORM });
+  const [formError, setFormError]       = useState<string | null>(null);
+  const [submitting, setSubmitting]     = useState(false);
+
+  const abortRef    = useRef<AbortController | null>(null);
+  const rolesLoaded = useRef(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Carga de datos ─────────────────────────────────────────────────────────
+  // cargar recibe todos los valores explícitamente — no captura nada por closure.
+  // Esto elimina el bug de "último carácter no aplicado" causado por valores
+  // stale atrapados en useCallback y por UppercaseInputGuard que modifica
+  // element.value directamente en la fase capture antes del onChange de React.
+  const cargar = useCallback(async (pg: number, termino: string) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const { signal } = controller;
+
+    setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
-      if (buscar) params.set('buscar', buscar);
-      if (filtroActivo) params.set('activo', filtroActivo);
+      if (termino)                      params.set('buscar', termino);
+      if (filtroActivoRef.current)      params.set('activo', filtroActivoRef.current);
+      if (filtroRolRef.current)         params.set('rolId',  filtroRolRef.current);
+      params.set('page',  String(pg));
+      params.set('limit', String(ITEMS_POR_PAGINA));
+
+      const url = `${API}/configuracion/usuarios?${params}`;
+
       const [resU, resR] = await Promise.all([
-        apiFetch(`${API}/configuracion/usuarios?${params}`),
-        apiFetch(`${API}/configuracion/roles`),
+        apiFetch(url, { signal }),
+        rolesLoaded.current
+          ? Promise.resolve(null)
+          : apiFetch(`${API}/configuracion/roles`, { signal }),
       ]);
+
+      if (signal.aborted) return;
       if (!resU.ok) throw new Error('Error al cargar usuarios');
+
       const dataU = await resU.json();
       setUsuarios(dataU.data ?? []);
-      if (resR.ok) setRoles(await resR.json());
-    } catch (e) { setError((e as Error).message); }
-    finally { setLoading(false); }
+      setTotal(dataU.total ?? 0);
+      setTotalPaginas(dataU.totalPaginas ?? 1);
+
+      if (resR && resR.ok) {
+        setRoles(await resR.json());
+        rolesLoaded.current = true;
+      }
+    } catch (e: unknown) {
+      if (signal.aborted) return;
+      setError(e instanceof Error ? e.message : 'Error al cargar usuarios');
+    } finally {
+      if (!signal.aborted) setLoading(false);
+    }
+  }, []); // deps vacíos — lee de refs y params explícitos; nunca stale
+
+  // Carga inicial; cargar es estable (deps vacíos), este effect solo corre al montar
+  useEffect(() => {
+    cargar(1, '');
+    return () => { abortRef.current?.abort(); };
+  }, [cargar]);
+
+  // ── Handlers de filtros ────────────────────────────────────────────────────
+  function handleBuscarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    // Actualizar ref PRIMERO (sincrónico) — cargar siempre leerá el valor actual
+    buscarRef.current = value;
+    setBuscar(value);
+
+    // Debounce en el handler mismo, no en un useEffect, para evitar cascadas async
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setPagina(1);
+      cargar(1, buscarRef.current);
+    }, 350);
   }
 
-  useEffect(() => { cargar(); }, [buscar, filtroActivo]);
+  function handleFiltroRolChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const value = e.target.value;
+    filtroRolRef.current = value;
+    setFiltroRol(value);
+    setPagina(1);
+    cargar(1, buscarRef.current);
+  }
 
+  function handleFiltroActivoChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const value = e.target.value;
+    filtroActivoRef.current = value;
+    setFiltroActivo(value);
+    setPagina(1);
+    cargar(1, buscarRef.current);
+  }
+
+  // ── Acciones form ──────────────────────────────────────────────────────────
   function abrirCrear() { setForm({ ...EMPTY_FORM }); setEditandoId(null); setFormError(null); setMostrarForm(true); }
   function abrirEditar(u: Usuario) {
     setForm({ nombre: u.nombre, apellido: u.apellido, correoElectronico: u.correoElectronico, contrasena: '', rolId: u.rol.id });
@@ -63,27 +147,28 @@ export default function UsuariosPage() {
     if (!editandoId && !form.contrasena) { setFormError('La contraseña es obligatoria para nuevos usuarios.'); return; }
     setSubmitting(true); setFormError(null);
     try {
-      const body: any = { nombre: form.nombre, apellido: form.apellido, correoElectronico: form.correoElectronico, rolId: form.rolId };
+      const body: Record<string, string> = { nombre: form.nombre, apellido: form.apellido, correoElectronico: form.correoElectronico, rolId: form.rolId };
       if (form.contrasena) body.contrasena = form.contrasena;
       const url = editandoId ? `${API}/configuracion/usuarios/${editandoId}` : `${API}/configuracion/usuarios`;
       const res = await apiFetch(url, { method: editandoId ? 'PATCH' : 'POST', body: JSON.stringify(body) });
       if (!res.ok) { const d = await res.json(); throw new Error(d.message ?? 'Error al guardar'); }
       setExito(editandoId ? 'Usuario actualizado.' : 'Usuario creado.');
-      setMostrarForm(false); cargar();
+      setMostrarForm(false);
+      cargar(pagina, buscarRef.current);
     } catch (e) { setFormError((e as Error).message); }
     finally { setSubmitting(false); setTimeout(() => setExito(null), 3000); }
   }
 
   async function toggleEstado(id: string) {
     await apiFetch(`${API}/configuracion/usuarios/${id}/estado`, { method: 'PATCH' });
-    cargar();
+    cargar(pagina, buscarRef.current);
   }
 
+  // ── Estilos ────────────────────────────────────────────────────────────────
   const FILTER_INPUT = 'rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-[#0f4c81] focus:ring-1 focus:ring-[#0f4c81]/20 transition';
 
-  const usuariosFiltrados = filtroRol
-    ? usuarios.filter(u => u.rol.id === filtroRol)
-    : usuarios;
+  const desde = total === 0 ? 0 : (pagina - 1) * ITEMS_POR_PAGINA + 1;
+  const hasta  = Math.min(pagina * ITEMS_POR_PAGINA, total);
 
   return (
     <div className="max-w-6xl mx-auto space-y-5 pt-4 px-2">
@@ -113,19 +198,26 @@ export default function UsuariosPage() {
 
         {/* Filtros */}
         <div className="px-4 py-3 border-b border-slate-100 flex flex-wrap gap-2 items-center">
+          {/*
+            data-no-uppercase="true" evita que UppercaseInputGuard (listener global en
+            fase capture) transforme el valor directamente en el DOM antes de que React
+            procese el evento — lo que causaba desincronización del input controlado y
+            el bug de "último carácter no aplicado".
+          */}
           <input
+            data-no-uppercase="true"
             value={buscar}
-            onChange={e => setBuscar(e.target.value)}
+            onChange={handleBuscarChange}
             placeholder="Buscar por nombre, apellido o email..."
             className={`${FILTER_INPUT} min-w-[200px] flex-1`}
           />
-          <select value={filtroRol} onChange={e => setFiltroRol(e.target.value)} className={FILTER_INPUT}>
+          <select value={filtroRol} onChange={handleFiltroRolChange} className={FILTER_INPUT}>
             <option value="">Todos los roles</option>
             {roles.map(r => (
               <option key={r.id} value={r.id}>{r.nombre.replace(/_/g, ' ')}</option>
             ))}
           </select>
-          <select value={filtroActivo} onChange={e => setFiltroActivo(e.target.value)} className={FILTER_INPUT}>
+          <select value={filtroActivo} onChange={handleFiltroActivoChange} className={FILTER_INPUT}>
             <option value="">Todos los estados</option>
             <option value="true">Activos</option>
             <option value="false">Inactivos</option>
@@ -147,9 +239,9 @@ export default function UsuariosPage() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-400">Cargando...</td></tr>
-              ) : usuariosFiltrados.length === 0 ? (
+              ) : usuarios.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-400">Sin usuarios encontrados.</td></tr>
-              ) : usuariosFiltrados.map((u, idx) => (
+              ) : usuarios.map((u, idx) => (
                 <tr key={u.id} className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/50' : ''}`}>
                   <td className="px-4 py-2.5 font-medium text-slate-800">{u.apellido}, {u.nombre}</td>
                   <td className="px-4 py-2.5 text-slate-600">{u.correoElectronico}</td>
@@ -191,6 +283,34 @@ export default function UsuariosPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Paginación */}
+        {!loading && total > 0 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50/40">
+            <span className="text-xs text-slate-500">
+              Mostrando {desde}–{hasta} de {total} usuario{total !== 1 ? 's' : ''}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => { const p = Math.max(1, pagina - 1); setPagina(p); cargar(p, buscarRef.current); }}
+                disabled={pagina === 1}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-md hover:bg-slate-100 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ← Anterior
+              </button>
+              <span className="px-3 py-1.5 text-xs font-semibold text-slate-700 border border-slate-200 rounded-md bg-white min-w-[80px] text-center">
+                Página {pagina} de {totalPaginas}
+              </span>
+              <button
+                onClick={() => { const p = Math.min(totalPaginas, pagina + 1); setPagina(p); cargar(p, buscarRef.current); }}
+                disabled={pagina === totalPaginas}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-md hover:bg-slate-100 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Siguiente →
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal */}
