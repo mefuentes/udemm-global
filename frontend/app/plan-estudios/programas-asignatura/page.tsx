@@ -11,6 +11,7 @@ import { getPermisosPrograma } from '@/lib/permisos-plan-estudios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 const TOTAL_SECCIONES = 6;
+const ITEMS_POR_PAGINA = 10;
 
 const NAV_INTERNA = [
   { label: 'Carreras',                         href: '/plan-estudios/carreras' },
@@ -142,6 +143,9 @@ export default function ProgramasAsignaturaPage() {
   const [filtroCodigo,    setFiltroCodigo]    = useState('');
   const [filtroNombre,    setFiltroNombre]    = useState('');
   const [filtroEstado,    setFiltroEstado]    = useState<EstadoLabel | ''>('');
+  const [debouncedCodigo, setDebouncedCodigo] = useState('');
+  const [debouncedNombre, setDebouncedNombre] = useState('');
+  const [pagina,          setPagina]          = useState(1);
   const [cargando,        setCargando]        = useState(false);
   const [cargandoPlanes,  setCargandoPlanes]  = useState(false);
   const [reloadKey,       setReloadKey]       = useState(0);
@@ -180,6 +184,9 @@ export default function ProgramasAsignaturaPage() {
     setFiltroCodigo('');
     setFiltroNombre('');
     setFiltroEstado('');
+    setDebouncedCodigo('');
+    setDebouncedNombre('');
+    setPagina(1);
   }, [planId]);
 
   // Cargar datos: dispara cuando cambia el plan O cuando se solicita recarga
@@ -227,6 +234,21 @@ export default function ProgramasAsignaturaPage() {
       .catch(() => setMateriasEditables(new Set()));
   }, [usuario?.rol?.nombre]);
 
+  // Debounce filtro código
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedCodigo(filtroCodigo), 350);
+    return () => clearTimeout(t);
+  }, [filtroCodigo]);
+
+  // Debounce filtro asignatura
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedNombre(filtroNombre), 350);
+    return () => clearTimeout(t);
+  }, [filtroNombre]);
+
+  // Resetear página al cambiar filtros efectivos
+  useEffect(() => { setPagina(1); }, [debouncedCodigo, debouncedNombre, filtroEstado]);
+
   // Recargar cuando el documento vuelve a ser visible (volver de otra solapa/ficha)
   useEffect(() => {
     const handler = () => {
@@ -241,14 +263,17 @@ export default function ProgramasAsignaturaPage() {
   // ── Datos derivados ────────────────────────────────────────────────────────
 
   const filtradas = useMemo(() => {
-    const cod = filtroCodigo.trim().toLowerCase();
-    const nom = filtroNombre.trim().toLowerCase();
+    const cod = debouncedCodigo.trim().toLowerCase();
+    const nom = debouncedNombre.trim().toLowerCase();
     return materias.filter(m =>
       (!cod || m.codigo.toLowerCase().includes(cod)) &&
-      (!nom || m.nombre.toLowerCase().includes(nom)) &&
+      (!nom || m.nombre.toLowerCase().normalize('NFC').includes(nom.normalize('NFC'))) &&
       (!filtroEstado || m.estadoLabel === filtroEstado)
     );
-  }, [materias, filtroCodigo, filtroNombre, filtroEstado]);
+  }, [materias, debouncedCodigo, debouncedNombre, filtroEstado]);
+
+  const totalPaginas = Math.max(1, Math.ceil(filtradas.length / ITEMS_POR_PAGINA));
+  const paginadas    = filtradas.slice((pagina - 1) * ITEMS_POR_PAGINA, pagina * ITEMS_POR_PAGINA);
 
   const selectCls = 'w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed';
 
@@ -388,31 +413,59 @@ export default function ProgramasAsignaturaPage() {
                   : 'No hay resultados para los filtros aplicados.'}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-100">
-                      <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-28">Código</th>
-                      <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide">Asignatura</th>
-                      <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-16">Año</th>
-                      <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-28">Completitud</th>
-                      <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-32">Aprobación</th>
-                      <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-48">Avance</th>
-                      <th className="px-4 py-3 w-44 text-right font-semibold text-slate-500 uppercase tracking-wide">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {filtradas.map(m => (
-                      <FilaPrograma
-                        key={m.id}
-                        materia={m}
-                        puedeCompletar={puedeCompletar || materiasEditables.has(m.id)}
-                        router={router}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-50/80 border-b border-slate-100">
+                        <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-28">Código</th>
+                        <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide">Asignatura</th>
+                        <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-16">Año</th>
+                        <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-28">Completitud</th>
+                        <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-32">Aprobación</th>
+                        <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-48">Avance</th>
+                        <th className="px-4 py-3 w-44 text-right font-semibold text-slate-500 uppercase tracking-wide">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {paginadas.map(m => (
+                        <FilaPrograma
+                          key={m.id}
+                          materia={m}
+                          puedeCompletar={puedeCompletar || materiasEditables.has(m.id)}
+                          router={router}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {totalPaginas > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 text-xs text-slate-500">
+                    <span>
+                      Mostrando {(pagina - 1) * ITEMS_POR_PAGINA + 1}–{Math.min(pagina * ITEMS_POR_PAGINA, filtradas.length)} de {filtradas.length}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setPagina(p => Math.max(1, p - 1))}
+                        disabled={pagina === 1}
+                        className="px-3 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-medium"
+                      >
+                        ← Anterior
+                      </button>
+                      <span className="font-semibold text-slate-700">
+                        Página {pagina} de {totalPaginas}
+                      </span>
+                      <button
+                        onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
+                        disabled={pagina === totalPaginas}
+                        className="px-3 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-medium"
+                      >
+                        Siguiente →
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </>
