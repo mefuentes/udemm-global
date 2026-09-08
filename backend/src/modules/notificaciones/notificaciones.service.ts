@@ -13,19 +13,19 @@ export class NotificacionesService {
     if (rolNombre === 'DOCENTE') {
       const docente = await this.getDocenteByUsuarioId(usuarioId);
       if (!docente) return [];
-      return (this.prisma as any).notificacion.findMany({
+      return this.prisma.notificacion.findMany({
         where: { docenteId: docente.id },
         orderBy: { fechaCreacion: 'desc' },
       });
     }
-    return (this.prisma as any).notificacion.findMany({
+    return this.prisma.notificacion.findMany({
       orderBy: { fechaCreacion: 'desc' },
       take: 200,
     });
   }
 
   async marcarLeida(id: string, usuarioId: string, rolNombre: string) {
-    const notif = await (this.prisma as any).notificacion.findUnique({ where: { id } });
+    const notif = await this.prisma.notificacion.findUnique({ where: { id } });
     if (!notif) throw new NotFoundException('Notificación no encontrada');
 
     if (rolNombre === 'DOCENTE') {
@@ -35,7 +35,7 @@ export class NotificacionesService {
       }
     }
 
-    return (this.prisma as any).notificacion.update({
+    return this.prisma.notificacion.update({
       where: { id },
       data: { leida: true, fechaLectura: new Date() },
     });
@@ -45,7 +45,7 @@ export class NotificacionesService {
     if (rolNombre !== 'DOCENTE') return 0;
     const docente = await this.getDocenteByUsuarioId(usuarioId);
     if (!docente) return 0;
-    return (this.prisma as any).notificacion.count({
+    return this.prisma.notificacion.count({
       where: { docenteId: docente.id, leida: false },
     });
   }
@@ -54,7 +54,7 @@ export class NotificacionesService {
     if (rolNombre !== 'DOCENTE') return { count: 0 };
     const docente = await this.getDocenteByUsuarioId(usuarioId);
     if (!docente) return { count: 0 };
-    const result = await (this.prisma as any).notificacion.updateMany({
+    const result = await this.prisma.notificacion.updateMany({
       where: { docenteId: docente.id, leida: false },
       data: { leida: true, fechaLectura: new Date() },
     });
