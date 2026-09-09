@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 import { FormularioVinculacion } from './_components/FormularioVinculacion';
@@ -134,6 +134,13 @@ export default function VinculacionesCatedraPage() {
   const [desvinculando, setDesvinculando]     = useState(false);
   const [errorDesvincular, setErrorDesvincular] = useState<string | null>(null);
 
+  // Refs para evitar closures stale en cargar (no disparan re-renders)
+  const buscarRef       = useRef('');
+  const filtroEstadoRef = useRef('');
+  const paginaRef       = useRef(1);
+  const abortRef        = useRef<AbortController | null>(null);
+  const debounceRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   function abrirDesvincular(v: Vinculacion) {
     setDesvinculandoTarget(v);
     setFormDesvincular({ fecha: new Date().toISOString().split('T')[0], motivo: '' });
@@ -144,6 +151,70 @@ export default function VinculacionesCatedraPage() {
     setDesvinculandoTarget(null);
     setErrorDesvincular(null);
   }
+
+  // ── Carga de datos ─────────────────────────────────────────────────────────
+  // cargar recibe todos los parámetros explícitamente — no captura nada por closure.
+  // Esto elimina el bug de "último carácter no aplicado" causado por:
+  //   1. UppercaseInputGuard: muta element.value en capture phase antes de React onChange
+  //   2. useCallback([buscar, filtroEstado, pagina]): valores stale en closure async
+  const cargar = useCallback(async (pg: number, termino: string, estado: string) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const { signal } = controller;
+
+    paginaRef.current = pg;
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (termino.trim()) params.set('buscar', termino.trim());
+      if (estado)         params.set('estado', estado);
+      params.set('page',  String(pg));
+      params.set('limit', '10');
+      const r = await apiFetch(`${API}/vinculaciones-catedra?${params}`, { signal } as RequestInit);
+      if (signal.aborted) return;
+      if (!r.ok) throw new Error('Error al cargar las vinculaciones');
+      const resp = await r.json();
+      setItems(resp.data);
+      setPaginacion({ total: resp.total, pagina: resp.pagina, limite: resp.limite, totalPaginas: resp.totalPaginas });
+      setPagina(pg);
+    } catch (e: unknown) {
+      if (signal.aborted) return;
+      setError((e as Error).message);
+    } finally {
+      if (!signal.aborted) setLoading(false);
+    }
+  }, []); // deps vacíos — lee de params explícitos y refs; nunca stale
+
+  // Carga inicial; cargar es estable (deps vacíos), este effect solo corre al montar
+  useEffect(() => {
+    cargar(1, '', '');
+    return () => { abortRef.current?.abort(); };
+  }, [cargar]);
+
+  // ── Handlers de filtros ────────────────────────────────────────────────────
+
+  function handleBuscarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = normalizarMayusculas(e.target.value);
+    // Actualizar ref PRIMERO (sincrónico) — cargar siempre leerá el valor actual
+    buscarRef.current = value;
+    setBuscar(value);
+    // Debounce en el handler mismo, no en un useEffect, para evitar cascadas async
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      cargar(1, buscarRef.current, filtroEstadoRef.current);
+    }, 350);
+  }
+
+  function handleFiltroEstadoChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const value = e.target.value;
+    filtroEstadoRef.current = value;
+    setFiltroEstado(value);
+    cargar(1, buscarRef.current, value);
+  }
+
+  // ── Acciones ───────────────────────────────────────────────────────────────
 
   async function confirmarDesvincular() {
     if (!desvinculandoTarget) return;
@@ -164,7 +235,7 @@ export default function VinculacionesCatedraPage() {
       cerrarDesvincular();
       setExito(`Vinculación de ${desvinculandoTarget.docente.apellido}, ${desvinculandoTarget.docente.nombre} finalizada correctamente.`);
       setTimeout(() => setExito(null), 6000);
-      cargar();
+      cargar(paginaRef.current, buscarRef.current, filtroEstadoRef.current);
     } catch (e) {
       setErrorDesvincular((e as Error).message);
     } finally {
@@ -172,41 +243,15 @@ export default function VinculacionesCatedraPage() {
     }
   }
 
-  const cargar = useCallback(async () => {
-    setLoading(true); setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (buscar.trim()) params.set('buscar', buscar.trim());
-      if (filtroEstado)  params.set('estado', filtroEstado);
-      params.set('page',  String(pagina));
-      params.set('limit', '10');
-      const r = await apiFetch(`${API}/vinculaciones-catedra?${params}`);
-      if (!r.ok) throw new Error('Error al cargar las vinculaciones');
-      const resp = await r.json();
-      setItems(resp.data);
-      setPaginacion({ total: resp.total, pagina: resp.pagina, limite: resp.limite, totalPaginas: resp.totalPaginas });
-      // Si la página actual quedó vacía pero hay registros, ir a la última página válida
-      if (resp.data.length === 0 && resp.total > 0 && pagina > 1) {
-        setPagina(Math.max(1, resp.totalPaginas));
-      }
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [buscar, filtroEstado, pagina]);
-
-  useEffect(() => { cargar(); }, [cargar]);
-
   function onGuardado() {
     setFormulario(false);
     setExito('Vinculación creada correctamente. Quedó en estado Pendiente de Aprobación.');
     setTimeout(() => setExito(null), 5000);
-    cargar();
+    cargar(1, buscarRef.current, filtroEstadoRef.current);
   }
 
   return (
-    <div className="p-6 sm:p-8 max-w-7xl mx-auto">
+    <div className="p-6 sm:p-8">
 
       {/* Header */}
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
@@ -240,16 +285,22 @@ export default function VinculacionesCatedraPage() {
       <div className="mb-4 flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <span className="absolute left-3 top-1/2 -translate-y-1/2"><IcSearch /></span>
+          {/*
+            data-no-uppercase="true" evita que UppercaseInputGuard (listener global en
+            fase capture) mute element.value antes de que React procese el evento,
+            lo que causaba el bug de "último carácter no aplicado".
+          */}
           <input
+            data-no-uppercase="true"
             value={buscar}
-            onChange={e => { setBuscar(e.target.value); setPagina(1); }}
+            onChange={handleBuscarChange}
             placeholder="Buscar por docente, asignatura o carrera…"
             className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none focus:border-[#0f4c81] focus:ring-2 focus:ring-[#0f4c81]/15 transition"
           />
         </div>
         <select
           value={filtroEstado}
-          onChange={e => { setFiltroEstado(e.target.value); setPagina(1); }}
+          onChange={handleFiltroEstadoChange}
           className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none focus:border-[#0f4c81] focus:ring-2 focus:ring-[#0f4c81]/15 transition min-w-[180px]"
         >
           <option value="">Todos los estados</option>
@@ -266,18 +317,23 @@ export default function VinculacionesCatedraPage() {
 
       {/* Tabla */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        {/*
+          overflow-x-auto sobre el contenedor de la tabla garantiza scroll horizontal
+          en resoluciones menores. Se eliminaron las clases hidden XX:table-cell que
+          antes ocultaban columnas en pantallas chicas.
+        */}
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="min-w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="text-left px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">Docente</th>
                 <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">Asignatura</th>
-                <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 hidden md:table-cell whitespace-nowrap">Carrera / Plan</th>
-                <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 hidden lg:table-cell whitespace-nowrap">Cátedra · Cargo</th>
-                <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 hidden xl:table-cell whitespace-nowrap">Modalidad · Designación</th>
-                <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 hidden lg:table-cell whitespace-nowrap">H/SEM · Año</th>
+                <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">Carrera / Plan</th>
+                <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">Cátedra · Cargo</th>
+                <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">Modalidad · Designación</th>
+                <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">H/SEM · Año</th>
                 <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">Estado</th>
-                <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 hidden sm:table-cell whitespace-nowrap">Fecha</th>
+                <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">Fecha</th>
                 <th className="text-right px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">Acciones</th>
               </tr>
             </thead>
@@ -310,32 +366,33 @@ export default function VinculacionesCatedraPage() {
               ) : items.map(v => (
                 <tr key={v.id} className="hover:bg-slate-50/60 transition-colors">
                   <td className="px-5 py-3.5">
-                    <span className="font-medium text-slate-800">{v.docente.apellido}, {v.docente.nombre}</span>
+                    <span className="block font-medium text-slate-800">{v.docente.apellido},</span>
+                    <span className="block font-medium text-slate-800">{v.docente.nombre}</span>
                   </td>
                   <td className="px-4 py-3.5">
                     <span className="font-medium text-slate-700">{v.materia.nombre}</span>
                     {v.materia.codigo && <span className="block text-xs text-slate-400">{v.materia.codigo}</span>}
                   </td>
-                  <td className="px-4 py-3.5 hidden md:table-cell">
+                  <td className="px-4 py-3.5">
                     <span className="text-slate-700">{v.carrera.nombre}</span>
                     <span className="block text-xs text-slate-400">{v.planEstudio.nombre}</span>
                   </td>
-                  <td className="px-4 py-3.5 hidden lg:table-cell">
+                  <td className="px-4 py-3.5 whitespace-nowrap">
                     <span className="text-slate-700">{v.catedra.nombre}</span>
                     <span className="block text-xs text-slate-400">{v.cargo.nombre}</span>
                   </td>
-                  <td className="px-4 py-3.5 hidden xl:table-cell">
+                  <td className="px-4 py-3.5 whitespace-nowrap">
                     <span className="text-slate-700">{v.modalidad.nombre}</span>
                     <span className="block text-xs text-slate-400">{v.designacion.nombre}</span>
                   </td>
-                  <td className="px-4 py-3.5 hidden lg:table-cell">
+                  <td className="px-4 py-3.5 whitespace-nowrap">
                     <span className="text-slate-700 font-medium">
                       {v.horasSemana != null ? `${v.horasSemana} h/sem` : <span className="text-slate-400 text-xs italic">—</span>}
                     </span>
                     <span className="block text-xs text-slate-400">{v.anioInicio ?? '—'}</span>
                   </td>
                   <td className="px-4 py-3.5">{badgeEstado(v.estado)}</td>
-                  <td className="px-4 py-3.5 text-xs text-slate-500 hidden sm:table-cell whitespace-nowrap">
+                  <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
                     {formatFecha(v.fechaCreacion)}
                   </td>
                   <td className="px-4 py-3.5 text-right">
@@ -370,7 +427,7 @@ export default function VinculacionesCatedraPage() {
             {paginacion.totalPaginas > 1 && (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setPagina(p => Math.max(1, p - 1))}
+                  onClick={() => { const p = Math.max(1, pagina - 1); cargar(p, buscarRef.current, filtroEstadoRef.current); }}
                   disabled={paginacion.pagina <= 1}
                   className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
@@ -380,7 +437,7 @@ export default function VinculacionesCatedraPage() {
                   Página {paginacion.pagina} de {paginacion.totalPaginas}
                 </span>
                 <button
-                  onClick={() => setPagina(p => Math.min(paginacion.totalPaginas, p + 1))}
+                  onClick={() => { const p = Math.min(paginacion.totalPaginas, pagina + 1); cargar(p, buscarRef.current, filtroEstadoRef.current); }}
                   disabled={paginacion.pagina >= paginacion.totalPaginas}
                   className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >

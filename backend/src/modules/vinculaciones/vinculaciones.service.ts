@@ -61,13 +61,21 @@ export class VinculacionesService {
     if (filtros.estado) where.estado = filtros.estado;
 
     if (filtros.buscar?.trim()) {
-      const b = filtros.buscar.trim();
-      where.OR = [
-        { materia:  { nombre:   { contains: b, mode: 'insensitive' } } },
-        { docente:  { nombre:   { contains: b, mode: 'insensitive' } } },
-        { docente:  { apellido: { contains: b, mode: 'insensitive' } } },
-        { carrera:  { nombre:   { contains: b, mode: 'insensitive' } } },
-      ];
+      const patron = `%${filtros.buscar.trim()}%`;
+      // unaccent() normaliza diacríticos en ambos lados: "ORTIZ" encuentra "ORTÍZ",
+      // "MARIA" encuentra "MARÍA". La Ñ pasa intacta (ambos lados quedan "MUNOZ").
+      const idsRaw = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT DISTINCT vc.id
+        FROM "VinculacionCatedra" vc
+        JOIN "Docente"  d ON vc."docenteId"  = d.id
+        JOIN "Materia"  m ON vc."materiaId"  = m.id
+        JOIN "Carrera"  c ON vc."carreraId"  = c.id
+        WHERE unaccent(d.nombre)   ILIKE unaccent(${patron})
+           OR unaccent(d.apellido) ILIKE unaccent(${patron})
+           OR unaccent(m.nombre)   ILIKE unaccent(${patron})
+           OR unaccent(c.nombre)   ILIKE unaccent(${patron})
+      `;
+      where.id = { in: idsRaw.map(r => r.id) };
     }
 
     // Modo paginado (cuando se envía el parámetro page)
