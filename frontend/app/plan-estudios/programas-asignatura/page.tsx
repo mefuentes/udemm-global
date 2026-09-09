@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch as apiFetchBase, mensajeErrorHttp } from '@/lib/api';
 import { getPermisosPrograma } from '@/lib/permisos-plan-estudios';
+import { jsPDF } from 'jspdf';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -277,6 +278,212 @@ export default function ProgramasAsignaturaPage() {
 
   const selectCls = 'w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed';
 
+  // ── Exportar PDF ───────────────────────────────────────────────────────────
+
+  function exportarPdf() {
+    if (filtradas.length === 0) {
+      alert('No hay registros para exportar con los filtros aplicados.');
+      return;
+    }
+
+    const doc    = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    const pageW  = doc.internal.pageSize.getWidth();   // 841.89
+    const pageH  = doc.internal.pageSize.getHeight();  // 595.28
+    const ML     = 35;
+    const MR     = 35;
+    const usableW = pageW - ML - MR;
+
+    const columns = [
+      { label: 'Código',      width: 80  },
+      { label: 'Asignatura',  width: 300 },
+      { label: 'Año',         width: 50  },
+      { label: 'Completitud', width: 100 },
+      { label: 'Avance',      width: 70  },
+      { label: 'Aprobación',  width: 110 },
+    ];
+
+    const carreraNombre = carreras.find(c => c.id === carreraId)?.nombre ?? '';
+    const planObj       = planes.find(p => p.id === planId);
+    const planNombre    = planObj
+      ? `${planObj.nombre}${planObj.anio ? ` (${planObj.anio})` : ''}${planObj.version ? ` v${planObj.version}` : ''}`
+      : '';
+    const fecha = new Date().toLocaleDateString('es-AR',  { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const hora  = new Date().toLocaleTimeString('es-AR',  { hour: '2-digit', minute: '2-digit' });
+
+    const filtrosAplicados: { etiqueta: string; valor: string }[] = [
+      ...(debouncedCodigo ? [{ etiqueta: 'Código',     valor: debouncedCodigo }] : []),
+      ...(debouncedNombre ? [{ etiqueta: 'Asignatura', valor: debouncedNombre }] : []),
+      ...(filtroEstado    ? [{ etiqueta: 'Estado',     valor: filtroEstado    }] : []),
+    ];
+
+    const ROW_H      = 20;
+    const HDR_H      = 22;
+    const FOOTER_TOP = pageH - 38;
+
+    let pageNum = 1;
+    let y       = 0;
+
+    // ── Footer ────────────────────────────────────────────────────────────────
+    function drawFooter() {
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.4);
+      doc.line(ML, FOOTER_TOP - 6, pageW - MR, FOOTER_TOP - 6);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text('Universidad de la Marina Mercante  ·  Programas de Asignatura', ML, FOOTER_TOP);
+      doc.text(`Página ${pageNum}`, pageW - MR, FOOTER_TOP, { align: 'right' });
+    }
+
+    // ── Encabezado primera página ─────────────────────────────────────────────
+    function drawFirstPageHeader() {
+      // Título institucional
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.setTextColor(15, 76, 129);
+      doc.text('UNIVERSIDAD DE LA MARINA MERCANTE', pageW / 2, 34, { align: 'center' });
+
+      doc.setFontSize(10);
+      doc.setTextColor(30, 41, 59);
+      doc.text('PROGRAMAS DE ASIGNATURA', pageW / 2, 50, { align: 'center' });
+
+      doc.setDrawColor(15, 76, 129);
+      doc.setLineWidth(1.2);
+      doc.line(ML, 57, pageW - MR, 57);
+
+      // Contexto
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      const contexto = [
+        carreraNombre ? `Carrera: ${carreraNombre}` : null,
+        planNombre    ? `Plan: ${planNombre}`        : null,
+      ].filter(Boolean).join('   ·   ');
+      doc.text(contexto, ML, 67);
+      doc.text(`Generado: ${fecha} ${hora}`, pageW - MR, 67, { align: 'right' });
+
+      // Filtros aplicados
+      let fy = 82;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(30, 41, 59);
+
+      if (filtrosAplicados.length === 0) {
+        doc.text('FILTROS APLICADOS: NINGUNO', ML, fy);
+        fy += 11;
+      } else {
+        doc.text('FILTROS APLICADOS', ML, fy);
+        fy += 11;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        for (const f of filtrosAplicados) {
+          doc.text(`${f.etiqueta}: ${f.valor}`, ML + 10, fy);
+          fy += 10;
+        }
+      }
+
+      // Total registros
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(30, 41, 59);
+      doc.text(`TOTAL DE REGISTROS: ${filtradas.length}`, ML, fy + 2);
+      fy += 14;
+
+      // Separador antes de la tabla
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.4);
+      doc.line(ML, fy, pageW - MR, fy);
+
+      y = fy + 8;
+    }
+
+    // ── Encabezado páginas siguientes ────────────────────────────────────────
+    function drawContinuationHeader() {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text('UNIVERSIDAD DE LA MARINA MERCANTE  ·  PROGRAMAS DE ASIGNATURA', ML, 26);
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.line(ML, 31, pageW - MR, 31);
+      y = 42;
+    }
+
+    // ── Encabezado de tabla ───────────────────────────────────────────────────
+    function drawTableHeader() {
+      doc.setFillColor(15, 76, 129);
+      doc.rect(ML, y, usableW, HDR_H, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      let x = ML;
+      for (const col of columns) {
+        doc.text(col.label, x + 5, y + 15);
+        x += col.width;
+      }
+      y += HDR_H;
+    }
+
+    // ── Nueva página ─────────────────────────────────────────────────────────
+    function newPage() {
+      drawFooter();
+      doc.addPage();
+      pageNum++;
+      drawContinuationHeader();
+      drawTableHeader();
+    }
+
+    // ── Fila de datos ─────────────────────────────────────────────────────────
+    function drawRow(values: string[], rowIdx: number) {
+      if (y + ROW_H > FOOTER_TOP - 14) newPage();
+
+      if (rowIdx % 2 === 0) {
+        doc.setFillColor(248, 250, 252);
+      } else {
+        doc.setFillColor(255, 255, 255);
+      }
+      doc.rect(ML, y, usableW, ROW_H, 'F');
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.25);
+      doc.rect(ML, y, usableW, ROW_H);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(30, 41, 59);
+
+      let x = ML;
+      for (let i = 0; i < columns.length; i++) {
+        const colW = columns[i].width;
+        doc.text(values[i] ?? '—', x + 5, y + 13, { maxWidth: colW - 8 });
+        if (i < columns.length - 1) {
+          doc.setDrawColor(226, 232, 240);
+          doc.setLineWidth(0.25);
+          doc.line(x + colW, y, x + colW, y + ROW_H);
+        }
+        x += colW;
+      }
+      y += ROW_H;
+    }
+
+    // ── Generar ───────────────────────────────────────────────────────────────
+    drawFirstPageHeader();
+    drawTableHeader();
+
+    filtradas.forEach((m, i) => {
+      drawRow([
+        m.codigo,
+        m.nombre,
+        m.anio ? `${m.anio}°` : '—',
+        m.estadoLabel,
+        `${m.avancePct}%`,
+        ESTADO_PROG_BADGE[m.estadoPrograma]?.label ?? m.estadoPrograma,
+      ], i);
+    });
+
+    drawFooter();
+    doc.save('programas-de-asignatura.pdf');
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -397,6 +604,16 @@ export default function ProgramasAsignaturaPage() {
             <span className="text-xs text-slate-400 self-center whitespace-nowrap">
               {filtradas.length} resultado{filtradas.length !== 1 ? 's' : ''}
             </span>
+            {permisosPrograma.ver && (
+              <button
+                type="button"
+                onClick={exportarPdf}
+                disabled={cargando || filtradas.length === 0}
+                className="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap font-medium"
+              >
+                Exportar PDF
+              </button>
+            )}
           </div>
 
           {/* Grilla */}
