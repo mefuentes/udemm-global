@@ -356,7 +356,6 @@ export default function DocentesPage() {
 
   const totalPaginas = Math.max(1, Math.ceil(total / limite));
   const roleName = (usuario as any)?.rol?.nombre ?? null;
-  const canCreate = ['ADMINISTRADOR_SISTEMA', 'DECANO', 'RECTORADO', 'SECRETARIA_ACADEMICA'].includes(roleName);
   const canExport = ['ADMINISTRADOR_SISTEMA', 'DECANO', 'RECTORADO', 'SECRETARIA_ACADEMICA', 'ADMINISTRATIVO', 'DIRECTOR_CARRERA'].includes(roleName);
 
   const cargosDisponibles = useMemo(
@@ -417,17 +416,6 @@ export default function DocentesPage() {
           <h1 className="text-xl font-bold text-slate-800">Docentes</h1>
           <p className="text-sm text-slate-500 mt-0.5">Listado, búsqueda y gestión de fichas docentes.</p>
         </div>
-        {canCreate && (
-          <Link
-            href="/docentes/mi-ficha?modo=nuevo"
-            className="inline-flex items-center gap-1.5 rounded-md bg-[#0f4c81] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#0a3960]"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            Nuevo docente
-          </Link>
-        )}
       </div>
 
       {error && (
