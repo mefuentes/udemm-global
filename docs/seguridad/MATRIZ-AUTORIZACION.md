@@ -187,14 +187,14 @@
 
 | Endpoint | Método | Auth | Roles | Ownership | Estado previo | Riesgo |
 |----------|--------|------|-------|-----------|---------------|--------|
-| `/vinculaciones-catedra` | GET | JWT | ADMIN, SECRETARIA_ACADEMICA, DECANO, RECTORADO, DOCENTE | DOCENTE → filtrado automático por docenteId propio | OK | OK |
-| `/vinculaciones-catedra/:id` | GET | JWT | ADMIN, SECRETARIA_ACADEMICA, DECANO, RECTORADO, DOCENTE | DOCENTE → ForbiddenException si no es suya | OK | OK |
-| `/vinculaciones-catedra` | POST | JWT | ADMIN, SECRETARIA_ACADEMICA, DECANO, RECTORADO | — | OK | OK |
+| `/vinculaciones-catedra` | GET | JWT | ADMIN, SECRETARIA_ACADEMICA, DIRECTOR_CARRERA, DECANO, RECTORADO, DOCENTE | DOCENTE → filtrado automático por docenteId propio | OK | OK |
+| `/vinculaciones-catedra/:id` | GET | JWT | ADMIN, SECRETARIA_ACADEMICA, DIRECTOR_CARRERA, DECANO, RECTORADO, DOCENTE | DOCENTE → ForbiddenException si no es suya | OK | OK |
+| `/vinculaciones-catedra` | POST | JWT | ADMIN, SECRETARIA_ACADEMICA, DIRECTOR_CARRERA, DECANO, RECTORADO | — | OK | OK |
 | `/vinculaciones-catedra/:id/aprobar` | PATCH | JWT | ADMIN, **DOCENTE** | DOCENTE → solo la suya | OK | OK |
 | `/vinculaciones-catedra/:id/rechazar` | PATCH | JWT | ADMIN, **DOCENTE** | DOCENTE → solo la suya | OK | OK |
-| `/vinculaciones-catedra/:id/desvincular` | PATCH | JWT | ADMIN, SECRETARIA_ACADEMICA, DECANO, RECTORADO | — | OK | OK |
+| `/vinculaciones-catedra/:id/desvincular` | PATCH | JWT | ADMIN, SECRETARIA_ACADEMICA, DIRECTOR_CARRERA, DECANO, RECTORADO | — | OK | OK |
 
-**F5 — DECISIÓN INSTITUCIONAL PENDIENTE (C6 diferido):** DIRECTOR_CARRERA no puede leer vinculaciones. La corrección requiere una relación explícita `Usuario/DIRECTOR_CARRERA → Carrera` en el modelo de datos (campo `carreraId` en `Usuario` o modelo `DirectorCarrera`). Esa relación no existe actualmente — implementarla requiere decisión de esquema + migración de BD. No implementado en S4.
+**F5 — IMPLEMENTADO (C7):** DIRECTOR_CARRERA tiene acceso a leer, crear y desvincular vinculaciones (igual que DECANO/RECTORADO). No puede aprobar ni rechazar. **Limitación conocida:** sin una relación explícita `Usuario↔Carrera` en el schema, DIRECTOR_CARRERA ve todas las vinculaciones (sin filtro por carrera). Esta limitación es aceptada institucionalmente — no se creó nueva relación de datos. El filtro por carrera queda pendiente como mejora futura cuando se decida el modelo `DirectorCarrera`.
 
 ---
 
@@ -269,7 +269,7 @@
 | F2 | M-05b | Usuario desactivado puede seguir usando sesiones activas | ALTO | ✅ CORREGIDO (C1+C2) — chequeo activo + invalidación de sesiones |
 | F3 | IDOR | DOCENTE puede modificar CUALQUIER materia sin ownership | MEDIO | ✅ CORREGIDO (C4) — solo estado='APROBADA' otorga acceso |
 | F4 | IDOR | DOCENTE puede modificar CUALQUIER programa sin ownership | MEDIO | ✅ CORREGIDO (C5) — solo estado='APROBADA' otorga acceso |
-| F5 | DIP | DIRECTOR_CARRERA no puede ver vinculaciones | INSTITUCIONAL | ⏳ DIFERIDO (C6) — requiere relación Usuario↔Carrera en schema |
+| F5 | DIP | DIRECTOR_CARRERA no podía ver vinculaciones | INSTITUCIONAL | ✅ IMPLEMENTADO (C7) — acceso a leer/crear/desvincular sin filtro por carrera (limitación aceptada institucionalmente) |
 | F6 | INFO | Health endpoints públicos exponen info de versión | BAJO | Aceptado — sin datos de negocio |
 | F7 | INFO | AreasDisiplinaresController sin @UsePipes | BAJO | ✅ CORREGIDO (C3) |
 

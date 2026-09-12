@@ -207,6 +207,7 @@ function getModulosByRol(rolNombre: string): Modulo[] {
         MOD_PLAN_ESTUDIOS,
         MOD_REPOSITORIO_NORMATIVAS,
         MOD_GESTION_ACADEMICA,
+        MOD_VINCULACION_CATEDRA,
         MOD_CONFIGURACION_TABLAS,
       ];
 

@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
-const ROLES_ACCESO = ['ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA', 'DECANO', 'RECTORADO'];
+const ROLES_ACCESO = ['ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA', 'DIRECTOR_CARRERA', 'DECANO', 'RECTORADO'];
 
 export default function VinculacionesLayout({ children }: { children: React.ReactNode }) {
   const { usuario } = useAuth();

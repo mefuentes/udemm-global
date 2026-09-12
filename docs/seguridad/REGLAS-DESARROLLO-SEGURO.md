@@ -329,27 +329,31 @@ No aplica a:
 
 ### 7.1 Estado actual
 
-🏛️ **DIRECTOR_CARRERA no puede ver ni gestionar vinculaciones de cátedra** (`/vinculaciones-catedra`). El rol no está incluido en `ROLES_LEER` del controlador de vinculaciones.
+✅ **DIRECTOR_CARRERA puede ver y gestionar vinculaciones de cátedra** (`/vinculaciones-catedra`). El rol está incluido en `ROLES_LEER` y `ROLES_CREAR` del controlador de vinculaciones.
 
-### 7.2 Por qué no está implementado
+**Acciones habilitadas:** leer listado, leer detalle, crear solicitudes, desvincular.
 
-La corrección requeriría filtrar las vinculaciones por carrera bajo la dirección del usuario. Sin embargo:
+**Acciones NO habilitadas:** aprobar, rechazar (reservado a ADMINISTRADOR_SISTEMA y DOCENTE para las propias).
+
+### 7.2 Limitación de scope por carrera
+
+DIRECTOR_CARRERA ve **todas las vinculaciones** del sistema, sin filtro por carrera. Esto se debe a que:
 
 - El modelo `Usuario` no tiene campo `carreraId`.
 - No existe un modelo `DirectorCarrera` en el schema de Prisma.
 - Sin esa relación explícita, es imposible implementar el filtro de forma confiable.
 
-Implementar esta funcionalidad requiere:
+Esta limitación fue aceptada institucionalmente (C7). DIRECTOR_CARRERA tiene el mismo scope que DECANO/RECTORADO en este módulo.
+
+### 7.3 Mejora futura pendiente
+
+El filtro por carrera requiere:
 1. Decisión de modelo de datos: ¿`carreraId` en `Usuario`? ¿modelo `DirectorCarrera`?
 2. Migración de base de datos.
 3. Modificación del servicio de vinculaciones.
 4. Tests de ownership de DIRECTOR_CARRERA.
 
-### 7.3 Referencia de la decisión
-
-Documentado en S4 como C6/DIP-3 — "DECISIÓN INSTITUCIONAL PENDIENTE — requiere relación explícita Usuario/DIRECTOR_CARRERA ↔ Carrera".
-
-**Regla:** no implementar el acceso de DIRECTOR_CARRERA a vinculaciones hasta que exista la relación en el schema y haya una migración aplicada.
+Documentado originalmente en S4 como C6/DIP-3. Implementación parcial en C7.
 
 ---
 

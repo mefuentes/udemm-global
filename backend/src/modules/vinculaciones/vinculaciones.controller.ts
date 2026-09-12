@@ -22,12 +22,12 @@ import { RechazarVinculacionDto } from './dto/rechazar-vinculacion.dto';
 
 // Roles que pueden leer (incluye DOCENTE — el servicio filtra automáticamente)
 const ROLES_LEER = [
-  'ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA', 'DECANO', 'RECTORADO', 'DOCENTE',
+  'ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA', 'DIRECTOR_CARRERA', 'DECANO', 'RECTORADO', 'DOCENTE',
 ] as const;
 
 // Roles que pueden crear solicitudes de vinculación y gestionar desvinculaciones
 const ROLES_CREAR = [
-  'ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA', 'DECANO', 'RECTORADO',
+  'ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA', 'DIRECTOR_CARRERA', 'DECANO', 'RECTORADO',
 ] as const;
 
 // Roles que pueden aprobar o rechazar (DOCENTE solo las propias)

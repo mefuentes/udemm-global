@@ -229,6 +229,7 @@ export function Sidebar() {
         SUBMENU_PLAN_ESTUDIOS,
         ITEM_REPOSITORIO,
         SUBMENU_GESTION_ACADEMICA,
+        ITEM_VINCULACION,
         {
           label: 'Configuración',
           icon: <IcSettings />,
