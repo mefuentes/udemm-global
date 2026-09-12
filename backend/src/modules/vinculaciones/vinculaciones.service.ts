@@ -43,7 +43,7 @@ export class VinculacionesService {
 
     if (rolNombre === 'DOCENTE') {
       const docente = await this.getDocenteByUsuarioId(usuarioId);
-      if (!docente) {
+      if (!docente || !docente.activo) {
         if (filtros.page !== undefined) {
           return { data: [], total: 0, pagina: 1, limite: filtros.limit ?? 10, totalPaginas: 1 };
         }
@@ -55,7 +55,19 @@ export class VinculacionesService {
       if (filtros.carreraId)     where.carreraId     = filtros.carreraId;
       if (filtros.planEstudioId) where.planEstudioId = filtros.planEstudioId;
       if (filtros.materiaId)     where.materiaId     = filtros.materiaId;
-      if (filtros.docenteId)     where.docenteId     = filtros.docenteId;
+      if (filtros.docenteId) {
+        const docenteTarget = await this.prisma.docente.findUnique({
+          where:  { id: filtros.docenteId },
+          select: { activo: true },
+        });
+        if (!docenteTarget || !docenteTarget.activo) {
+          if (filtros.page !== undefined) {
+            return { data: [], total: 0, pagina: filtros.page ?? 1, limite: filtros.limit ?? 10, totalPaginas: 1 };
+          }
+          return [];
+        }
+        where.docenteId = filtros.docenteId;
+      }
     }
 
     if (filtros.estado) where.estado = filtros.estado;

@@ -64,13 +64,13 @@ export class DocentesController {
 
   @Patch(':id')
   @Roles('ADMINISTRADOR_SISTEMA', 'DECANO', 'RECTORADO', 'DIRECTOR_CARRERA', 'SECRETARIA_ACADEMICA', 'ADMINISTRATIVO')
-  async actualizar(@Param('id') id: string, @Body() actualizarDocenteDto: ActualizarDocenteDto) {
-    return this.docentesService.actualizarDocente(id, actualizarDocenteDto);
+  async actualizar(@Param('id') id: string, @Body() actualizarDocenteDto: ActualizarDocenteDto, @Req() req: any) {
+    return this.docentesService.actualizarDocente(id, actualizarDocenteDto, req.user.id);
   }
 
   @Delete(':id')
   @Roles('ADMINISTRADOR_SISTEMA', 'DECANO', 'RECTORADO', 'SECRETARIA_ACADEMICA')
-  async eliminar(@Param('id') id: string) {
-    return this.docentesService.eliminarDocente(id);
+  async eliminar(@Param('id') id: string, @Req() req: any) {
+    return this.docentesService.eliminarDocente(id, req.user.id);
   }
 }

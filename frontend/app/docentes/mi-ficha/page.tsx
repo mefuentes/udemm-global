@@ -2787,6 +2787,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
 
       setFormData((current) => (current ? { ...current, activo: false } : current));
       setEditMode(false);
+      setVinculacionesAprobadas([]);
       setSuccessMessage('Baja lógica aplicada. El estado del docente ahora es Inactivo.');
     } catch (err) {
       setError((err as Error).message);

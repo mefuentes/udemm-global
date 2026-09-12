@@ -321,7 +321,7 @@ export class DocentesService {
     }
   }
 
-  async actualizarDocente(id: string, data: ActualizarDocenteDto) {
+  async actualizarDocente(id: string, data: ActualizarDocenteDto, operadorId?: string) {
     this.normalizarTexto(data);
     const docenteExistente = await this.obtenerDocentePorId(id);
 
@@ -356,24 +356,52 @@ export class DocentesService {
       dataToUpdate.numeroDocumento ?? docenteExistente.numeroDocumento
     );
 
-    try {
-      const docenteActualizado = await this.prisma.docente.update({
-        where: { id },
-        data: dataToUpdate,
-        include: {
-          usuario: {
+    const esBajaLogica = data.activo === false && docenteExistente.activo === true;
+    const includeUsuario = {
+      usuario: {
+        select: {
+          id: true,
+          correoElectronico: true,
+          rol: {
             select: {
               id: true,
-              correoElectronico: true,
-              rol: {
-                select: {
-                  id: true,
-                  nombre: true
-                }
-              }
+              nombre: true
             }
           }
         }
+      }
+    };
+
+    try {
+      if (esBajaLogica && operadorId) {
+        const docenteActualizado = await this.prisma.$transaction(async (tx) => {
+          const actualizado = await tx.docente.update({
+            where: { id },
+            data: dataToUpdate,
+            include: includeUsuario,
+          });
+          await tx.vinculacionCatedra.updateMany({
+            where: {
+              docenteId: id,
+              estado: { in: ['APROBADA', 'PENDIENTE_DE_APROBACION'] },
+            },
+            data: {
+              estado: 'DESVINCULADA',
+              desvinculadorId: operadorId,
+              motivoDesvinculacion: 'BAJA LÓGICA DE DOCENTE',
+              fechaDesvinculacion: new Date(),
+              fechaRegistroDesvinculacion: new Date(),
+            },
+          });
+          return actualizado;
+        });
+        return this.formatearDocenteFecha(docenteActualizado);
+      }
+
+      const docenteActualizado = await this.prisma.docente.update({
+        where: { id },
+        data: dataToUpdate,
+        include: includeUsuario,
       });
 
       return this.formatearDocenteFecha(docenteActualizado);
@@ -469,12 +497,44 @@ export class DocentesService {
     }
   }
 
-  async eliminarDocente(id: string) {
+  async eliminarDocente(id: string, operadorId: string) {
     await this.obtenerDocentePorId(id);
-    const docente = await this.prisma.docente.update({
-      where: { id },
-      data: { activo: false }
+
+    const docente = await this.prisma.$transaction(async (tx) => {
+      const actualizado = await tx.docente.update({
+        where: { id },
+        data: { activo: false },
+        include: {
+          usuario: {
+            select: {
+              id: true,
+              correoElectronico: true,
+              rol: { select: { id: true, nombre: true } },
+            },
+          },
+        },
+      });
+
+      // Cierra todas las vinculaciones pendientes o aprobadas del docente.
+      // Estado DESVINCULADA es el mecanismo de baja lógica de VinculacionCatedra;
+      // el campo estado: 'APROBADA' ya no otorgará acceso (§6.1 REGLAS-DESARROLLO-SEGURO).
+      await tx.vinculacionCatedra.updateMany({
+        where: {
+          docenteId: id,
+          estado: { in: ['APROBADA', 'PENDIENTE_DE_APROBACION'] },
+        },
+        data: {
+          estado:                      'DESVINCULADA',
+          desvinculadorId:             operadorId,
+          motivoDesvinculacion:        'BAJA LÓGICA DE DOCENTE',
+          fechaDesvinculacion:         new Date(),
+          fechaRegistroDesvinculacion: new Date(),
+        },
+      });
+
+      return actualizado;
     });
+
     return this.formatearDocenteFecha(docente);
   }
 }
