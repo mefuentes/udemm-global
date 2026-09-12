@@ -188,10 +188,9 @@ function getModulosByRol(rolNombre: string): Modulo[] {
         {
           href: '/docentes',
           titulo: 'Gestión Docentes',
-          descripcion: 'Administración de la planta docente: altas, listado y bandeja de aprobaciones.',
+          descripcion: 'Administración de la planta docente: listado y bandeja de aprobaciones.',
           subItems: [
             { label: 'Listado de Docentes',      href: '/docentes'              },
-            { label: 'Nuevos Docentes',          href: '/docentes/nuevo'        },
             { label: 'Bandeja de Aprobaciones',  href: '/docentes/aprobaciones' },
           ],
           colorKey: 'blue',

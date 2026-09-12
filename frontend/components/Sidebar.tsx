@@ -260,7 +260,6 @@ export function Sidebar() {
         icon: <IcManage />,
         submenu: [
           { label: 'Listado de Docentes',        href: '/docentes'              },
-          { label: 'Nuevos Docentes',            href: '/docentes/nuevo'        },
           { label: 'Bandeja de Aprobaciones',    href: '/docentes/aprobaciones' },
         ],
       });
@@ -289,6 +288,16 @@ export function Sidebar() {
 
   const isMenuActive = (submenu?: { label: string; href: string }[]) =>
     submenu?.some(item => pathname.startsWith(item.href)) ?? false;
+
+  // Para subitems: gana el prefijo más largo que coincide,
+  // evitando que /docentes active también /docentes/aprobaciones y vice-versa.
+  const activeSubItemHref = (subitems: { label: string; href: string }[]): string | null => {
+    const matches = subitems.filter(
+      (s) => pathname === s.href || pathname.startsWith(s.href + '/'),
+    );
+    if (!matches.length) return null;
+    return matches.reduce((best, s) => (s.href.length > best.href.length ? s : best)).href;
+  };
 
   return (
     <aside className={`${isOpen ? 'w-64' : 'w-14'} bg-[#0d2244] border-r border-white/5 shadow-xl transition-all duration-200 flex flex-col h-screen fixed left-0 top-0 z-40`}>
@@ -371,20 +380,23 @@ export function Sidebar() {
 
                 {isOpen && expandedMenu === item.label && item.submenu && (
                   <div className="ml-3 mt-0.5 mb-1 space-y-0.5 border-l border-white/8 pl-3">
-                    {item.submenu.map((sub) => (
-                      <Link
-                        key={sub.href}
-                        href={sub.href}
-                        className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
-                          isActive(sub.href)
-                            ? 'bg-[#1a5ea8] text-white font-medium'
-                            : 'text-blue-200/50 hover:text-white hover:bg-white/5'
-                        }`}
-                      >
-                        <span className="w-1 h-1 rounded-full bg-current flex-shrink-0 opacity-50" />
-                        <span className="flex-1 min-w-0 whitespace-normal break-words leading-snug">{sub.label}</span>
-                      </Link>
-                    ))}
+                    {(() => {
+                      const activeHref = activeSubItemHref(item.submenu);
+                      return item.submenu.map((sub) => (
+                        <Link
+                          key={sub.href}
+                          href={sub.href}
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
+                            activeHref === sub.href
+                              ? 'bg-[#1a5ea8] text-white font-medium'
+                              : 'text-blue-200/50 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          <span className="w-1 h-1 rounded-full bg-current flex-shrink-0 opacity-50" />
+                          <span className="flex-1 min-w-0 whitespace-normal break-words leading-snug">{sub.label}</span>
+                        </Link>
+                      ));
+                    })()}
                   </div>
                 )}
               </>
