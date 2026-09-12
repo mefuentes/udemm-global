@@ -122,6 +122,7 @@
 | `/materias/:id` | DELETE | JWT | ADMIN, SECRETARIA_ACADEMICA, DIRECTOR_CARRERA, ADMINISTRATIVO | — | OK | OK |
 | `/materias/:id/correlativas` | GET | JWT | Todos los roles | — | OK | OK |
 | `/materias/:id/correlativas` | POST | JWT | ADMIN, SECRETARIA_ACADEMICA, DIRECTOR_CARRERA, ADMINISTRATIVO | DOCENTE excluido (arquitectura curricular) | CORREGIDO (C4) | OK |
+| `/materias/:id/correlativas/:correlativaId` | PATCH | JWT | ADMIN, SECRETARIA_ACADEMICA, DIRECTOR_CARRERA, ADMINISTRATIVO | DOCENTE excluido (arquitectura curricular) | OK | OK |
 | `/materias/:id/correlativas/:correlativaId` | DELETE | JWT | ADMIN, SECRETARIA_ACADEMICA, DIRECTOR_CARRERA, ADMINISTRATIVO | DOCENTE excluido (arquitectura curricular) | CORREGIDO (C4) | OK |
 
 **F3 — CORREGIDO (C4):** `PATCH /materias/:id` con DOCENTE requiere `VinculacionCatedra` con `estado='APROBADA'`. `PENDIENTE_DE_APROBACION`, `RECHAZADA` y `DESVINCULADA` → 403. DOCENTE removido de correlativas (son arquitectura curricular).

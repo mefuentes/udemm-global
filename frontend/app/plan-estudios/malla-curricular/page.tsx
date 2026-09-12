@@ -25,7 +25,7 @@ const ESTADOS_PLAN = ['ACTIVO', 'INACTIVO', 'EN_REVISION'];
 const MODALIDADES_DICTADO = [
   { value: 'PRESENCIAL', label: 'Presencial' },
   { value: 'VIRTUAL',    label: 'Virtual' },
-  { value: 'MIXTA',      label: 'Mixta / Semipresencial' },
+  { value: 'HÍBRIDA',    label: 'Híbrida' },
 ];
 
 const BLOQUES_CONOCIMIENTO = [
@@ -438,7 +438,7 @@ export default function MallaCurricularPage() {
 
   function colorModalidad(val?: string) {
     if (val === 'VIRTUAL') return 'bg-sky-50 text-sky-700 border-sky-200';
-    if (val === 'MIXTA')   return 'bg-teal-50 text-teal-700 border-teal-200';
+    if (val === 'HÍBRIDA') return 'bg-teal-50 text-teal-700 border-teal-200';
     return 'bg-green-50 text-green-700 border-green-200';
   }
 

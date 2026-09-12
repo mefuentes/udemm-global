@@ -31,7 +31,7 @@ const REGIMENES = ['Cuatrimestral', 'Anual', 'Intensivo', 'Bimestral'];
 const MODALIDADES_DICTADO = [
   { value: 'PRESENCIAL', label: 'Presencial' },
   { value: 'VIRTUAL',    label: 'Virtual' },
-  { value: 'MIXTA',      label: 'Mixta / Semipresencial' },
+  { value: 'HÍBRIDA',    label: 'Híbrida' },
 ];
 
 function labelModalidad(val?: string | null) {
@@ -40,7 +40,7 @@ function labelModalidad(val?: string | null) {
 
 function colorModalidadBadge(val?: string | null) {
   if (val === 'VIRTUAL') return 'bg-sky-50 text-sky-700 border-sky-200';
-  if (val === 'MIXTA')   return 'bg-teal-50 text-teal-700 border-teal-200';
+  if (val === 'HÍBRIDA') return 'bg-teal-50 text-teal-700 border-teal-200';
   if (val === 'PRESENCIAL') return 'bg-green-50 text-green-700 border-green-200';
   return '';
 }
@@ -627,6 +627,8 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
   const [corrAgregar, setCorrAgregar] = useState({ correlativaId: '', tipo: 'CURSADO' });
   const [agregandoCorr, setAgregandoCorr] = useState(false);
   const [mostrarFormCorr, setMostrarFormCorr] = useState(false);
+  const [corrEditando, setCorrEditando] = useState<{ correlativaId: string; tipo: string } | null>(null);
+  const [guardandoCorr, setGuardandoCorr] = useState(false);
 
   useEffect(() => {
     if (!usuario || !materiaId) return;
@@ -714,8 +716,25 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
     }
   }
 
-  async function quitarCorrelativa(correlativaId: string) {
-    if (!window.confirm('¿Quitar esta correlativa?')) return;
+  async function modificarCorrelativa() {
+    if (!corrEditando) return;
+    setGuardandoCorr(true);
+    try {
+      await apiFetch(`${API_URL}/materias/${materiaId}/correlativas/${corrEditando.correlativaId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ tipo: corrEditando.tipo })
+      });
+      setCorrEditando(null);
+      await fetchFicha();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setGuardandoCorr(false);
+    }
+  }
+
+  async function quitarCorrelativa(correlativaId: string, nombre: string) {
+    if (!window.confirm(`¿Eliminar la correlativa "${nombre}"? Se elimina solo la relación, no la asignatura.`)) return;
     try {
       await apiFetch(`${API_URL}/materias/${materiaId}/correlativas/${correlativaId}`, { method: 'DELETE' });
       await fetchFicha();
@@ -744,6 +763,7 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
     setModoEditar(false);
     setMostrarFormCorr(false);
     setCorrAgregar({ correlativaId: '', tipo: 'CURSADO' });
+    setCorrEditando(null);
   }
 
   // ── Datos derivados ─────────────────────────────────────────────────────
@@ -972,31 +992,84 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
                       <tr className="bg-slate-50 border-b border-slate-200">
                         <th className="text-left px-3 py-2 font-semibold text-slate-500 uppercase tracking-wide text-[10px] w-24">Código</th>
                         <th className="text-left px-3 py-2 font-semibold text-slate-500 uppercase tracking-wide text-[10px]">Nombre</th>
-                        {permisos.editar && !modoVer && <th className="w-10 px-3 py-2" />}
+                        <th className="text-left px-3 py-2 font-semibold text-slate-500 uppercase tracking-wide text-[10px] w-28">Tipo</th>
+                        {permisos.editar && !modoVer && <th className="w-24 px-3 py-2" />}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {ficha.correlativas.map(c => (
-                        <tr key={c.id} className="hover:bg-slate-50/60 transition-colors">
-                          <td className="px-3 py-2.5">
-                            <span className="text-[10px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/15">
-                              {c.correlativa.codigo}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 text-slate-700">{c.correlativa.nombre}</td>
-                          {permisos.editar && !modoVer && (
-                            <td className="px-3 py-2.5 text-right">
-                              <button
-                                onClick={() => quitarCorrelativa(c.correlativa.id)}
-                                className="text-slate-300 hover:text-red-500 transition-colors p-0.5 rounded"
-                                title="Eliminar correlativa"
-                              >
-                                <IcClose />
-                              </button>
+                      {ficha.correlativas.map(c => {
+                        const editandoEstaFila = corrEditando?.correlativaId === c.correlativa.id;
+                        return (
+                          <tr key={c.id} className={`transition-colors ${editandoEstaFila ? 'bg-blue-50/40' : 'hover:bg-slate-50/60'}`}>
+                            <td className="px-3 py-2.5">
+                              <span className="text-[10px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/15">
+                                {c.correlativa.codigo}
+                              </span>
                             </td>
-                          )}
-                        </tr>
-                      ))}
+                            <td className="px-3 py-2.5 text-slate-700">{c.correlativa.nombre}</td>
+                            <td className="px-3 py-2.5">
+                              {editandoEstaFila ? (
+                                <select
+                                  value={corrEditando.tipo}
+                                  onChange={e => setCorrEditando(v => v ? { ...v, tipo: e.target.value } : v)}
+                                  className="text-xs border border-slate-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/30"
+                                >
+                                  <option value="CURSADO">Para cursar</option>
+                                  <option value="EXAMEN">Para rendir</option>
+                                </select>
+                              ) : (
+                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${
+                                  c.tipo === 'EXAMEN'
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : 'bg-blue-50 text-blue-700 border-blue-200'
+                                }`}>
+                                  {c.tipo === 'EXAMEN' ? 'Para rendir' : 'Para cursar'}
+                                </span>
+                              )}
+                            </td>
+                            {permisos.editar && !modoVer && (
+                              <td className="px-3 py-2.5">
+                                <div className="flex items-center justify-end gap-1">
+                                  {editandoEstaFila ? (
+                                    <>
+                                      <button
+                                        onClick={modificarCorrelativa}
+                                        disabled={guardandoCorr}
+                                        className="text-[10px] font-semibold px-2 py-1 bg-[#0f4c81] text-white rounded hover:bg-[#0d3e6b] disabled:opacity-50 transition-colors"
+                                      >
+                                        {guardandoCorr ? '...' : 'Guardar'}
+                                      </button>
+                                      <button
+                                        onClick={() => setCorrEditando(null)}
+                                        className="text-[10px] px-2 py-1 border border-slate-200 text-slate-600 rounded hover:bg-slate-50 transition-colors"
+                                      >
+                                        Cancelar
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <button
+                                        onClick={() => { setCorrEditando({ correlativaId: c.correlativa.id, tipo: c.tipo }); setMostrarFormCorr(false); }}
+                                        className="text-slate-400 hover:text-[#0f4c81] transition-colors p-0.5 rounded"
+                                        title="Modificar tipo de correlativa"
+                                      >
+                                        <IcEdit />
+                                      </button>
+                                      <button
+                                        onClick={() => quitarCorrelativa(c.correlativa.id, c.correlativa.nombre)}
+                                        className="text-slate-300 hover:text-red-500 transition-colors p-0.5 rounded"
+                                        title="Eliminar correlativa"
+                                      >
+                                        <IcClose />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1004,7 +1077,7 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
               {permisos.editar && modoEditar && (
                 !mostrarFormCorr ? (
                   <button
-                    onClick={() => setMostrarFormCorr(true)}
+                    onClick={() => { setMostrarFormCorr(true); setCorrEditando(null); }}
                     className="flex items-center gap-1.5 text-xs font-semibold text-[#0f4c81] hover:bg-[#0f4c81]/5 px-3 py-2 rounded-lg transition-colors"
                   >
                     <IcPlus />
@@ -1025,6 +1098,17 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
                         </option>
                       ))}
                     </select>
+                    <div className="flex items-center gap-4">
+                      <span className="text-xs text-slate-600 font-medium">Tipo:</span>
+                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <input type="radio" name="tipoCorr" value="CURSADO" checked={corrAgregar.tipo === 'CURSADO'} onChange={() => setCorrAgregar(c => ({ ...c, tipo: 'CURSADO' }))} className="accent-[#0f4c81]" />
+                        Para cursar
+                      </label>
+                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <input type="radio" name="tipoCorr" value="EXAMEN" checked={corrAgregar.tipo === 'EXAMEN'} onChange={() => setCorrAgregar(c => ({ ...c, tipo: 'EXAMEN' }))} className="accent-[#0f4c81]" />
+                        Para rendir
+                      </label>
+                    </div>
                     <div className="flex gap-2">
                       <button
                         onClick={agregarCorrelativa}
@@ -1139,8 +1223,9 @@ const ACCION_CONFIG: Record<string, { label: string; cls: string }> = {
   ACTUALIZACION:         { label: 'Actualización',      cls: 'bg-blue-50 text-blue-700 border-blue-200' },
   APROBACION:            { label: 'Aprobación',         cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   BAJA:                  { label: 'Baja',               cls: 'bg-red-50 text-red-600 border-red-200' },
-  CORRELATIVA_AGREGADA:  { label: 'Correlativa +',      cls: 'bg-violet-50 text-violet-700 border-violet-200' },
-  CORRELATIVA_QUITADA:   { label: 'Correlativa −',      cls: 'bg-orange-50 text-orange-700 border-orange-200' },
+  CORRELATIVA_AGREGADA:   { label: 'Correlativa +',  cls: 'bg-violet-50 text-violet-700 border-violet-200' },
+  CORRELATIVA_MODIFICADA: { label: 'Correlativa ~',  cls: 'bg-sky-50 text-sky-700 border-sky-200' },
+  CORRELATIVA_QUITADA:    { label: 'Correlativa −',  cls: 'bg-orange-50 text-orange-700 border-orange-200' },
 };
 
 function AccionBadge({ accion }: { accion: string }) {

@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CrearMateriaDto } from './dto/crear-materia.dto';
 import { ActualizarMateriaDto } from './dto/actualizar-materia.dto';
 import { GestionarCorrelativaDto } from './dto/gestionar-correlativa.dto';
+import { ActualizarCorrelativaDto } from './dto/actualizar-correlativa.dto';
 
 const LABELS_CAMPO: Record<string, string> = {
   nombre:             'Nombre',
@@ -272,6 +273,37 @@ export class MateriasService {
       `Correlativa agregada: [${correlativa.codigo}] ${correlativa.nombre} (${tipoLabel})`
     );
     return registro;
+  }
+
+  async actualizarCorrelativa(materiaId: string, correlativaId: string, dto: ActualizarCorrelativaDto, usuarioId: string) {
+    const registro = await this.prisma.correlatividad.findUnique({
+      where: { materiaId_correlativaId: { materiaId, correlativaId } }
+    });
+    if (!registro) throw new NotFoundException('Correlativa no encontrada');
+
+    const correlativa = await this.prisma.materia.findUnique({
+      where: { id: correlativaId },
+      select: { codigo: true, nombre: true }
+    });
+
+    const updated = await this.prisma.correlatividad.update({
+      where: { id: registro.id },
+      data: { tipo: dto.tipo },
+      include: {
+        correlativa: {
+          select: { id: true, codigo: true, nombre: true, anio: true, cuatrimestre: true }
+        }
+      }
+    });
+
+    const tipoLabel = dto.tipo === 'EXAMEN' ? 'Para rendir' : 'Para cursar';
+    if (correlativa) {
+      await this.registrarHistorial(
+        materiaId, usuarioId, 'CORRELATIVA_MODIFICADA',
+        `Correlativa modificada: [${correlativa.codigo}] ${correlativa.nombre} → ${tipoLabel}`
+      );
+    }
+    return updated;
   }
 
   async quitarCorrelativa(materiaId: string, correlativaId: string, usuarioId: string) {

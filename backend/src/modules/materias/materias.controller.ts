@@ -19,6 +19,7 @@ import { MateriasService } from './materias.service';
 import { CrearMateriaDto } from './dto/crear-materia.dto';
 import { ActualizarMateriaDto } from './dto/actualizar-materia.dto';
 import { GestionarCorrelativaDto } from './dto/gestionar-correlativa.dto';
+import { ActualizarCorrelativaDto } from './dto/actualizar-correlativa.dto';
 
 const ROLES_VER = [
   'ADMINISTRADOR_SISTEMA',
@@ -126,6 +127,17 @@ export class MateriasController {
     @Req() req: any
   ) {
     return this.materiasService.agregarCorrelativa(id, dto, req.user.id);
+  }
+
+  @Patch(':id/correlativas/:correlativaId')
+  @Roles(...ROLES_ACTUALIZAR_CORRELATIVAS)
+  actualizarCorrelativa(
+    @Param('id') id: string,
+    @Param('correlativaId') correlativaId: string,
+    @Body() dto: ActualizarCorrelativaDto,
+    @Req() req: any
+  ) {
+    return this.materiasService.actualizarCorrelativa(id, correlativaId, dto, req.user.id);
   }
 
   @Delete(':id/correlativas/:correlativaId')

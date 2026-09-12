@@ -54,7 +54,7 @@ export class CrearMateriaDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['PRESENCIAL', 'VIRTUAL', 'MIXTA'])
+  @IsIn(['PRESENCIAL', 'VIRTUAL', 'HÍBRIDA'])
   modalidadDictado?: string;
 
   @IsOptional()

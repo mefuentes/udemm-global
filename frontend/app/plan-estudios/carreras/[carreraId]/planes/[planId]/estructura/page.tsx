@@ -33,7 +33,7 @@ const ESTADOS_ASIGNATURA = ['ACTIVO', 'INACTIVO'];
 const MODALIDADES_DICTADO = [
   { value: 'PRESENCIAL', label: 'Presencial' },
   { value: 'VIRTUAL',    label: 'Virtual' },
-  { value: 'MIXTA',      label: 'Mixta / Semipresencial' },
+  { value: 'HÍBRIDA',    label: 'Híbrida' },
 ];
 
 const MATERIA_VACIA = {
