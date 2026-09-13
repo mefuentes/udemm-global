@@ -779,17 +779,12 @@ function FilaPrograma({
       {/* Acciones */}
       <td className="px-4 py-3 text-right">
         <div className="flex items-center justify-end gap-2 flex-wrap">
-          {avancePct === 100 && estadoPrograma === 'APROBADO' && (
-            <span className="inline-block text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
-              ✓ Aprobado
-            </span>
-          )}
-          {puedeCompletar && !(avancePct === 100 && estadoPrograma === 'APROBADO') && (
+          {puedeCompletar && (
             <button
               onClick={() => router.push(fichaUrl)}
               className="text-[11px] font-semibold bg-[#0f4c81] text-white px-3 py-1 rounded-lg hover:bg-[#0d3e6b] transition-colors whitespace-nowrap"
             >
-              Completar →
+              Editar
             </button>
           )}
           <button
