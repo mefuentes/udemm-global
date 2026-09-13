@@ -7,7 +7,7 @@ import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
 const VIGENCIAS = ['VIGENTE', 'DEROGADA', 'SUSPENDIDA', 'REEMPLAZADA'] as const;
-const MAX_MB    = 15;
+const MAX_MB    = 50;
 const MAX_BYTES = MAX_MB * 1024 * 1024;
 const HOY_ISO   = new Date().toISOString().slice(0, 10);
 

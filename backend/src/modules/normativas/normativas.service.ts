@@ -38,7 +38,7 @@ function tokenizar(texto: string): string[] {
     .filter(t => t.length > 1 && !STOPWORDS.has(t.toLowerCase()));
 }
 
-const MAX_BYTES = 15 * 1024 * 1024; // 15 MB
+const MAX_BYTES = 50 * 1024 * 1024; // 50 MB
 
 // Firma mágica de PDF: %PDF (bytes 0x25 0x50 0x44 0x46)
 function esPdf(buffer: Buffer): boolean {
@@ -77,7 +77,7 @@ export class NormativasService {
     // 2. Tamaño
     if (archivo.size > MAX_BYTES) {
       throw new BadRequestException(
-        'ERROR: EL ARCHIVO EXCEDE EL TAMAÑO MÁXIMO PERMITIDO (15 MB).',
+        'ERROR: EL ARCHIVO EXCEDE EL TAMAÑO MÁXIMO PERMITIDO (50 MB).',
       );
     }
 
@@ -212,7 +212,7 @@ export class NormativasService {
     if (archivo) {
       if (archivo.size > MAX_BYTES) {
         throw new BadRequestException(
-          'ERROR: EL ARCHIVO EXCEDE EL TAMAÑO MÁXIMO PERMITIDO (15 MB).',
+          'ERROR: EL ARCHIVO EXCEDE EL TAMAÑO MÁXIMO PERMITIDO (50 MB).',
         );
       }
       if (!esPdf(archivo.buffer)) {

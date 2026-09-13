@@ -73,7 +73,7 @@ export class NormativasController {
   @UseInterceptors(
     FileInterceptor('archivo', {
       storage: memoryStorage(),
-      limits: { fileSize: 20 * 1024 * 1024 },
+      limits: { fileSize: 55 * 1024 * 1024 },
     }),
   )
   crear(
@@ -222,7 +222,7 @@ export class NormativasController {
   @UseInterceptors(
     FileInterceptor('archivo', {
       storage: memoryStorage(),
-      limits: { fileSize: 20 * 1024 * 1024 },
+      limits: { fileSize: 55 * 1024 * 1024 },
     }),
   )
   actualizar(

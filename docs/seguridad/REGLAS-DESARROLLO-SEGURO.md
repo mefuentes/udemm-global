@@ -596,7 +596,7 @@ app.use(urlencoded({ extended: true, limit: '1mb' }));
 
 El backend se crea con `{ bodyParser: false }` — NestJS no registra su propio parser.
 
-**Excepción:** subidas de archivos usan multer (configurado en `normativas.controller.ts`) con límite de 20 MB en el controlador. El service rechaza archivos sobre 15 MB.
+**Excepción:** subidas de archivos usan multer (configurado en `normativas.controller.ts`) con límite de 55 MB en el controlador. El service rechaza archivos sobre 50 MB.
 
 ### 13.4 Cache-Control en autenticación
 
@@ -625,7 +625,7 @@ El backend se crea con `{ bodyParser: false }` — NestJS no registra su propio 
 | Magic bytes check | `esPdf()` verifica `%PDF-` (bytes 0x25 0x50 0x44 0x46) — no se confía en el Content-Type del cliente |
 | Nombre de archivo seguro | `randomUUID()` — nunca usa el nombre original del archivo |
 | Path traversal prevention | `StorageService.resolverRuta()` verifica que la ruta resuelta comience con `basePath + sep` |
-| Tamaño máximo | Multer: 20 MB; Service: 15 MB (el service rechaza antes de escribir a disco) |
+| Tamaño máximo | Multer: 55 MB; Service: 50 MB (el service rechaza antes de escribir a disco) |
 | Tipo MIME | No se usa el MIME del cliente; solo magic bytes determinan el tipo válido |
 
 **Regla:** cualquier nuevo endpoint de subida de archivos debe incluir verificación de magic bytes, nombre aleatorio (nunca el original) y path traversal prevention.
