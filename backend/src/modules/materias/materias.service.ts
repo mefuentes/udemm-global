@@ -92,6 +92,16 @@ export class MateriasService {
         ...(planEstudioId ? { planEstudioId } : {}),
         estado: 'ACTIVO'
       },
+      include: {
+        vinculaciones: {
+          where: { estado: 'APROBADA' },
+          select: {
+            docente: {
+              select: { id: true, nombre: true, apellido: true }
+            }
+          }
+        }
+      },
       orderBy: [{ anio: 'asc' }, { cuatrimestre: 'asc' }, { nombre: 'asc' }]
     });
   }

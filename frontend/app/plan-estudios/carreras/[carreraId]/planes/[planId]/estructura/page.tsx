@@ -55,6 +55,9 @@ interface PlanDetalle {
   estado: string; duracionCuatrimestres?: number; totalCreditos?: number;
   carrera: Carrera;
 }
+interface DocenteVinculado {
+  id: string; nombre: string; apellido: string;
+}
 interface Materia {
   id: string; codigo: string; nombre: string;
   anio?: number; cuatrimestre?: number;
@@ -62,6 +65,7 @@ interface Materia {
   cargaHorariaSemanal?: number; cargaHorariaTotal?: number;
   creditos: number; tipoAsignatura: string; estado: string;
   descripcion?: string; observaciones?: string; planEstudioId: string;
+  vinculaciones?: { docente: DocenteVinculado }[];
 }
 interface CorrelativaItem {
   id: string; tipo: string;
@@ -651,7 +655,7 @@ export default function EstructuraCurricularPage() {
                             </div>
                           ) : (
                             <div className="overflow-x-auto">
-                              <table className="w-full text-xs min-w-[680px]">
+                              <table className="w-full text-xs min-w-[900px]">
                                 <thead>
                                   <tr className="border-b border-slate-100">
                                     <Th label="Código"     col="codigo"   ordenCol={ordenCol} ordenAsc={ordenAsc} onClick={() => toggleSort('codigo')}   cls="w-28 pl-5" />
@@ -659,6 +663,9 @@ export default function EstructuraCurricularPage() {
                                     <Th label="Bloque"     col="bloque"   ordenCol={ordenCol} ordenAsc={ordenAsc} onClick={() => toggleSort('bloque')}   cls="min-w-[160px]" />
                                     <th className="px-3 py-2.5 text-left font-semibold text-slate-400 uppercase tracking-wide text-[10px] min-w-[140px]">
                                       Correlativas aprobadas
+                                    </th>
+                                    <th className="px-3 py-2.5 text-left font-semibold text-slate-400 uppercase tracking-wide text-[10px] min-w-[160px]">
+                                      Docentes vinculados
                                     </th>
                                     <Th label="H/Sem" col="hSemanal" ordenCol={ordenCol} ordenAsc={ordenAsc} onClick={() => toggleSort('hSemanal')} cls="w-20 text-center" />
                                     <Th label="H/Tot" col="hTotal"   ordenCol={ordenCol} ordenAsc={ordenAsc} onClick={() => toggleSort('hTotal')}   cls="w-20 text-center" />
@@ -723,6 +730,21 @@ export default function EstructuraCurricularPage() {
                                             </div>
                                           ) : (
                                             <span className="text-[11px] text-slate-400 italic">Sin correlativas</span>
+                                          )}
+                                        </td>
+
+                                        {/* Docentes vinculados */}
+                                        <td className="px-3 py-3">
+                                          {(materia.vinculaciones ?? []).length > 0 ? (
+                                            <div className="flex flex-col gap-0.5">
+                                              {(materia.vinculaciones ?? []).map(v => (
+                                                <span key={v.docente.id} className="text-[10px] text-slate-700 font-medium leading-tight">
+                                                  {v.docente.apellido.toUpperCase()}, {v.docente.nombre}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <span className="text-[10px] text-slate-400 italic">Sin docente vinculado</span>
                                           )}
                                         </td>
 
