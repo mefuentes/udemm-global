@@ -22,7 +22,7 @@ const NAV_INTERNA = [
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
-interface Carrera { id: string; nombre: string }
+interface Carrera { id: string; nombre: string; facultadId?: string }
 interface Plan    { id: string; nombre: string; anio?: number; version?: string; estado: string }
 
 interface MateriaResumen {
@@ -43,12 +43,6 @@ interface ProgramaResumen {
   estadoS4: string; estadoS5: string; estadoS6: string;
   estadoPrograma: string;
 }
-
-const ESTADO_PROG_BADGE: Record<string, { label: string; cls: string }> = {
-  PENDIENTE:   { label: 'Pendiente',   cls: 'bg-slate-100 text-slate-500 border-slate-200' },
-  EN_REVISION: { label: 'En revisión', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  APROBADO:    { label: 'Aprobado',    cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-};
 
 type EstadoLabel = 'Sin iniciar' | 'En proceso' | 'Completo';
 
@@ -132,7 +126,6 @@ export default function ProgramasAsignaturaPage() {
   const { usuario } = useAuth();
 
   const permisosPrograma = getPermisosPrograma(usuario?.rol?.nombre ?? '');
-  const puedeCompletar   = permisosPrograma.editar;
 
   const [materiasEditables, setMateriasEditables] = useState<Set<string>>(new Set());
 
@@ -151,6 +144,24 @@ export default function ProgramasAsignaturaPage() {
   const [cargandoPlanes,  setCargandoPlanes]  = useState(false);
   const [reloadKey,       setReloadKey]       = useState(0);
   const planIdRef = useRef(planId);
+
+  // Scope-aware: DC solo puede editar su carrera; DECANO solo las de su facultad.
+  // SECRETARIA_ACADEMICA/RECTORADO tienen scope global → permisosPrograma.editar basta.
+  // Declarada después de todos los useState para que carreraId y carreras estén inicializados.
+  function puedeEditarEnCarreraSeleccionada(): boolean {
+    if (!carreraId) return false;
+    const rol = usuario?.rol?.nombre;
+    if (rol === 'DIRECTOR_CARRERA') {
+      return usuario?.carreraAsociada?.id === carreraId;
+    }
+    if (rol === 'DECANO') {
+      const carrera = carreras.find(c => c.id === carreraId);
+      return !!carrera?.facultadId && carrera.facultadId === usuario?.facultadAsociada?.id;
+    }
+    return permisosPrograma.editar;
+  }
+
+  const puedeCompletar = puedeEditarEnCarreraSeleccionada();
 
   // ── API helper ─────────────────────────────────────────────────────────────
 
@@ -295,11 +306,10 @@ export default function ProgramasAsignaturaPage() {
 
     const columns = [
       { label: 'Código',      width: 80  },
-      { label: 'Asignatura',  width: 300 },
+      { label: 'Asignatura',  width: 340 },
       { label: 'Año',         width: 50  },
-      { label: 'Completitud', width: 100 },
-      { label: 'Avance',      width: 70  },
-      { label: 'Aprobación',  width: 110 },
+      { label: 'Completitud', width: 120 },
+      { label: 'Avance',      width: 80  },
     ];
 
     const carreraNombre = carreras.find(c => c.id === carreraId)?.nombre ?? '';
@@ -476,7 +486,6 @@ export default function ProgramasAsignaturaPage() {
         m.anio ? `${m.anio}°` : '—',
         m.estadoLabel,
         `${m.avancePct}%`,
-        ESTADO_PROG_BADGE[m.estadoPrograma]?.label ?? m.estadoPrograma,
       ], i);
     });
 
@@ -639,7 +648,6 @@ export default function ProgramasAsignaturaPage() {
                         <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide">Asignatura</th>
                         <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-16">Año</th>
                         <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-28">Completitud</th>
-                        <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-32">Aprobación</th>
                         <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-48">Avance</th>
                         <th className="px-4 py-3 w-44 text-right font-semibold text-slate-500 uppercase tracking-wide">Acciones</th>
                       </tr>
@@ -700,14 +708,12 @@ function FilaPrograma({
   puedeCompletar: boolean;
   router: ReturnType<typeof useRouter>;
 }) {
-  const { avancePct, estadoLabel, estadoPrograma } = materia;
+  const { avancePct, estadoLabel } = materia;
 
   const estadoCls =
     estadoLabel === 'Completo'  ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
     estadoLabel === 'En proceso'? 'bg-amber-50 text-amber-700 border-amber-200' :
                                   'bg-slate-100 text-slate-500 border-slate-200';
-
-  const aprobCfg = ESTADO_PROG_BADGE[estadoPrograma] ?? ESTADO_PROG_BADGE.PENDIENTE;
 
   const barCls =
     avancePct === 100 ? 'bg-emerald-500' :
@@ -748,13 +754,6 @@ function FilaPrograma({
       <td className="px-4 py-3">
         <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${estadoCls}`}>
           {estadoLabel}
-        </span>
-      </td>
-
-      {/* Aprobación */}
-      <td className="px-4 py-3">
-        <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${aprobCfg.cls}`}>
-          {aprobCfg.label}
         </span>
       </td>
 

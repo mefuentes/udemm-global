@@ -1,9 +1,9 @@
 # MATRIZ DE AUTORIZACIÓN — UDEMM Global
 
 **Fecha:** 2026-08-27
-**Actualizado:** 2026-09-16 (FASE 1 — scopes institucionales)
+**Actualizado:** 2026-09-16 (FASE 3 — scopes aplicados a Programas de Asignatura)
 **Rama:** `feature/ajustes-permisos-docentes`
-**Etapa:** S4 — ETAPA B COMPLETADA / FASE 1 scopes implementada
+**Etapa:** S4 — ETAPA B COMPLETADA / FASES 1-3 scopes implementadas
 
 ---
 
@@ -39,7 +39,7 @@
 
 **Limpieza automática:** al cambiar el rol de un usuario (`actualizarUsuario`), se eliminan las asociaciones de scope residuales (`UsuariosService.limpiarScopesResiduales`).
 
-**Estado:** ✅ INFRAESTRUCTURA IMPLEMENTADA — FASE 2 (gestión de asociaciones desde UI de Usuarios) pendiente.
+**Estado:** ✅ INFRAESTRUCTURA IMPLEMENTADA — FASE 2 (gestión desde UI de Usuarios) ✅ COMPLETADA — FASE 3 (aplicación a Programas de Asignatura) ✅ COMPLETADA.
 
 ---
 
@@ -156,13 +156,20 @@
 
 ## Módulo: Programas de Asignatura (`/programas`)
 
-| Endpoint | Método | Auth | Roles | Ownership | Estado previo | Riesgo |
-|----------|--------|------|-------|-----------|---------------|--------|
+| Endpoint | Método | Auth | Roles | Ownership / Scope | Estado | Riesgo |
+|----------|--------|------|-------|-------------------|--------|--------|
 | `/programas/materia/:materiaId` | GET | JWT | Todos los roles | — | OK | OK |
-| `/programas/materia/:materiaId` | PATCH | JWT | ADMIN, SECRETARIA_ACADEMICA, DIRECTOR_CARRERA, ADMINISTRATIVO, DOCENTE | ✅ DOCENTE: requiere VinculacionCatedra `estado='APROBADA'` con esa materia | CORREGIDO (C5) | OK |
-| `/programas/materia/:materiaId/aprobar` | POST | JWT | ADMIN, SECRETARIA_ACADEMICA, DIRECTOR_CARRERA | — | OK | OK |
+| `/programas/materia/:materiaId` | PATCH | JWT | DIRECTOR_CARRERA, DECANO, SECRETARIA_ACADEMICA, RECTORADO | ✅ DC: scope carrera · ✅ DECANO: scope facultad · SEC/REC: global | ✅ FASE 3 | OK |
 
-**F4 — CORREGIDO (C5):** `PATCH /programas/materia/:materiaId` con DOCENTE requiere `VinculacionCatedra` con `estado='APROBADA'`. `PENDIENTE_DE_APROBACION`, `RECHAZADA` y `DESVINCULADA` → 403.
+**FASE 3 — Scopes Institucionales y política definitiva de roles (C8):**
+- `DIRECTOR_CARRERA`: solo puede editar programas de la Carrera que tiene asociada (`UsuarioCarrera`). Acceso a otras carreras → 403.
+- `DECANO`: solo puede editar programas de Carreras pertenecientes a su Facultad (`UsuarioFacultad`). Acceso a carreras de otra facultad → 403.
+- `SECRETARIA_ACADEMICA`, `RECTORADO`: scope global, sin restricción territorial.
+- `DOCENTE`, `ADMINISTRADOR_SISTEMA`, `ADMINISTRATIVO`: **solo lectura** — no están en `ROLES_EDITAR`. `PATCH /programas/materia/:materiaId` devuelve 403 para estos roles.
+- Endpoint `POST /aprobar` **eliminado**. El flujo de aprobación deja de usarse funcionalmente.
+- `estadoPrograma = 'APROBADO'` histórico se **conserva intacto** en BD tanto al consultar como al editar. Solo se recalcula PENDIENTE/EN_REVISION para programas que no eran APROBADO.
+- No se generan nuevas entradas de tipo `APROBACION` en historial; las existentes son visibles en la ficha.
+- El historial de modificaciones (`HistorialPrograma`) se persiste en una `$transaction` atómica junto con el upsert del programa.
 
 ---
 
@@ -293,22 +300,24 @@
 | F1 | M-05a | Cambio de rol no tiene efecto inmediato | ALTO | ✅ CORREGIDO (C1) — rol desde BD en cada request |
 | F2 | M-05b | Usuario desactivado puede seguir usando sesiones activas | ALTO | ✅ CORREGIDO (C1+C2) — chequeo activo + invalidación de sesiones |
 | F3 | IDOR | DOCENTE puede modificar CUALQUIER materia sin ownership | MEDIO | ✅ CORREGIDO (C4) — solo estado='APROBADA' otorga acceso |
-| F4 | IDOR | DOCENTE puede modificar CUALQUIER programa sin ownership | MEDIO | ✅ CORREGIDO (C5) — solo estado='APROBADA' otorga acceso |
+| F4 | RBAC | DOCENTE podía modificar programas (con VinculacionCatedra APROBADA) | MEDIO | ✅ CORREGIDO (C5→C9) — DOCENTE eliminado de ROLES_EDITAR; es solo lectura en Programas |
 | F5 | DIP | DIRECTOR_CARRERA no podía ver vinculaciones | INSTITUCIONAL | ✅ IMPLEMENTADO (C7) — acceso a leer/crear/desvincular sin filtro por carrera (limitación aceptada institucionalmente) |
+| F8 | SCOPE | DC/DECANO podían editar programas fuera de su scope territorial | MEDIO | ✅ CORREGIDO (C8) — FASE 3: ScopeService.tieneScopeCarrera() en ProgramasService |
 | F6 | INFO | Health endpoints públicos exponen info de versión | BAJO | Aceptado — sin datos de negocio |
 | F7 | INFO | AreasDisiplinaresController sin @UsePipes | BAJO | ✅ CORREGIDO (C3) |
 
-### Política de ownership definitiva (VinculacionCatedra)
+### Política de ownership definitiva (VinculacionCatedra — solo módulo Vinculaciones)
+
+> **FASE 3:** El ownership por `VinculacionCatedra` ya **no aplica a Programas de Asignatura**.
+> DOCENTE es solo lectura en Programas. La tabla de estados aplica únicamente al módulo de Vinculaciones.
 
 Estados del modelo `VinculacionCatedra` confirmados en código:
 
-| Estado | Significado | Otorga ownership DOCENTE |
-|--------|-------------|--------------------------|
+| Estado | Significado | Relevante para Vinculaciones |
+|--------|-------------|------------------------------|
 | `PENDIENTE_DE_APROBACION` | Solicitud enviada, sin resolución | ❌ NO |
 | `APROBADA` | Vinculación efectivamente activa | ✅ SÍ |
 | `RECHAZADA` | Vinculación denegada | ❌ NO |
 | `DESVINCULADA` | Vinculación finalizada (baja) | ❌ NO |
-
-La query definitiva: `vinculacionCatedra.findFirst({ where: { docenteId, materiaId, estado: 'APROBADA' } })`
 
 **DIP:** Decisión Institucional Pendiente

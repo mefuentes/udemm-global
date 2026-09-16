@@ -13,6 +13,8 @@ interface Usuario {
     id: string;
     nombre: string;
   };
+  carreraAsociada?: { id: string; nombre: string } | null;
+  facultadAsociada?: { id: string; nombre: string } | null;
 }
 
 interface AuthContextType {

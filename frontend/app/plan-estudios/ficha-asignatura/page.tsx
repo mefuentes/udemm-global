@@ -1583,13 +1583,12 @@ function ProgramaView({
   const fpActivRef = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const [guardando, setGuardando] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [confirmarAprobacion, setConfirmarAprobacion] = useState(false);
-  const [aprobando, setAprobando] = useState(false);
+  const [historialPagina, setHistorialPagina] = useState(1);
 
   useEffect(() => {
     setCargando(true);
     apiFetch(`${API_URL}/programas/materia/${materiaId}`)
-      .then(data => setPrograma(data))
+      .then(data => { setPrograma(data); setHistorialPagina(1); })
       .catch(() => setErrorMsg('No se pudo cargar el programa'))
       .finally(() => setCargando(false));
   }, [materiaId]);
@@ -1771,21 +1770,6 @@ function ProgramaView({
     setErrorMsg(null);
   }
 
-  async function aprobarPrograma() {
-    setAprobando(true);
-    setErrorMsg(null);
-    try {
-      const data = await apiFetch(`${API_URL}/programas/materia/${materiaId}/aprobar`, { method: 'POST' });
-      setPrograma(data);
-      setConfirmarAprobacion(false);
-    } catch (e: unknown) {
-      setErrorMsg(e instanceof Error ? e.message : 'Error al aprobar el programa');
-      setConfirmarAprobacion(false);
-    } finally {
-      setAprobando(false);
-    }
-  }
-
   async function guardarSeccion() {
     for (const campo of seccion.campos) {
       if (campo.digitosExactos) {
@@ -1844,15 +1828,17 @@ function ProgramaView({
   if (!programa) return <div className="p-8 text-center text-xs text-slate-400">{errorMsg ?? 'No se pudo cargar el programa.'}</div>;
 
   const estadoProgCfg = ESTADO_PROG_CFG[programa.estadoPrograma] ?? ESTADO_PROG_CFG.PENDIENTE;
-  const ultimaAprobacion = programa.historial.find(h => h.accion === 'APROBACION');
-  const puedeAprobar = permisosPrograma.aprobar
-    && porcentaje === 100
-    && programa.estadoPrograma === 'EN_REVISION';
   const cellCls = 'w-full text-sm border border-slate-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] resize-none';
   const compFilas = tryParseJson<CompetenciaFila[]>(programa.competenciasResultadosJson) ?? [];
   const contFilas = tryParseJson<ContenidoFila[]>(programa.contenidosGridJson) ?? [];
   const udFilas   = tryParseJson<UnidadDidacticaFila[]>(programa.unidadesDidacticasJson) ?? [];
   const fpFilas   = tryParseJson<FormacionPracticaFila[]>(programa.formacionPracticaJson) ?? [];
+
+  // Paginación del historial: 5 registros por página
+  const HIST_POR_PAG   = 5;
+  const histTotalPags  = Math.ceil(programa.historial.length / HIST_POR_PAG) || 1;
+  const histPagActual  = Math.min(historialPagina, histTotalPags);
+  const histVisible    = programa.historial.slice((histPagActual - 1) * HIST_POR_PAG, histPagActual * HIST_POR_PAG);
 
   return (
     <div>
@@ -1870,24 +1856,8 @@ function ProgramaView({
               · Actualizado {formatFecha(programa.fechaActualizacion)}
             </span>
           )}
-          {programa.estadoPrograma === 'APROBADO' && ultimaAprobacion && (
-            <span className="text-[11px] text-emerald-600">
-              · Aprobado por {ultimaAprobacion.usuario.nombre} {ultimaAprobacion.usuario.apellido} el {formatFechaCorta(ultimaAprobacion.fecha)}
-            </span>
-          )}
         </div>
         <div className="flex items-center gap-2">
-          {puedeAprobar && !modoVer && (
-            <button
-              onClick={() => setConfirmarAprobacion(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-              Aprobar programa
-            </button>
-          )}
           {permisosPrograma.exportar && (
             <button
               onClick={() => exportarProgramaPDF(ficha, programa)}
@@ -2571,20 +2541,6 @@ function ProgramaView({
                           <option key={y} value={String(y)}>{y}</option>
                         ))}
                       </select>
-                    ) : campo.tipo === 'select' ? (
-                      <select
-                        key={`${seccionActiva}-${campo.key}`}
-                        ref={el => { fieldRefs.current[campo.key] = el; }}
-                        defaultValue={String((programa as unknown as Record<string, unknown>)[campo.key] ?? '')}
-                        className={edCls}
-                      >
-                        {campo.opciones?.map(op => (
-                          <option key={op} value={op}
-                            disabled={op === 'APROBADO' && !permisosPrograma.aprobar}>
-                            {op === 'EN_REVISION' ? 'En revisión' : 'Aprobado'}
-                          </option>
-                        ))}
-                      </select>
                     ) : (
                       <input
                         key={`${seccionActiva}-${campo.key}`}
@@ -2656,48 +2612,72 @@ function ProgramaView({
           </div>}
       </div>
 
-      {/* ── Modal de confirmación de aprobación ──────────────────────────── */}
-      {confirmarAprobacion && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-800">Aprobar Programa de Asignatura</h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Esta acción aprobará formalmente el programa. Quedará registrado en el historial con tu usuario y la fecha actual.
-                </p>
-              </div>
-            </div>
-            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-5">
-              <p className="text-[11px] text-amber-700">
-                <strong>Importante:</strong> Si posteriormente se realizan cambios en el contenido, el programa volverá automáticamente a estado <em>En revisión</em> y requerirá una nueva aprobación.
-              </p>
-            </div>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setConfirmarAprobacion(false)}
-                disabled={aprobando}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={aprobarPrograma}
-                disabled={aprobando}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-60"
-              >
-                {aprobando ? <IcSpinner /> : null}
-                {aprobando ? 'Aprobando...' : 'Confirmar aprobación'}
-              </button>
-            </div>
+      {/* ── Historial de modificaciones ──────────────────────────────────── */}
+      <div className="px-5 pb-5 pt-2">
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/60">
+            <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+              Historial de modificaciones
+            </h3>
           </div>
+          {programa.historial.length === 0 ? (
+            <div className="px-5 py-5 text-center">
+              <p className="text-xs text-slate-400 italic">SIN MODIFICACIONES REGISTRADAS</p>
+            </div>
+          ) : (
+            <>
+              <div className="divide-y divide-slate-50">
+                {histVisible.map(item => {
+                  const cfg = ACCION_PROG_CFG[item.accion] ?? { label: item.accion, cls: 'bg-slate-100 text-slate-500 border-slate-200' };
+                  return (
+                    <div key={item.id} className="px-5 py-3 flex items-start gap-3">
+                      <span className={`mt-0.5 shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${cfg.cls}`}>
+                        {cfg.label}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-slate-700 leading-snug">
+                          {item.descripcion ?? cfg.label}
+                          {item.seccion && (
+                            <span className="text-slate-400 ml-1">· {item.seccion}</span>
+                          )}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {item.usuario.nombre} {item.usuario.apellido}
+                          <span className="mx-1">·</span>
+                          {new Date(item.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          {' '}
+                          {new Date(item.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {histTotalPags > 1 && (
+                <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => setHistorialPagina(p => Math.max(1, p - 1))}
+                    disabled={histPagActual === 1}
+                    className="text-[11px] font-medium px-3 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Anterior
+                  </button>
+                  <span className="text-[11px] text-slate-500">
+                    Página {histPagActual} de {histTotalPags}
+                  </span>
+                  <button
+                    onClick={() => setHistorialPagina(p => Math.min(histTotalPags, p + 1))}
+                    disabled={histPagActual === histTotalPags}
+                    className="text-[11px] font-medium px-3 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

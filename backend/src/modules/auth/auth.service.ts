@@ -66,15 +66,18 @@ export class AuthService {
   }
 
   async login(correoElectronico: string, contrasena: string, ip?: string, userAgent?: string) {
-    const usuario = await this.validarUsuario(correoElectronico, contrasena);
+    const usuarioBase = await this.validarUsuario(correoElectronico, contrasena);
 
     const sesion = await this.prisma.sesion.create({
-      data: { usuarioId: usuario.id, ip: ip ?? null, userAgent: userAgent ?? null }
+      data: { usuarioId: usuarioBase.id, ip: ip ?? null, userAgent: userAgent ?? null }
     });
 
-    const accessToken = this.generarTokenAcceso(usuario as any, sesion.id);
-    const refreshToken = await this.generarTokenRefresh(usuario.id, sesion.id);
+    const accessToken = this.generarTokenAcceso(usuarioBase as any, sesion.id);
+    const refreshToken = await this.generarTokenRefresh(usuarioBase.id, sesion.id);
 
+    // FASE 3: devolver usuario completo con carreraAsociada/facultadAsociada para
+    // que el frontend pueda evaluar scopes institucionales sin requerir page refresh.
+    const usuario = await this.me(usuarioBase.id);
     return { accessToken, refreshToken, usuario };
   }
 
@@ -154,12 +157,26 @@ export class AuthService {
         correoElectronico: true,
         nombre: true,
         apellido: true,
-        rol: { select: { id: true, nombre: true } }
+        rol: { select: { id: true, nombre: true } },
+        carrerasAsociadas: {
+          select: { carrera: { select: { id: true, nombre: true } } },
+          take: 1,
+        },
+        facultadesAsociadas: {
+          select: { facultad: { select: { id: true, nombre: true } } },
+          take: 1,
+        },
       }
     });
 
     if (!usuario) throw new UnauthorizedException('Usuario no encontrado');
-    return usuario;
+
+    const { carrerasAsociadas, facultadesAsociadas, ...rest } = usuario;
+    return {
+      ...rest,
+      carreraAsociada: carrerasAsociadas[0]?.carrera ?? null,
+      facultadAsociada: facultadesAsociadas[0]?.facultad ?? null,
+    };
   }
 
   async solicitarRecuperacion(correoElectronico: string): Promise<void> {

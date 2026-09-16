@@ -1,5 +1,6 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ScopeService } from '../scopes/scope.service';
 import { ActualizarProgramaDto } from './dto/actualizar-programa.dto';
 
 const HISTORIAL_INCLUDE = {
@@ -83,23 +84,19 @@ function calcEstadoSecciones(prog: Record<string, unknown>): Record<string, stri
 
 @Injectable()
 export class ProgramasService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scopeService: ScopeService,
+  ) {}
 
-  private async verificarOwnershipDocente(materiaId: string, usuarioId: string): Promise<void> {
-    const docente = await this.prisma.docente.findUnique({ where: { usuarioId } });
-    if (!docente) {
-      throw new ForbiddenException('Sin acceso: sin perfil docente asociado');
-    }
-    const vinculacion = await this.prisma.vinculacionCatedra.findFirst({
-      where: {
-        docenteId: docente.id,
-        materiaId,
-        estado: 'APROBADA',
-      },
+  private async resolverCarreraDeMateria(materiaId: string): Promise<string> {
+    const materia = await this.prisma.materia.findUnique({
+      where: { id: materiaId },
+      select: { planEstudio: { select: { carreraId: true } } },
     });
-    if (!vinculacion) {
-      throw new ForbiddenException('Sin acceso: no tenés una vinculación aprobada con esta asignatura');
-    }
+    const carreraId = materia?.planEstudio?.carreraId;
+    if (!carreraId) throw new NotFoundException(`No se pudo resolver la carrera para la materia ${materiaId}`);
+    return carreraId;
   }
 
   async obtenerPrograma(materiaId: string) {
@@ -117,8 +114,8 @@ export class ProgramasService {
     const estadoSecciones = calcEstadoSecciones(prog as unknown as Record<string, unknown>);
     const todasCompletas = Object.values(estadoSecciones).every(v => v === 'COMPLETO');
 
-    // Recalcular estadoPrograma (preservar APROBADO; corregir estados stale PENDIENTE/EN_REVISION)
-    let estadoPrograma = prog.estadoPrograma;
+    // FASE 3: conservar APROBADO histórico intacto; recalcular solo si no era APROBADO
+    let estadoPrograma: string = prog.estadoPrograma;
     if (estadoPrograma !== 'APROBADO') {
       estadoPrograma = todasCompletas ? 'EN_REVISION' : 'PENDIENTE';
     }
@@ -127,8 +124,12 @@ export class ProgramasService {
   }
 
   async actualizarPrograma(materiaId: string, dto: ActualizarProgramaDto, usuarioId: string, rolNombre: string) {
-    if (rolNombre === 'DOCENTE') {
-      await this.verificarOwnershipDocente(materiaId, usuarioId);
+    if (rolNombre === 'DIRECTOR_CARRERA' || rolNombre === 'DECANO') {
+      const carreraId = await this.resolverCarreraDeMateria(materiaId);
+      const tieneScope = await this.scopeService.tieneScopeCarrera(usuarioId, rolNombre, carreraId);
+      if (!tieneScope) {
+        throw new ForbiddenException('Sin acceso: la materia no pertenece a tu carrera o facultad asignada');
+      }
     }
     const materia = await this.prisma.materia.findUnique({ where: { id: materiaId } });
     if (!materia) throw new NotFoundException(`Materia ${materiaId} no encontrada`);
@@ -150,41 +151,34 @@ export class ProgramasService {
     const estadoSecciones = calcEstadoSecciones(mergedForCalc);
     const todasCompletas = Object.values(estadoSecciones).every(v => v === 'COMPLETO');
 
-    // Determinar nuevo estadoPrograma
-    let nuevoEstadoProg: string;
-    if (programaActual?.estadoPrograma === 'APROBADO' && seccionModificada) {
-      nuevoEstadoProg = 'EN_REVISION';
-    } else if (todasCompletas) {
-      nuevoEstadoProg = 'EN_REVISION';
-    } else {
-      nuevoEstadoProg = 'PENDIENTE';
-    }
+    // FASE 3: conservar APROBADO histórico; recalcular solo si el estado actual no era APROBADO
+    const nuevoEstadoProg = programaActual?.estadoPrograma === 'APROBADO'
+      ? 'APROBADO'
+      : todasCompletas ? 'EN_REVISION' : 'PENDIENTE';
 
     // Guardar cambios junto con los estados calculados
     const finalData = { ...data, ...estadoSecciones, estadoPrograma: nuevoEstadoProg };
-    const programa = await this.prisma.programaAsignatura.upsert({
-      where: { materiaId },
-      create: { materiaId, ...finalData },
-      update: finalData,
-    });
-
-    const revirtioAprobacion =
-      programaActual?.estadoPrograma === 'APROBADO' && nuevoEstadoProg === 'EN_REVISION';
-
     const descripcion = seccionModificada
       ? `Sección "${seccionModificada}" actualizada`
       : 'Programa actualizado';
 
-    await this.prisma.historialPrograma.create({
-      data: {
-        programaId: programa.id,
-        usuarioId,
-        accion: revirtioAprobacion ? 'REVERSION' : 'ACTUALIZACION',
-        seccion: seccionModificada ?? null,
-        descripcion: revirtioAprobacion
-          ? `Aprobación revertida por modificación en sección "${seccionModificada}"`
-          : descripcion,
-      },
+    // Upsert + historial en una misma transacción: si falla el historial, revierte el upsert
+    const programa = await this.prisma.$transaction(async (tx) => {
+      const upserted = await tx.programaAsignatura.upsert({
+        where: { materiaId },
+        create: { materiaId, ...finalData },
+        update: finalData,
+      });
+      await tx.historialPrograma.create({
+        data: {
+          programaId: upserted.id,
+          usuarioId,
+          accion: 'ACTUALIZACION',
+          seccion: seccionModificada ?? null,
+          descripcion,
+        },
+      });
+      return upserted;
     });
 
     const result = await this.prisma.programaAsignatura.findUnique({
@@ -194,35 +188,4 @@ export class ProgramasService {
     return { ...result, ...estadoSecciones, estadoPrograma: nuevoEstadoProg };
   }
 
-  async aprobarPrograma(materiaId: string, usuarioId: string) {
-    const materia = await this.prisma.materia.findUnique({ where: { id: materiaId } });
-    if (!materia) throw new NotFoundException(`Materia ${materiaId} no encontrada`);
-
-    const programaActual = await this.prisma.programaAsignatura.findUnique({ where: { materiaId } });
-    if (!programaActual) throw new NotFoundException('Programa no encontrado para esta materia');
-    if (programaActual.estadoPrograma !== 'EN_REVISION') {
-      throw new BadRequestException(
-        'Solo se puede aprobar un programa que esté en estado EN_REVISION (100% completo)'
-      );
-    }
-
-    const programa = await this.prisma.programaAsignatura.update({
-      where: { materiaId },
-      data: { estadoPrograma: 'APROBADO' },
-    });
-
-    await this.prisma.historialPrograma.create({
-      data: {
-        programaId: programa.id,
-        usuarioId,
-        accion: 'APROBACION',
-        descripcion: 'Programa de asignatura aprobado formalmente',
-      },
-    });
-
-    return this.prisma.programaAsignatura.findUnique({
-      where: { id: programa.id },
-      include: HISTORIAL_INCLUDE,
-    });
-  }
 }
