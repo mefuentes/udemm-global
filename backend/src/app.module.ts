@@ -22,6 +22,7 @@ import { VinculacionesModule } from './modules/vinculaciones/vinculaciones.modul
 import { NotificacionesModule } from './modules/notificaciones/notificaciones.module';
 import { AreasDisiplinaresModule } from './modules/areas-disciplinares/areas-disciplinares.module';
 import { NormativasModule } from './modules/normativas/normativas.module';
+import { ScopeModule } from './modules/scopes/scope.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { NormativasModule } from './modules/normativas/normativas.module';
     NotificacionesModule,
     AreasDisiplinaresModule,
     NormativasModule,
+    ScopeModule,
   ],
   controllers: [],
   providers: [

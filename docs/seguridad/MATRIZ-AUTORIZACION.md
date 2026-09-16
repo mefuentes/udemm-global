@@ -1,9 +1,9 @@
 # MATRIZ DE AUTORIZACIÓN — UDEMM Global
 
 **Fecha:** 2026-08-27
-**Actualizado:** 2026-08-27 (ETAPA B — revisión final de ownership)
-**Rama:** `feature/security-hardening`
-**Etapa:** S4 — ETAPA B COMPLETADA
+**Actualizado:** 2026-09-16 (FASE 1 — scopes institucionales)
+**Rama:** `feature/ajustes-permisos-docentes`
+**Etapa:** S4 — ETAPA B COMPLETADA / FASE 1 scopes implementada
 
 ---
 
@@ -15,6 +15,31 @@
 | **Roles** | Roles autorizados (todos los demás → 403) |
 | **Ownership** | Restricción adicional de recurso dentro del rol |
 | **Riesgo** | `ALTO` / `MEDIO` / `BAJO` / `OK` |
+
+---
+
+## Scopes institucionales (FASE 1)
+
+> **SCOPE ≠ PERMISO.**
+> El scope delimita el universo de Carreras sobre las que un usuario puede operar.
+> El RBAC (roles en controlador) determina qué operación puede ejecutar.
+> Ambas condiciones deben cumplirse: **PERMISO RBAC + SCOPE INSTITUCIONAL**.
+
+| Rol | Mecanismo de scope | Tablas involucradas |
+|-----|--------------------|---------------------|
+| `DIRECTOR_CARRERA` | Alcance sobre Carrera(s) en `UsuarioCarrera` | `UsuarioCarrera` |
+| `DECANO` | Alcance sobre todas las Carreras de su Facultad (`UsuarioFacultad → Facultad → Carreras`) | `UsuarioFacultad`, `Carrera` |
+| `SECRETARIA_ACADEMICA` | Global (sin restricción territorial) | — |
+| `RECTORADO` | Global (sin restricción territorial) | — |
+| `ADMINISTRADOR_SISTEMA` | Global (sin restricción territorial) | — |
+| `ADMINISTRATIVO` | Global (sin restricción territorial) — scope global ≠ permiso de edición | — |
+| `DOCENTE` | Sin scope de gestión sobre Carreras | — |
+
+**Implementación:** `ScopeService.tieneScopeCarrera(usuarioId, rolNombre, carreraId)` en `backend/src/modules/scopes/scope.service.ts`.
+
+**Limpieza automática:** al cambiar el rol de un usuario (`actualizarUsuario`), se eliminan las asociaciones de scope residuales (`UsuariosService.limpiarScopesResiduales`).
+
+**Estado:** ✅ INFRAESTRUCTURA IMPLEMENTADA — FASE 2 (gestión de asociaciones desde UI de Usuarios) pendiente.
 
 ---
 

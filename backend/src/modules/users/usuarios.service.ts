@@ -104,6 +104,26 @@ export class UsuariosService {
     });
   }
 
+  /**
+   * Elimina asociaciones UsuarioCarrera/UsuarioFacultad cuando el rol ya no
+   * corresponde al propietario del scope. Se invoca tras cualquier cambio de rol.
+   *
+   * - Nuevo rol != DIRECTOR_CARRERA → elimina todas sus filas en UsuarioCarrera
+   * - Nuevo rol != DECANO           → elimina todas sus filas en UsuarioFacultad
+   *
+   * El servicio ScopeService SIEMPRE verifica ROL + ASOCIACIÓN, por lo que
+   * aunque esta limpieza falle, la asociación residual no concedería scope.
+   * La limpieza proactiva es una defensa en profundidad.
+   */
+  private async limpiarScopesResiduales(usuarioId: string, nuevoRolNombre: string): Promise<void> {
+    if (nuevoRolNombre !== 'DIRECTOR_CARRERA') {
+      await this.prisma.usuarioCarrera.deleteMany({ where: { usuarioId } });
+    }
+    if (nuevoRolNombre !== 'DECANO') {
+      await this.prisma.usuarioFacultad.deleteMany({ where: { usuarioId } });
+    }
+  }
+
   async crearUsuario(data: {
     nombre: string;
     apellido: string;
@@ -289,6 +309,13 @@ export class UsuariosService {
         },
         usuarioActualizado.rol.nombre,
       );
+    }
+
+    // Limpiar asociaciones de scope institucional cuando el rol cambia.
+    // Una asociación residual de un ex-DIRECTOR_CARRERA o ex-DECANO no debe
+    // conceder scope — se eliminan de forma proactiva al retirar el rol.
+    if (data.rolId !== undefined) {
+      await this.limpiarScopesResiduales(usuarioActualizado.id, usuarioActualizado.rol.nombre);
     }
 
     return usuarioActualizado;

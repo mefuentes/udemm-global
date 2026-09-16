@@ -26,6 +26,7 @@ model Facultad {
   carreras           Carrera[]
   universidad        Universidad          @relation(fields: [universidadId], references: [id])
   vinculaciones      VinculacionCatedra[]
+  usuariosAsociados  UsuarioFacultad[]
 }
 
 model Carrera {
@@ -42,6 +43,7 @@ model Carrera {
   facultad           Facultad             @relation(fields: [facultadId], references: [id])
   planes             PlanEstudio[]
   vinculaciones      VinculacionCatedra[]
+  usuariosAsociados  UsuarioCarrera[]
 }
 
 model PlanEstudio {
@@ -238,6 +240,8 @@ model Usuario {
   vinculacionesAprobadas     VinculacionCatedra[] @relation("VinculacionAprobador")
   vinculacionesDesvinculadas VinculacionCatedra[] @relation("VinculacionDesvinculador")
   vinculacionesSolicitadas   VinculacionCatedra[] @relation("VinculacionSolicitante")
+  carrerasAsociadas          UsuarioCarrera[]
+  facultadesAsociadas        UsuarioFacultad[]
 }
 
 model Sesion {
@@ -568,4 +572,33 @@ model AuditLogNormativa {
   @@index([usuarioId])
   @@index([accion])
   @@index([normativaId])
+}
+
+// ── Scopes institucionales (FASE 1) ─────────────────────────────────────────
+// SCOPE != PERMISO. La existencia de estas filas delimita el universo de
+// Carreras/Facultades que el usuario puede gestionar, pero no concede
+// permisos por sí sola. El RBAC del controlador valida la operación concreta.
+
+model UsuarioCarrera {
+  id                 String   @id @default(uuid())
+  usuarioId          String
+  carreraId          String
+  fechaCreacion      DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+  usuario            Usuario  @relation(fields: [usuarioId], references: [id])
+  carrera            Carrera  @relation(fields: [carreraId], references: [id])
+
+  @@unique([usuarioId, carreraId])
+}
+
+model UsuarioFacultad {
+  id                 String   @id @default(uuid())
+  usuarioId          String
+  facultadId         String
+  fechaCreacion      DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+  usuario            Usuario  @relation(fields: [usuarioId], references: [id])
+  facultad           Facultad @relation(fields: [facultadId], references: [id])
+
+  @@unique([usuarioId, facultadId])
 }

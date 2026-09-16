@@ -802,6 +802,36 @@ const makePrisma = (tieneVinculacionAprobada: boolean) => ({
 
 **Nota:** los roles institucionales actuales (ADMINISTRADOR_SISTEMA, SECRETARIA_ACADEMICA, etc.) no tienen chequeo de ownership en los módulos existentes, pero eso no es una regla general — es la política actual de cada recurso documentada en MATRIZ-AUTORIZACION. Un rol institucional puede tener scope restringido (ejemplo futuro: DIRECTOR_CARRERA con filtro por carreraId). Consultar MATRIZ-AUTORIZACION para la política de cada endpoint antes de escribir o auditar tests.
 
+### 19.4 Scopes institucionales (FASE 1 — implementado)
+
+✅ **`scope.spec.ts`** — 22 tests cubren:
+
+| Test | Rol | Resultado |
+|------|-----|-----------|
+| 1 | DIRECTOR_CARRERA + Carrera A | scope permitido |
+| 2 | DIRECTOR_CARRERA + Carrera B (no asociada) | scope rechazado |
+| 3 | DIRECTOR_CARRERA sin asociación | sin scope (array vacío) |
+| 4 | DECANO + Carrera de su Facultad | scope permitido |
+| 5 | DECANO + Carrera de otra Facultad | scope rechazado |
+| 6 | DECANO sin asociación | sin scope (array vacío) |
+| 7–8 | SECRETARIA_ACADEMICA, RECTORADO | scope global (null — sin restricción) |
+| 9–10 | ADMINISTRADOR_SISTEMA, ADMINISTRATIVO | scope global |
+| 11 | ADMINISTRATIVO — scope global ≠ permiso de edición | documentado en test |
+| 12 | DOCENTE con UsuarioCarrera accidental | no obtiene scope de DIRECTOR_CARRERA |
+| 13 | Ex-DIRECTOR con rol DOCENTE (asociación residual) | no obtiene scope |
+| 14 | Ex-DECANO con rol DOCENTE (asociación residual) | no obtiene scope |
+
+**Regla de scopes:**
+```
+SCOPE   = qué Carreras puede gestionar el rol
+PERMISO = qué operación puede ejecutar sobre esas Carreras (RBAC del controlador)
+Ambos deben cumplirse: PERMISO RBAC + SCOPE INSTITUCIONAL
+```
+
+**Implementación centralizada:** `ScopeService.tieneScopeCarrera(usuarioId, rolNombre, carreraId)` — no distribuir esta lógica en controllers.
+
+**Limpieza de scopes residuales:** `UsuariosService.limpiarScopesResiduales()` se invoca al cambiar el rol en `actualizarUsuario`. Si el nuevo rol no es DIRECTOR_CARRERA, se eliminan sus UsuarioCarrera. Si no es DECANO, se eliminan sus UsuarioFacultad. El `ScopeService` también verifica ROL + ASOCIACIÓN como defensa en profundidad.
+
 ---
 
 ## 20. Checklist de Revisión de Seguridad por PR
