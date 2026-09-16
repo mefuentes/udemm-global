@@ -1,5 +1,6 @@
 import { IsEmail, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
+
 export class ActualizarUsuarioDto {
   @IsString()
   @IsOptional()
@@ -25,4 +26,12 @@ export class ActualizarUsuarioDto {
   @IsUUID('4', { message: 'El identificador de rol no es válido.' })
   @IsOptional()
   rolId?: string;
+
+  @IsUUID('4', { message: 'El identificador de carrera no es válido.' })
+  @IsOptional()
+  carreraId?: string;
+
+  @IsUUID('4', { message: 'El identificador de facultad no es válido.' })
+  @IsOptional()
+  facultadId?: string;
 }

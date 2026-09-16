@@ -26,6 +26,19 @@ const SELECT_USUARIO = {
   rol: { select: { id: true, nombre: true } }
 };
 
+// Extiende SELECT_USUARIO con las asociaciones de scope institucional.
+// Usado en obtenerUsuarioPorId para que el endpoint de detalle devuelva
+// la carrera (DIRECTOR_CARRERA) o facultad (DECANO) ya configurada.
+const SELECT_USUARIO_CON_SCOPE = {
+  ...SELECT_USUARIO,
+  carrerasAsociadas: {
+    select: { carrera: { select: { id: true, nombre: true } } },
+  },
+  facultadesAsociadas: {
+    select: { facultad: { select: { id: true, nombre: true } } },
+  },
+};
+
 @Injectable()
 export class UsuariosService {
   constructor(private readonly prisma: PrismaService) {}
@@ -130,25 +143,57 @@ export class UsuariosService {
     correoElectronico: string;
     contrasena: string;
     rolId: string;
+    carreraId?: string;
+    facultadId?: string;
   }) {
+    // 1. Correo único
     const existe = await this.prisma.usuario.findUnique({
       where: { correoElectronico: data.correoElectronico }
     });
     if (existe) throw new BadRequestException('El correo electrónico ya está registrado');
 
+    // 2. Resolver nombre del rol para validar scope
+    const rol = await this.prisma.rol.findUnique({ where: { id: data.rolId }, select: { nombre: true } });
+    if (!rol) throw new BadRequestException('El rol indicado no existe.');
+    const rolNombre = rol.nombre;
+
+    // 3. Validar requisitos de scope institucional
+    if (rolNombre === 'DIRECTOR_CARRERA') {
+      if (!data.carreraId) throw new BadRequestException('El rol DIRECTOR_CARRERA requiere una Carrera asociada.');
+      const carrera = await this.prisma.carrera.findUnique({ where: { id: data.carreraId }, select: { id: true } });
+      if (!carrera) throw new NotFoundException('La Carrera indicada no existe.');
+    }
+    if (rolNombre === 'DECANO') {
+      if (!data.facultadId) throw new BadRequestException('El rol DECANO requiere una Facultad asociada.');
+      const facultad = await this.prisma.facultad.findUnique({ where: { id: data.facultadId }, select: { id: true } });
+      if (!facultad) throw new NotFoundException('La Facultad indicada no existe.');
+    }
+
     const contrasenaHash = await bcrypt.hash(data.contrasena, 10);
-    const usuario = await this.prisma.usuario.create({
-      data: {
-        nombre: data.nombre,
-        apellido: data.apellido,
-        correoElectronico: data.correoElectronico,
-        contrasenaHash,
-        rolId: data.rolId
-      },
-      select: SELECT_USUARIO
+
+    // 4. Crear usuario y asociación de scope en una sola transacción atómica
+    const usuario = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.usuario.create({
+        data: {
+          nombre:            data.nombre,
+          apellido:          data.apellido,
+          correoElectronico: data.correoElectronico,
+          contrasenaHash,
+          rolId:             data.rolId,
+        },
+        select: SELECT_USUARIO,
+      });
+
+      if (rolNombre === 'DIRECTOR_CARRERA' && data.carreraId) {
+        await tx.usuarioCarrera.create({ data: { usuarioId: u.id, carreraId: data.carreraId } });
+      } else if (rolNombre === 'DECANO' && data.facultadId) {
+        await tx.usuarioFacultad.create({ data: { usuarioId: u.id, facultadId: data.facultadId } });
+      }
+
+      return u;
     });
 
-    // Si el rol es DOCENTE, garantizar la existencia del registro Docente vinculado
+    // 5. Sincronizar registro Docente (fuera de la transacción, no crítico)
     if (usuario.rol.nombre === 'DOCENTE') {
       await this.sincronizarDocente(
         {
@@ -261,7 +306,7 @@ export class UsuariosService {
   }
 
   async obtenerUsuarioPorId(id: string) {
-    const usuario = await this.prisma.usuario.findUnique({ where: { id }, select: SELECT_USUARIO });
+    const usuario = await this.prisma.usuario.findUnique({ where: { id }, select: SELECT_USUARIO_CON_SCOPE });
     if (!usuario) throw new NotFoundException('Usuario no encontrado');
     return usuario;
   }
@@ -272,9 +317,42 @@ export class UsuariosService {
     correoElectronico?: string;
     contrasena?: string;
     rolId?: string;
+    carreraId?: string;
+    facultadId?: string;
   }) {
-    await this.obtenerUsuarioPorId(id);
+    // 1. Verificar existencia y obtener rol actual
+    const usuarioActual = await this.obtenerUsuarioPorId(id);
+    const rolActualNombre = usuarioActual.rol.nombre;
 
+    // 2. Resolver nombre del nuevo rol (si cambia)
+    let rolNuevoNombre = rolActualNombre;
+    if (data.rolId && data.rolId !== usuarioActual.rol.id) {
+      const rolNuevo = await this.prisma.rol.findUnique({ where: { id: data.rolId }, select: { nombre: true } });
+      if (!rolNuevo) throw new BadRequestException('El rol indicado no existe.');
+      rolNuevoNombre = rolNuevo.nombre;
+    }
+
+    // 3. Validar scope requerido al cambiar a un rol con scope territorial
+    const cambiaADirector = rolNuevoNombre === 'DIRECTOR_CARRERA' && rolActualNombre !== 'DIRECTOR_CARRERA';
+    const cambiaADecano   = rolNuevoNombre === 'DECANO'           && rolActualNombre !== 'DECANO';
+    if (cambiaADirector && !data.carreraId) {
+      throw new BadRequestException('Al asignar el rol DIRECTOR_CARRERA se requiere una Carrera asociada.');
+    }
+    if (cambiaADecano && !data.facultadId) {
+      throw new BadRequestException('Al asignar el rol DECANO se requiere una Facultad asociada.');
+    }
+
+    // 4. Validar existencia de carreraId/facultadId si se proveyeron
+    if (data.carreraId) {
+      const carrera = await this.prisma.carrera.findUnique({ where: { id: data.carreraId }, select: { id: true } });
+      if (!carrera) throw new NotFoundException('La Carrera indicada no existe.');
+    }
+    if (data.facultadId) {
+      const facultad = await this.prisma.facultad.findUnique({ where: { id: data.facultadId }, select: { id: true } });
+      if (!facultad) throw new NotFoundException('La Facultad indicada no existe.');
+    }
+
+    // 5. Correo único
     if (data.correoElectronico) {
       const existe = await this.prisma.usuario.findFirst({
         where: { correoElectronico: data.correoElectronico, NOT: { id } }
@@ -282,22 +360,44 @@ export class UsuariosService {
       if (existe) throw new BadRequestException('El correo electrónico ya está en uso');
     }
 
-    const updateData: any = { ...data };
+    // 6. Construir payload de actualización (sin campos de scope, que van a tablas propias)
+    const updateData: any = {};
+    if (data.nombre !== undefined)            updateData.nombre = data.nombre;
+    if (data.apellido !== undefined)          updateData.apellido = data.apellido;
+    if (data.correoElectronico !== undefined) updateData.correoElectronico = data.correoElectronico;
+    if (data.rolId !== undefined)             updateData.rolId = data.rolId;
     if (data.contrasena) {
       updateData.contrasenaHash = await bcrypt.hash(data.contrasena, 10);
     }
-    delete updateData.contrasena;
 
-    const usuarioActualizado = await this.prisma.usuario.update({
-      where: { id },
-      data: updateData,
-      select: SELECT_USUARIO
+    // 7. Actualizar usuario y gestionar scopes en una sola transacción atómica.
+    //    Orden de operaciones:
+    //      a) Actualizar fila Usuario
+    //      b) Eliminar asociaciones que ya no corresponden al nuevo rol
+    //      c) Crear/reemplazar la asociación si se proveyó carreraId/facultadId
+    const usuarioActualizado = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.usuario.update({ where: { id }, data: updateData, select: SELECT_USUARIO });
+
+      if (rolNuevoNombre !== 'DIRECTOR_CARRERA') {
+        await tx.usuarioCarrera.deleteMany({ where: { usuarioId: id } });
+      }
+      if (rolNuevoNombre !== 'DECANO') {
+        await tx.usuarioFacultad.deleteMany({ where: { usuarioId: id } });
+      }
+
+      if (rolNuevoNombre === 'DIRECTOR_CARRERA' && data.carreraId) {
+        await tx.usuarioCarrera.deleteMany({ where: { usuarioId: id } });
+        await tx.usuarioCarrera.create({ data: { usuarioId: id, carreraId: data.carreraId } });
+      }
+      if (rolNuevoNombre === 'DECANO' && data.facultadId) {
+        await tx.usuarioFacultad.deleteMany({ where: { usuarioId: id } });
+        await tx.usuarioFacultad.create({ data: { usuarioId: id, facultadId: data.facultadId } });
+      }
+
+      return u;
     });
 
-    // Sincronizar el registro Docente cuando:
-    //   - El rol cambió (cualquier dirección)
-    //   - El usuario resultante tiene rol DOCENTE (garantiza creación tardía para
-    //     usuarios creados antes de la existencia de esta lógica)
+    // 8. Sincronizar registro Docente (fuera de la transacción, no crítico)
     if (data.rolId !== undefined || usuarioActualizado.rol.nombre === 'DOCENTE') {
       await this.sincronizarDocente(
         {
@@ -309,13 +409,6 @@ export class UsuariosService {
         },
         usuarioActualizado.rol.nombre,
       );
-    }
-
-    // Limpiar asociaciones de scope institucional cuando el rol cambia.
-    // Una asociación residual de un ex-DIRECTOR_CARRERA o ex-DECANO no debe
-    // conceder scope — se eliminan de forma proactiva al retirar el rol.
-    if (data.rolId !== undefined) {
-      await this.limpiarScopesResiduales(usuarioActualizado.id, usuarioActualizado.rol.nombre);
     }
 
     return usuarioActualizado;

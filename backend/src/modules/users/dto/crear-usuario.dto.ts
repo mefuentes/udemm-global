@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 export class CrearUsuarioDto {
   @IsString()
@@ -25,4 +25,12 @@ export class CrearUsuarioDto {
   @IsUUID('4', { message: 'El identificador de rol no es válido.' })
   @IsNotEmpty({ message: 'El rol es obligatorio.' })
   rolId: string;
+
+  @IsUUID('4', { message: 'El identificador de carrera no es válido.' })
+  @IsOptional()
+  carreraId?: string;
+
+  @IsUUID('4', { message: 'El identificador de facultad no es válido.' })
+  @IsOptional()
+  facultadId?: string;
 }

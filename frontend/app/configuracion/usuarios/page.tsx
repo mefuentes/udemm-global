@@ -5,20 +5,28 @@ import { apiFetch } from '@/lib/api';
 import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 
 interface Rol { id: string; nombre: string; }
+interface Carrera { id: string; nombre: string; }
+interface Facultad { id: string; nombre: string; }
 interface Usuario {
   id: string; nombre: string; apellido: string;
   correoElectronico: string; activo: boolean;
   fechaCreacion: string; rol: Rol;
 }
+interface UsuarioDetalle extends Usuario {
+  carrerasAsociadas?: { carrera: { id: string; nombre: string } }[];
+  facultadesAsociadas?: { facultad: { id: string; nombre: string } }[];
+}
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 const INPUT = 'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:ring-1 focus:ring-[#0f4c81]/20 transition';
-const EMPTY_FORM = { nombre: '', apellido: '', correoElectronico: '', contrasena: '', rolId: '' };
+const EMPTY_FORM = { nombre: '', apellido: '', correoElectronico: '', contrasena: '', rolId: '', carreraId: '', facultadId: '' };
 const ITEMS_POR_PAGINA = 10;
 
 export default function UsuariosPage() {
   const [usuarios, setUsuarios]         = useState<Usuario[]>([]);
   const [roles, setRoles]               = useState<Rol[]>([]);
+  const [carreras, setCarreras]         = useState<Carrera[]>([]);
+  const [facultades, setFacultades]     = useState<Facultad[]>([]);
   const [total, setTotal]               = useState(0);
   const [totalPaginas, setTotalPaginas] = useState(1);
 
@@ -102,6 +110,23 @@ export default function UsuariosPage() {
     return () => { abortRef.current?.abort(); };
   }, [cargar]);
 
+  // Carga carreras y facultades una sola vez para los selectores de scope
+  useEffect(() => {
+    Promise.all([
+      apiFetch(`${API}/carreras`),
+      apiFetch(`${API}/facultades`),
+    ]).then(async ([rc, rf]) => {
+      if (rc.ok) {
+        const d = await rc.json();
+        setCarreras(Array.isArray(d) ? d : (d.data ?? []));
+      }
+      if (rf.ok) {
+        const d = await rf.json();
+        setFacultades(Array.isArray(d) ? d : (d.data ?? []));
+      }
+    }).catch(() => {});
+  }, []);
+
   // ── Handlers de filtros ────────────────────────────────────────────────────
   function handleBuscarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const value = e.target.value;
@@ -135,9 +160,24 @@ export default function UsuariosPage() {
 
   // ── Acciones form ──────────────────────────────────────────────────────────
   function abrirCrear() { setForm({ ...EMPTY_FORM }); setEditandoId(null); setFormError(null); setMostrarForm(true); }
-  function abrirEditar(u: Usuario) {
-    setForm({ nombre: u.nombre, apellido: u.apellido, correoElectronico: u.correoElectronico, contrasena: '', rolId: u.rol.id });
-    setEditandoId(u.id); setFormError(null); setMostrarForm(true);
+
+  async function abrirEditar(u: Usuario) {
+    setEditandoId(u.id);
+    setFormError(null);
+    setForm({ nombre: u.nombre, apellido: u.apellido, correoElectronico: u.correoElectronico, contrasena: '', rolId: u.rol.id, carreraId: '', facultadId: '' });
+    setMostrarForm(true);
+    // Obtener detalle del usuario para precargar la asociación de scope
+    try {
+      const res = await apiFetch(`${API}/configuracion/usuarios/${u.id}`);
+      if (res.ok) {
+        const d: UsuarioDetalle = await res.json();
+        setForm(prev => ({
+          ...prev,
+          carreraId:  d.carrerasAsociadas?.[0]?.carrera?.id  ?? '',
+          facultadId: d.facultadesAsociadas?.[0]?.facultad?.id ?? '',
+        }));
+      }
+    } catch { /* mantener valores vacíos como fallback */ }
   }
 
   async function guardar() {
@@ -145,10 +185,21 @@ export default function UsuariosPage() {
       setFormError('Completá los campos obligatorios.'); return;
     }
     if (!editandoId && !form.contrasena) { setFormError('La contraseña es obligatoria para nuevos usuarios.'); return; }
+
+    const rolNombreSeleccionado = roles.find(r => r.id === form.rolId)?.nombre ?? '';
+    if (rolNombreSeleccionado === 'DIRECTOR_CARRERA' && !form.carreraId) {
+      setFormError('Seleccioná la Carrera para el Director de Carrera.'); return;
+    }
+    if (rolNombreSeleccionado === 'DECANO' && !form.facultadId) {
+      setFormError('Seleccioná la Facultad para el Decano.'); return;
+    }
+
     setSubmitting(true); setFormError(null);
     try {
       const body: Record<string, string> = { nombre: form.nombre, apellido: form.apellido, correoElectronico: form.correoElectronico, rolId: form.rolId };
       if (form.contrasena) body.contrasena = form.contrasena;
+      if (rolNombreSeleccionado === 'DIRECTOR_CARRERA' && form.carreraId) body.carreraId = form.carreraId;
+      if (rolNombreSeleccionado === 'DECANO' && form.facultadId) body.facultadId = form.facultadId;
       const url = editandoId ? `${API}/configuracion/usuarios/${editandoId}` : `${API}/configuracion/usuarios`;
       const res = await apiFetch(url, { method: editandoId ? 'PATCH' : 'POST', body: JSON.stringify(body) });
       if (!res.ok) { const d = await res.json(); throw new Error(d.message ?? 'Error al guardar'); }
@@ -163,6 +214,9 @@ export default function UsuariosPage() {
     await apiFetch(`${API}/configuracion/usuarios/${id}/estado`, { method: 'PATCH' });
     cargar(pagina, buscarRef.current);
   }
+
+  // Rol seleccionado en el formulario (para condicionar selectores de scope)
+  const rolNombreSeleccionado = roles.find(r => r.id === form.rolId)?.nombre ?? '';
 
   // ── Estilos ────────────────────────────────────────────────────────────────
   const FILTER_INPUT = 'rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-[#0f4c81] focus:ring-1 focus:ring-[#0f4c81]/20 transition';
@@ -366,11 +420,43 @@ export default function UsuariosPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Rol *</label>
-                <select value={form.rolId} onChange={e => setForm(p => ({ ...p, rolId: e.target.value }))} className={INPUT}>
+                <select
+                  value={form.rolId}
+                  onChange={e => setForm(p => ({ ...p, rolId: e.target.value, carreraId: '', facultadId: '' }))}
+                  className={INPUT}
+                >
                   <option value="">Seleccionar rol</option>
                   {roles.map(r => <option key={r.id} value={r.id}>{r.nombre.replace(/_/g, ' ')}</option>)}
                 </select>
               </div>
+              {/* Selector de Carrera — visible solo para DIRECTOR_CARRERA */}
+              {rolNombreSeleccionado === 'DIRECTOR_CARRERA' && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Carrera asociada *</label>
+                  <select
+                    value={form.carreraId}
+                    onChange={e => setForm(p => ({ ...p, carreraId: e.target.value }))}
+                    className={INPUT}
+                  >
+                    <option value="">Seleccionar carrera</option>
+                    {carreras.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                </div>
+              )}
+              {/* Selector de Facultad — visible solo para DECANO */}
+              {rolNombreSeleccionado === 'DECANO' && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Facultad asociada *</label>
+                  <select
+                    value={form.facultadId}
+                    onChange={e => setForm(p => ({ ...p, facultadId: e.target.value }))}
+                    className={INPUT}
+                  >
+                    <option value="">Seleccionar facultad</option>
+                    {facultades.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
               <button
