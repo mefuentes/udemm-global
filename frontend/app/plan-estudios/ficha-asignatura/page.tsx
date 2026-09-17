@@ -1433,7 +1433,7 @@ function exportarProgramaPDF(ficha: FichaCompleta, programa: ProgramaAsignatura)
     `<table>
       <thead><tr>
         <th style="width:80%">Intensidad de formación práctica</th>
-        <th style="width:20%;text-align:center">Hora de clase</th>
+        <th style="width:20%;text-align:center">Horas de clase</th>
       </tr></thead>
       <tbody>
         ${intensFilasPdf.map(f => `<tr>
@@ -2309,7 +2309,7 @@ function ProgramaView({
                         Intensidad de formación práctica
                       </th>
                       <th className="text-center px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-32">
-                        Hora de clase
+                        Horas de clase
                       </th>
                       {editando && <th className="w-10" />}
                     </tr>
