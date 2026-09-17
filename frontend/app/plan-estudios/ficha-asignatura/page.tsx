@@ -99,6 +99,7 @@ interface ProgramaAsignatura {
   contenidosGridJson?: string;
   unidadesDidacticasJson?: string;
   formacionPracticaJson?: string;
+  actividadesFormacionPractica?: string;
   fundamentacion?: string;
   propositos?: string;
   objetivosEspecificos?: string;
@@ -963,14 +964,14 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
               <CampoEditable label="Horas semanales"
                 valor={ficha.cargaHorariaSemanal ? `${ficha.cargaHorariaSemanal} horas` : '—'}
                 editar={modoEditar}
-                input={<input type="number" min="0" value={form.cargaHorariaSemanal}
-                  onChange={e => setForm(f => ({ ...f, cargaHorariaSemanal: e.target.value }))}
+                input={<input type="text" inputMode="numeric" value={form.cargaHorariaSemanal}
+                  onChange={e => setForm(f => ({ ...f, cargaHorariaSemanal: soloDigitos(e.target.value) }))}
                   className={inputCls} placeholder="0" />} />
               <CampoEditable label="Horas totales"
                 valor={ficha.cargaHorariaTotal ? `${ficha.cargaHorariaTotal} horas` : '—'}
                 editar={modoEditar}
-                input={<input type="number" min="0" value={form.cargaHorariaTotal}
-                  onChange={e => setForm(f => ({ ...f, cargaHorariaTotal: e.target.value }))}
+                input={<input type="text" inputMode="numeric" value={form.cargaHorariaTotal}
+                  onChange={e => setForm(f => ({ ...f, cargaHorariaTotal: soloDigitos(e.target.value) }))}
                   className={inputCls} placeholder="0" />} />
               <CampoEditable label="Créditos"
                 valor={ficha.creditos > 0 ? `${ficha.creditos} créditos` : '—'}
@@ -1271,11 +1272,16 @@ interface SeccionConfig {
 type CompetenciaFila      = { competencia: string; resultadoAprendizaje: string };
 type ContenidoFila        = { conceptuales: string; procedimentales: string; actitudinales: string };
 type UnidadDidacticaFila  = { unidad: string; horas: string };
-type FormacionPracticaFila = { actividad: string; competenciaIdx: number; hsPres: number; hsSinc: number };
+type IntensidadFila       = { intensidad: string; horasClase: number };
 
 function tryParseJson<T>(str: string | undefined | null): T | null {
   if (!str) return null;
   try { return JSON.parse(str) as T; } catch { return null; }
+}
+
+// Elimina cualquier carácter que no sea dígito (0-9). Usar en todos los campos de horas.
+function soloDigitos(val: string): string {
+  return val.replace(/[^0-9]/g, '');
 }
 
 function calcEstadoS2(prog: ProgramaAsignatura): string {
@@ -1292,13 +1298,14 @@ function calcEstadoS3(prog: ProgramaAsignatura): string {
 }
 
 function calcEstadoS4(prog: ProgramaAsignatura): string {
-  const filas = tryParseJson<FormacionPracticaFila[]>(prog.formacionPracticaJson) ?? [];
-  return filas.some(f =>
-    f.actividad?.trim().length > 0 &&
-    f.competenciaIdx >= 0 &&
-    typeof f.hsPres === 'number' && f.hsPres >= 0 &&
-    typeof f.hsSinc === 'number' && f.hsSinc >= 0
-  ) ? 'COMPLETO' : 'PENDIENTE';
+  const hasActiv = (prog.actividadesFormacionPractica?.trim().length ?? 0) > 50;
+  const filas = tryParseJson<IntensidadFila[]>(prog.formacionPracticaJson) ?? [];
+  const hasIntens = filas.some(f =>
+    (f.intensidad?.trim().length ?? 0) > 0 &&
+    typeof f.horasClase === 'number' && Number.isInteger(f.horasClase) &&
+    f.horasClase >= 0 && f.horasClase <= 99
+  );
+  return hasActiv && hasIntens ? 'COMPLETO' : 'PENDIENTE';
 }
 
 const SECCIONES_PROGRAMA: SeccionConfig[] = [
@@ -1362,8 +1369,7 @@ const ACCION_PROG_CFG: Record<string, { label: string; cls: string }> = {
 };
 
 function exportarProgramaPDF(ficha: FichaCompleta, programa: ProgramaAsignatura) {
-  const fecha     = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
-  const estadoCfg = ESTADO_PROG_CFG[programa.estadoPrograma] ?? ESTADO_PROG_CFG.PENDIENTE;
+  const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
 
   // ── Mini helpers ─────────────────────────────────────────────────────────
   const esc   = (s: unknown) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -1384,7 +1390,7 @@ function exportarProgramaPDF(ficha: FichaCompleta, programa: ProgramaAsignatura)
   const compFilas = tryParseJson<CompetenciaFila[]>(programa.competenciasResultadosJson) ?? [];
   const contFilas = tryParseJson<ContenidoFila[]>(programa.contenidosGridJson) ?? [];
   const udFilas   = tryParseJson<UnidadDidacticaFila[]>(programa.unidadesDidacticasJson) ?? [];
-  const fpFilas   = tryParseJson<FormacionPracticaFila[]>(programa.formacionPracticaJson) ?? [];
+  const intensFilasPdf = tryParseJson<IntensidadFila[]>(programa.formacionPracticaJson) ?? [];
 
   // ── S1: Objetivos y perfil (campos genéricos) ─────────────────────────
   const s1Cfg = SECCIONES_PROGRAMA.find(s => s.id === 's1')!;
@@ -1419,41 +1425,23 @@ function exportarProgramaPDF(ficha: FichaCompleta, programa: ProgramaAsignatura)
   const s3HTML = campoTabla('Unidades didácticas', tblUD);
 
   // ── S4: Formación práctica ────────────────────────────────────────────
-  let tblFP: string;
-  if (fpFilas.length === 0) {
-    tblFP = SIN;
-  } else {
-    const tPres = fpFilas.reduce((s,f) => s + (f.hsPres||0), 0);
-    const tSinc = fpFilas.reduce((s,f) => s + (f.hsSinc||0), 0);
-    tblFP = `<table>
+  const s4ActHTML = campoTxt(
+    'Actividades de formación práctica',
+    programa.actividadesFormacionPractica ?? '',
+  );
+  const tblIntens = intensFilasPdf.length === 0 ? SIN :
+    `<table>
       <thead><tr>
-        <th style="width:35%">Actividad / tipo</th>
-        <th style="width:30%">Competencia vinculada</th>
-        <th style="width:10%;text-align:center">Hs pres.</th>
-        <th style="width:10%;text-align:center">Hs sinc.</th>
-        <th style="width:10%;text-align:center">Total</th>
+        <th style="width:80%">Intensidad de formación práctica</th>
+        <th style="width:20%;text-align:center">Hora de clase</th>
       </tr></thead>
       <tbody>
-        ${fpFilas.map(f => {
-          const comp = compFilas[f.competenciaIdx]?.competencia ?? '—';
-          const tot  = (f.hsPres||0) + (f.hsSinc||0);
-          return `<tr>
-            <td>${nl2br(f.actividad||'—')}</td>
-            <td>${esc(comp)}</td>
-            <td style="text-align:center">${fmtN(f.hsPres||0)}</td>
-            <td style="text-align:center">${fmtN(f.hsSinc||0)}</td>
-            <td style="text-align:center;font-weight:bold">${fmtN(tot)}</td>
-          </tr>`;
-        }).join('')}
-        <tr class="tot-row">
-          <td colspan="2" style="text-align:right;padding-right:12px">Totales</td>
-          <td style="text-align:center">${fmtN(tPres)}</td>
-          <td style="text-align:center">${fmtN(tSinc)}</td>
-          <td style="text-align:center">${fmtN(tPres+tSinc)}</td>
-        </tr>
+        ${intensFilasPdf.map(f => `<tr>
+          <td>${nl2br(f.intensidad||'—')}</td>
+          <td style="text-align:center">${esc(f.horasClase != null ? String(f.horasClase) : '—')}</td>
+        </tr>`).join('')}
       </tbody></table>`;
-  }
-  const s4HTML = campoTabla('Actividades de formación práctica', tblFP);
+  const s4HTML = s4ActHTML + campoTabla('Intensidad de la formación práctica', tblIntens);
 
   // ── S5: Metodología y evaluación (campos genéricos) ───────────────────
   const s5Cfg = SECCIONES_PROGRAMA.find(s => s.id === 's5')!;
@@ -1493,10 +1481,6 @@ body{font-family:Arial,sans-serif;font-size:10pt;color:#1e293b;margin:0}
 .meta-grid{display:flex;flex-wrap:wrap;gap:5px 22px;border:1px solid #e2e8f0;border-top:0;padding:9px 18px;background:#f8fafc;margin-bottom:22px}
 .mi{font-size:8.5pt;color:#475569}
 .mi strong{color:#1e293b}
-.est-lbl{display:inline-block;font-size:8pt;font-weight:bold;padding:1px 7px;border-radius:3px}
-.est-pend{background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1}
-.est-rev{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
-.est-apr{background:#d1fae5;color:#065f46;border:1px solid #a7f3d0}
 h2{font-size:11pt;color:#0f4c81;border-bottom:2px solid #0f4c81;padding-bottom:4px;margin:24px 0 10px;break-after:avoid;page-break-after:avoid}
 .seccion{break-inside:avoid;page-break-inside:avoid}
 .campo{margin-bottom:13px;break-inside:avoid;page-break-inside:avoid}
@@ -1526,7 +1510,6 @@ tr{break-inside:avoid;page-break-inside:avoid}
   ${ficha.anio ? `<div class="mi"><strong>Año:</strong> ${ficha.anio}°</div>` : ''}
   ${ficha.cuatrimestre != null ? `<div class="mi"><strong>Cuatrimestre:</strong> ${esc(duracionLabel(ficha.cuatrimestre))}</div>` : ''}
   ${ficha.bloqueConocimiento ? `<div class="mi"><strong>Bloque de conocimiento:</strong> ${esc(ficha.bloqueConocimiento)}</div>` : ''}
-  <div class="mi"><strong>Estado:</strong> <span class="est-lbl ${programa.estadoPrograma === 'APROBADO' ? 'est-apr' : programa.estadoPrograma === 'EN_REVISION' ? 'est-rev' : 'est-pend'}">${estadoCfg.label}</span></div>
   ${(() => {
     const aprobacion = programa.historial.find(h => h.accion === 'APROBACION');
     if (!aprobacion) return '';
@@ -1579,8 +1562,9 @@ function ProgramaView({
   const contRefMap = useRef<Record<string, { conc: HTMLTextAreaElement | null; proc: HTMLTextAreaElement | null; act: HTMLTextAreaElement | null }>>({});
   const [editUDRows, setEditUDRows] = useState<Array<{ _id: string; unidad: string; horas: string }>>([]);
   const udRefMap = useRef<Record<string, { unidad: HTMLTextAreaElement | null; horas: HTMLInputElement | null }>>({});
-  const [editFPRows, setEditFPRows] = useState<Array<{ _id: string; actividad: string; competenciaIdx: number; hsPres: string; hsSinc: string }>>([]);
-  const fpActivRef = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const fpTextRef  = useRef<HTMLTextAreaElement | null>(null);
+  const [editIntensRows, setEditIntensRows] = useState<Array<{ _id: string; intensidad: string; horasClase: string }>>([]);
+  const intensRefMap = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const [guardando, setGuardando] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [historialPagina, setHistorialPagina] = useState(1);
@@ -1700,39 +1684,37 @@ function ProgramaView({
 
   function iniciarEdicionFormacion() {
     const mkId = () => String(gridIdCounter.current++);
-    const filas = tryParseJson<FormacionPracticaFila[]>(programa?.formacionPracticaJson) ?? [];
-    fpActivRef.current = {};
-    setEditFPRows((filas.length > 0 ? filas : [{ actividad: '', competenciaIdx: -1, hsPres: 0, hsSinc: 0 }])
-      .map(f => ({
-        _id: mkId(),
-        actividad:      f.actividad ?? '',
-        competenciaIdx: f.competenciaIdx ?? -1,
-        hsPres:         f.hsPres != null ? String(f.hsPres) : '',
-        hsSinc:         f.hsSinc != null ? String(f.hsSinc) : '',
-      })));
+    const filas = tryParseJson<IntensidadFila[]>(programa?.formacionPracticaJson) ?? [];
+    intensRefMap.current = {};
+    setEditIntensRows(filas.map(f => ({
+      _id: mkId(),
+      intensidad: f.intensidad ?? '',
+      horasClase: f.horasClase != null ? String(f.horasClase) : '',
+    })));
     setEditando(true);
     setErrorMsg(null);
   }
 
   async function guardarFormacion() {
-    const filas: FormacionPracticaFila[] = editFPRows.map(row => ({
-      actividad:      fpActivRef.current[row._id]?.value ?? '',
-      competenciaIdx: row.competenciaIdx,
-      hsPres:         parseFloat(row.hsPres) >= 0 ? parseFloat(row.hsPres) : 0,
-      hsSinc:         parseFloat(row.hsSinc) >= 0 ? parseFloat(row.hsSinc) : 0,
+    const texto = fpTextRef.current?.value ?? '';
+    const filas: IntensidadFila[] = editIntensRows.map(row => ({
+      intensidad: intensRefMap.current[row._id]?.value ?? row.intensidad,
+      horasClase: Math.max(0, Math.min(99, parseInt(row.horasClase) || 0)),
     }));
     setGuardando(true);
     setErrorMsg(null);
     try {
       const payload: Record<string, unknown> = {
-        seccionModificada:   seccion.titulo,
-        formacionPracticaJson: JSON.stringify(filas),
+        seccionModificada:           seccion.titulo,
+        actividadesFormacionPractica: texto,
+        formacionPracticaJson:        JSON.stringify(filas),
       };
       const data = await apiFetch(`${API_URL}/programas/materia/${materiaId}`, {
         method: 'PATCH',
         body: JSON.stringify(payload)
       });
       setPrograma(data);
+      setHistorialPagina(1);
       setEditando(false);
     } catch (e: unknown) {
       setErrorMsg(e instanceof Error ? e.message : 'Error al guardar');
@@ -1830,9 +1812,9 @@ function ProgramaView({
   const estadoProgCfg = ESTADO_PROG_CFG[programa.estadoPrograma] ?? ESTADO_PROG_CFG.PENDIENTE;
   const cellCls = 'w-full text-sm border border-slate-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] resize-none';
   const compFilas = tryParseJson<CompetenciaFila[]>(programa.competenciasResultadosJson) ?? [];
-  const contFilas = tryParseJson<ContenidoFila[]>(programa.contenidosGridJson) ?? [];
-  const udFilas   = tryParseJson<UnidadDidacticaFila[]>(programa.unidadesDidacticasJson) ?? [];
-  const fpFilas   = tryParseJson<FormacionPracticaFila[]>(programa.formacionPracticaJson) ?? [];
+  const contFilas   = tryParseJson<ContenidoFila[]>(programa.contenidosGridJson) ?? [];
+  const udFilas     = tryParseJson<UnidadDidacticaFila[]>(programa.unidadesDidacticasJson) ?? [];
+  const intensFilas = tryParseJson<IntensidadFila[]>(programa.formacionPracticaJson) ?? [];
 
   // Paginación del historial: 5 registros por página
   const HIST_POR_PAG   = 5;
@@ -2243,8 +2225,10 @@ function ProgramaView({
                         <td className="px-2 py-1.5 align-top">
                           <input
                             type="text"
+                            inputMode="numeric"
                             ref={el => { if (!udRefMap.current[row._id]) udRefMap.current[row._id] = { unidad: null, horas: null }; udRefMap.current[row._id].horas = el; }}
                             defaultValue={row.horas}
+                            onInput={e => { const el = e.currentTarget; const clean = soloDigitos(el.value); if (el.value !== clean) el.value = clean; }}
                             className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]"
                           />
                         </td>
@@ -2289,157 +2273,127 @@ function ProgramaView({
         )}
 
         {/* ── Sección 4: formación práctica ── */}
-        {seccion.renderTipo === 'formacion' && (() => {
-          const selCls   = 'w-full text-sm border border-slate-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]';
-          const numCls   = 'w-full text-sm border border-slate-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] text-center';
-          // totales en modo edición (desde estado controlado)
-          const tPresEdit = editFPRows.reduce((s, r) => s + (parseFloat(r.hsPres) || 0), 0);
-          const tSincEdit = editFPRows.reduce((s, r) => s + (parseFloat(r.hsSinc) || 0), 0);
-          // totales en modo vista (desde datos guardados)
-          const tPresView = fpFilas.reduce((s, f) => s + (f.hsPres || 0), 0);
-          const tSincView = fpFilas.reduce((s, f) => s + (f.hsSinc || 0), 0);
-          const tPres = editando ? tPresEdit : tPresView;
-          const tSinc = editando ? tSincEdit : tSincView;
-          return (
-            <div className="space-y-4">
-              <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-3">
+        {seccion.renderTipo === 'formacion' && (
+          <div className="space-y-6">
+
+            {/* Bloque 1: Actividades de Formación Práctica */}
+            <div>
+              <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-2">
                 Actividades de formación práctica
+              </p>
+              {editando ? (
+                <textarea
+                  ref={fpTextRef}
+                  defaultValue={programa?.actividadesFormacionPractica ?? ''}
+                  rows={5}
+                  className={cellCls}
+                  placeholder="Describa las actividades de formación práctica de la asignatura..."
+                />
+              ) : (
+                <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                  {programa.actividadesFormacionPractica || <span className="text-slate-300 italic">Sin datos</span>}
+                </p>
+              )}
+            </div>
+
+            {/* Bloque 2: Intensidad de la Formación Práctica */}
+            <div>
+              <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-2">
+                Intensidad de la formación práctica
               </p>
               <div className="overflow-x-auto rounded-lg border border-slate-200">
                 <table className="w-full text-sm border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200">
-                      <th className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-[38%]">
-                        Actividad / tipo <span className="text-red-500">*</span>
+                      <th className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                        Intensidad de formación práctica
                       </th>
-                      <th className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-[30%]">
-                        Competencia <span className="text-red-500">*</span>
-                      </th>
-                      <th className="text-center px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-[10%]">
-                        Hs pres. <span className="text-red-500">*</span>
-                      </th>
-                      <th className="text-center px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-[10%]">
-                        Hs sinc. <span className="text-red-500">*</span>
-                      </th>
-                      <th className="text-center px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-[8%]">
-                        Total
+                      <th className="text-center px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-32">
+                        Hora de clase
                       </th>
                       {editando && <th className="w-10" />}
                     </tr>
                   </thead>
                   <tbody>
                     {editando ? (
-                      editFPRows.map(row => {
-                        const pres  = parseFloat(row.hsPres) || 0;
-                        const sinc  = parseFloat(row.hsSinc) || 0;
-                        const total = pres + sinc;
-                        return (
+                      editIntensRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="px-3 py-4 text-center text-sm text-slate-300 italic">
+                            Sin filas — use &ldquo;Agregar fila&rdquo;
+                          </td>
+                        </tr>
+                      ) : (
+                        editIntensRows.map(row => (
                           <tr key={row._id} className="border-b border-slate-100 last:border-0">
                             <td className="px-2 py-1.5 align-top">
                               <textarea
-                                ref={el => { fpActivRef.current[row._id] = el; }}
-                                defaultValue={row.actividad}
+                                ref={el => { intensRefMap.current[row._id] = el; }}
+                                defaultValue={row.intensidad}
                                 rows={2}
                                 className={cellCls}
+                                placeholder="Tipo de actividad de formación práctica"
                               />
                             </td>
-                            <td className="px-2 py-1.5 align-top">
-                              {compFilas.length === 0 ? (
-                                <p className="text-[11px] text-slate-400 italic px-1">Sin competencias — completar sección 2</p>
-                              ) : (
-                                <select
-                                  value={row.competenciaIdx}
-                                  onChange={e => setEditFPRows(prev => prev.map(r => r._id === row._id ? { ...r, competenciaIdx: Number(e.target.value) } : r))}
-                                  className={selCls}
-                                >
-                                  <option value={-1} disabled>Seleccionar...</option>
-                                  {compFilas.map((c, i) => (
-                                    <option key={i} value={i}>{c.competencia}</option>
-                                  ))}
-                                </select>
-                              )}
-                            </td>
-                            <td className="px-2 py-1.5 align-top">
+                            <td className="px-2 py-1.5 align-middle">
                               <input
-                                type="number"
-                                min={0}
-                                step={0.5}
-                                value={row.hsPres}
-                                onChange={e => setEditFPRows(prev => prev.map(r => r._id === row._id ? { ...r, hsPres: e.target.value } : r))}
-                                className={numCls}
+                                type="text"
+                                inputMode="numeric"
+                                value={row.horasClase}
+                                onChange={e => {
+                                  const digits = soloDigitos(e.target.value);
+                                  const val = digits === '' ? '' : String(Math.min(99, parseInt(digits, 10)));
+                                  setEditIntensRows(prev => prev.map(r => r._id === row._id ? { ...r, horasClase: val } : r));
+                                }}
+                                className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] text-center"
                               />
-                            </td>
-                            <td className="px-2 py-1.5 align-top">
-                              <input
-                                type="number"
-                                min={0}
-                                step={0.5}
-                                value={row.hsSinc}
-                                onChange={e => setEditFPRows(prev => prev.map(r => r._id === row._id ? { ...r, hsSinc: e.target.value } : r))}
-                                className={numCls}
-                              />
-                            </td>
-                            <td className="px-2 py-1.5 align-middle text-center text-sm font-semibold text-slate-700">
-                              {total % 1 === 0 ? total : total.toFixed(1)}
                             </td>
                             <td className="px-2 py-1.5 align-middle text-center">
-                              {editFPRows.length > 1 && (
-                                <button
-                                  onClick={() => { delete fpActivRef.current[row._id]; setEditFPRows(prev => prev.filter(r => r._id !== row._id)); }}
-                                  className="text-slate-300 hover:text-red-500 transition-colors text-base leading-none"
-                                  title="Eliminar fila"
-                                >✕</button>
-                              )}
+                              <button
+                                onClick={() => {
+                                  delete intensRefMap.current[row._id];
+                                  setEditIntensRows(prev => prev.filter(r => r._id !== row._id));
+                                }}
+                                className="text-slate-300 hover:text-red-500 transition-colors text-base leading-none"
+                                title="Eliminar fila"
+                              >✕</button>
                             </td>
                           </tr>
-                        );
-                      })
-                    ) : fpFilas.length === 0 ? (
+                        ))
+                      )
+                    ) : intensFilas.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-3 py-5 text-center text-sm text-slate-300 italic">Sin datos</td>
+                        <td colSpan={2} className="px-3 py-5 text-center text-sm text-slate-300 italic">Sin datos</td>
                       </tr>
                     ) : (
-                      fpFilas.map((row, i) => {
-                        const comp  = compFilas[row.competenciaIdx]?.competencia;
-                        const total = (row.hsPres || 0) + (row.hsSinc || 0);
-                        return (
-                          <tr key={i} className="border-b border-slate-100 last:border-0">
-                            <td className="px-3 py-2.5 text-sm text-slate-700 align-top whitespace-pre-wrap">{row.actividad || <span className="text-slate-300 italic">—</span>}</td>
-                            <td className="px-3 py-2.5 text-sm text-slate-700 align-top">{comp ?? <span className="text-slate-300 italic">—</span>}</td>
-                            <td className="px-3 py-2.5 text-sm text-slate-700 text-center">{row.hsPres ?? '—'}</td>
-                            <td className="px-3 py-2.5 text-sm text-slate-700 text-center">{row.hsSinc ?? '—'}</td>
-                            <td className="px-3 py-2.5 text-sm font-semibold text-slate-700 text-center">{total % 1 === 0 ? total : total.toFixed(1)}</td>
-                          </tr>
-                        );
-                      })
-                    )}
-                    {/* Fila de totales */}
-                    {(editando ? editFPRows.length > 0 : fpFilas.length > 0) && (
-                      <tr className="border-t-2 border-slate-200 bg-slate-50">
-                        <td colSpan={2} className="px-3 py-2 text-[11px] font-bold text-slate-600 uppercase tracking-wide text-right">Totales</td>
-                        <td className="px-3 py-2 text-sm font-bold text-slate-800 text-center">{tPres % 1 === 0 ? tPres : tPres.toFixed(1)}</td>
-                        <td className="px-3 py-2 text-sm font-bold text-slate-800 text-center">{tSinc % 1 === 0 ? tSinc : tSinc.toFixed(1)}</td>
-                        <td className="px-3 py-2 text-sm font-bold text-[#0f4c81] text-center">{(tPres + tSinc) % 1 === 0 ? tPres + tSinc : (tPres + tSinc).toFixed(1)}</td>
-                        {editando && <td />}
-                      </tr>
+                      intensFilas.map((row, i) => (
+                        <tr key={i} className="border-b border-slate-100 last:border-0">
+                          <td className="px-3 py-2.5 text-sm text-slate-700 align-top whitespace-pre-wrap">
+                            {row.intensidad || <span className="text-slate-300 italic">—</span>}
+                          </td>
+                          <td className="px-3 py-2.5 text-sm text-slate-700 text-center">
+                            {row.horasClase ?? '—'}
+                          </td>
+                        </tr>
+                      ))
                     )}
                   </tbody>
                 </table>
               </div>
               {editando && (
                 <button
-                  onClick={() => setEditFPRows(prev => [...prev, { _id: String(gridIdCounter.current++), actividad: '', competenciaIdx: -1, hsPres: '', hsSinc: '' }])}
+                  onClick={() => setEditIntensRows(prev => [...prev, { _id: String(gridIdCounter.current++), intensidad: '', horasClase: '' }])}
                   className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-[#0f4c81] hover:bg-[#0f4c81]/5 px-2.5 py-1.5 rounded-lg transition-colors"
                 >
                   <span className="text-base leading-none">+</span> Agregar fila
                 </button>
               )}
-              <p className="text-[11px] text-slate-400 pt-3 border-t border-slate-100">
-                <span className="text-red-500 font-semibold">*</span> Los campos marcados con asterisco son obligatorios.
-              </p>
             </div>
-          );
-        })()}
+
+            <p className="text-[11px] text-slate-400 pt-3 border-t border-slate-100">
+              Sección completa cuando el texto de actividades supera los 50 caracteres y existe al menos una fila de intensidad.
+            </p>
+          </div>
+        )}
 
         {/* ── Secciones genéricas (1, 5-6) ── */}
         {!seccion.renderTipo && <div className="space-y-5">

@@ -142,9 +142,10 @@ model ProgramaAsignatura {
   recomendacionesCursado     String?
   competenciasResultadosJson String?
   contenidosGridJson         String?
-  unidadesDidacticasJson     String?
-  formacionPracticaJson      String?
-  historial                  HistorialPrograma[]
+  unidadesDidacticasJson       String?
+  formacionPracticaJson        String?
+  actividadesFormacionPractica String?
+  historial                    HistorialPrograma[]
   materia                    Materia             @relation(fields: [materiaId], references: [id], onDelete: Cascade)
 }
 

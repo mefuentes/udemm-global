@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ScopeService } from '../scopes/scope.service';
 import { ActualizarProgramaDto } from './dto/actualizar-programa.dto';
@@ -52,15 +52,16 @@ function calcEstadoSecciones(prog: Record<string, unknown>): Record<string, stri
   const uds = tryParseJsonArr<UD>(prog['unidadesDidacticasJson']);
   const s3 = uds.some(r => (r.unidad?.trim().length ?? 0) > 0) ? 'COMPLETO' : 'PENDIENTE';
 
-  // S4: formación práctica con actividad + competenciaIdx válido + horas >= 0
-  type FP = { actividad?: string; competenciaIdx?: number; hsPres?: number; hsSinc?: number };
-  const fps = tryParseJsonArr<FP>(prog['formacionPracticaJson']);
-  const s4 = fps.some(f =>
-    (f.actividad?.trim().length ?? 0) > 0 &&
-    typeof f.competenciaIdx === 'number' && f.competenciaIdx >= 0 &&
-    typeof f.hsPres === 'number' && f.hsPres >= 0 &&
-    typeof f.hsSinc === 'number' && f.hsSinc >= 0
-  ) ? 'COMPLETO' : 'PENDIENTE';
+  // S4: actividadesFormacionPractica (texto >50 chars) + al menos una fila de intensidad válida
+  type IF4 = { intensidad?: string; horasClase?: number };
+  const ifs = tryParseJsonArr<IF4>(prog['formacionPracticaJson']);
+  const s4 =
+    str(prog, 'actividadesFormacionPractica').length > 50 &&
+    ifs.some(f =>
+      (f.intensidad?.trim().length ?? 0) > 0 &&
+      typeof f.horasClase === 'number' && Number.isInteger(f.horasClase) &&
+      f.horasClase >= 0 && f.horasClase <= 99
+    ) ? 'COMPLETO' : 'PENDIENTE';
 
   // S5: 4 campos textarea obligatorios >50 chars
   const s5 =
@@ -139,6 +140,43 @@ export class ProgramasService {
     const data: Record<string, unknown> = { ...rest };
     if (fechaAprobacion !== undefined) {
       data.fechaAprobacion = fechaAprobacion ? new Date(fechaAprobacion) : null;
+    }
+
+    // Validar horasClase en formacionPracticaJson: debe ser entero 0-99
+    if (typeof data.formacionPracticaJson === 'string') {
+      try {
+        const rows = JSON.parse(data.formacionPracticaJson as string);
+        if (Array.isArray(rows)) {
+          for (const row of rows) {
+            if (row.horasClase !== undefined && row.horasClase !== null) {
+              const hc = Number(row.horasClase);
+              if (!Number.isInteger(hc) || hc < 0 || hc > 99) {
+                throw new BadRequestException('horasClase debe ser un entero entre 0 y 99');
+              }
+            }
+          }
+        }
+      } catch (e) {
+        if (e instanceof BadRequestException) throw e;
+      }
+    }
+
+    // Validar horas en unidadesDidacticasJson: si se proporciona, debe ser string de dígitos
+    if (typeof data.unidadesDidacticasJson === 'string') {
+      try {
+        const rows = JSON.parse(data.unidadesDidacticasJson as string);
+        if (Array.isArray(rows)) {
+          for (const row of rows) {
+            if (row.horas !== undefined && row.horas !== null && row.horas !== '') {
+              if (!/^[0-9]+$/.test(String(row.horas))) {
+                throw new BadRequestException('horas en unidades didácticas debe contener solo dígitos enteros positivos');
+              }
+            }
+          }
+        }
+      } catch (e) {
+        if (e instanceof BadRequestException) throw e;
+      }
     }
 
     const programaActual = await this.prisma.programaAsignatura.findFirst({ where: { materiaId } });

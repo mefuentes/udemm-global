@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ProgramasService } from './programas.service';
 
 /**
@@ -34,6 +34,7 @@ function makePrograma(estadoPrograma = 'PENDIENTE') {
     objetivosGenerales: null, aportesPerfilTitulo: null,
     competenciasResultadosJson: null, contenidosGridJson: null,
     unidadesDidacticasJson: null, formacionPracticaJson: null,
+    actividadesFormacionPractica: null,
     recursosDidacticos: null, metodologiaEnsenanza: null,
     modalidadEvaluacion: null, requisitosAprobacion: null,
     bibliografiaBasica: null, fechaVigenciaPrograma: null, fechaAprobacion: null,
@@ -221,7 +222,8 @@ describe('ProgramasService — scopes institucionales (FASE 3)', () => {
         competenciasResultadosJson: JSON.stringify([{ competencia: 'x'.repeat(10), resultadoAprendizaje: 'x'.repeat(10) }]),
         contenidosGridJson: JSON.stringify([{ conceptuales: 'x'.repeat(10), procedimentales: 'x'.repeat(10), actitudinales: 'x'.repeat(10) }]),
         unidadesDidacticasJson: JSON.stringify([{ unidad: 'x'.repeat(10), horas: '2' }]),
-        formacionPracticaJson: JSON.stringify([{ actividad: 'x'.repeat(10), competenciaIdx: 0, hsPres: 2, hsSinc: 1 }]),
+        actividadesFormacionPractica: 'x'.repeat(60),
+        formacionPracticaJson: JSON.stringify([{ intensidad: 'x'.repeat(10), horasClase: 2 }]),
         recursosDidacticos: 'x'.repeat(60), metodologiaEnsenanza: 'x'.repeat(60),
         modalidadEvaluacion: 'x'.repeat(60), requisitosAprobacion: 'x'.repeat(60),
         bibliografiaBasica: 'x'.repeat(60), fechaVigenciaPrograma: 2025, fechaAprobacion: new Date(),
@@ -352,7 +354,8 @@ describe('ProgramasService — scopes institucionales (FASE 3)', () => {
         competenciasResultadosJson: JSON.stringify([{ competencia: 'x'.repeat(10), resultadoAprendizaje: 'x'.repeat(10) }]),
         contenidosGridJson: JSON.stringify([{ conceptuales: 'x'.repeat(10), procedimentales: 'x'.repeat(10), actitudinales: 'x'.repeat(10) }]),
         unidadesDidacticasJson: JSON.stringify([{ unidad: 'x'.repeat(10) }]),
-        formacionPracticaJson: JSON.stringify([{ actividad: 'x'.repeat(10), competenciaIdx: 0, hsPres: 2, hsSinc: 1 }]),
+        actividadesFormacionPractica: 'x'.repeat(60),
+        formacionPracticaJson: JSON.stringify([{ intensidad: 'x'.repeat(10), horasClase: 2 }]),
         recursosDidacticos: 'x'.repeat(60), metodologiaEnsenanza: 'x'.repeat(60),
         modalidadEvaluacion: 'x'.repeat(60), requisitosAprobacion: 'x'.repeat(60),
         bibliografiaBasica: 'x'.repeat(60), fechaVigenciaPrograma: 2025, fechaAprobacion: new Date(),
@@ -374,6 +377,54 @@ describe('ProgramasService — scopes institucionales (FASE 3)', () => {
       };
       const result = await makeService(prisma).obtenerPrograma(MATERIA_ID);
       expect(result.estadoPrograma).toBe('PENDIENTE');
+    });
+  });
+
+  // ── Validación — horas en unidades didácticas (S3) ──────────────────────
+
+  describe('Validación — horas en unidadesDidacticasJson', () => {
+    it('acepta horas como string de solo dígitos', async () => {
+      const prisma = makePrisma({});
+      await expect(
+        makeService(prisma).actualizarPrograma(
+          MATERIA_ID,
+          { unidadesDidacticasJson: JSON.stringify([{ unidad: 'Unidad 1', horas: '10' }]) },
+          USUARIO_ID, 'SECRETARIA_ACADEMICA',
+        )
+      ).resolves.not.toThrow();
+    });
+
+    it('acepta horas vacías o nulas sin validar', async () => {
+      const prisma = makePrisma({});
+      await expect(
+        makeService(prisma).actualizarPrograma(
+          MATERIA_ID,
+          { unidadesDidacticasJson: JSON.stringify([{ unidad: 'Unidad 1', horas: '' }]) },
+          USUARIO_ID, 'SECRETARIA_ACADEMICA',
+        )
+      ).resolves.not.toThrow();
+    });
+
+    it('rechaza horas con punto decimal (e.g. "1.5")', async () => {
+      const prisma = makePrisma({});
+      await expect(
+        makeService(prisma).actualizarPrograma(
+          MATERIA_ID,
+          { unidadesDidacticasJson: JSON.stringify([{ unidad: 'Unidad 1', horas: '1.5' }]) },
+          USUARIO_ID, 'SECRETARIA_ACADEMICA',
+        )
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rechaza horas con letras (e.g. "2h")', async () => {
+      const prisma = makePrisma({});
+      await expect(
+        makeService(prisma).actualizarPrograma(
+          MATERIA_ID,
+          { unidadesDidacticasJson: JSON.stringify([{ unidad: 'Unidad 1', horas: '2h' }]) },
+          USUARIO_ID, 'SECRETARIA_ACADEMICA',
+        )
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

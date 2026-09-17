@@ -19,6 +19,7 @@ export class ActualizarProgramaDto {
 
   // S4
   @IsOptional() @IsString() formacionPracticaJson?: string;
+  @IsOptional() @IsString() actividadesFormacionPractica?: string;
 
   // S2 (legacy)
   @IsOptional() @IsString() fundamentacion?: string;
