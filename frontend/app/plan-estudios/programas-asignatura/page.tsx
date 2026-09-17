@@ -127,7 +127,6 @@ export default function ProgramasAsignaturaPage() {
 
   const permisosPrograma = getPermisosPrograma(usuario?.rol?.nombre ?? '');
 
-  const [materiasEditables, setMateriasEditables] = useState<Set<string>>(new Set());
 
   const [carreras,        setCarreras]        = useState<Carrera[]>([]);
   const [planes,          setPlanes]          = useState<Plan[]>([]);
@@ -232,19 +231,6 @@ export default function ProgramasAsignaturaPage() {
       .finally(() => setCargando(false));
   }, [planId, reloadKey]);
 
-  // Cargar materias editables para DOCENTE (VinculacionCatedra APROBADA)
-  useEffect(() => {
-    if (!usuario || usuario?.rol?.nombre !== 'DOCENTE') {
-      setMateriasEditables(new Set());
-      return;
-    }
-    apiFetch(`${API_URL}/vinculaciones-catedra?estado=APROBADA`)
-      .then((data: unknown) => {
-        const arr = Array.isArray(data) ? (data as { materia?: { id: string } }[]) : [];
-        setMateriasEditables(new Set(arr.map(v => v.materia?.id).filter((id): id is string => !!id)));
-      })
-      .catch(() => setMateriasEditables(new Set()));
-  }, [usuario?.rol?.nombre]);
 
   // Debounce filtro código
   useEffect(() => {
@@ -657,7 +643,7 @@ export default function ProgramasAsignaturaPage() {
                         <FilaPrograma
                           key={m.id}
                           materia={m}
-                          puedeCompletar={puedeCompletar || materiasEditables.has(m.id)}
+                          puedeCompletar={puedeCompletar}
                           router={router}
                         />
                       ))}
