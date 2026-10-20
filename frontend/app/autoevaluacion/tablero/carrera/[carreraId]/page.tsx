@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetch, mensajeErrorHttp } from '@/lib/api';
-import type { EstadoCalculo, ResultadoIP04, ResultadoIP13, TablroCarreraResponse } from './types';
+import type { EstadoCalculo, ResultadoIP04, ResultadoIP09, ResultadoIP13, TablroCarreraResponse } from './types';
 
 // ── Helpers visuales ─────────────────────────────────────────────────────────
 
@@ -137,6 +137,73 @@ function TarjetaIP04({ ip04 }: { ip04: ResultadoIP04 }) {
 
           <div className="flex justify-end mt-2">
             <EstadoBadge ec={ip04.estadoCalculo} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── IP-09: Completitud promedio del plantel ───────────────────────────────────
+
+function TarjetaIP09({ ip09 }: { ip09: ResultadoIP09 }) {
+  const ec = ip09.estadoCalculo;
+  const pct = ip09.completitudPromedio;
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <EtiquetaIndicador codigo="IP-09" titulo="Completitud promedio del plantel" />
+
+      {ec === 'NO_APLICA' ? (
+        <div className="p-3 rounded-lg bg-sky-50 border border-sky-200">
+          <p className="text-xs text-sky-700">
+            Sin docentes activos con asignaciones aprobadas. No aplica la evaluación.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            {/* Completitud promedio — métrica principal */}
+            <div className="rounded-lg px-3 py-3 border border-[#0f4c81]/15 bg-[#0f4c81]/5 text-center col-span-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#0f4c81]/60 mb-0.5 leading-tight">
+                Completitud promedio
+              </p>
+              <p className="text-2xl font-bold tabular-nums text-[#0f4c81]">
+                {pct !== null ? `${pct}%` : '—'}
+              </p>
+              <p className="text-[9px] text-slate-400 mt-0.5">sobre 100%</p>
+            </div>
+            <Metrica label="Docentes evaluados" valor={ip09.totalDocentes} />
+          </div>
+
+          {pct !== null && (
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] text-slate-400">0%</span>
+                <span className="text-[10px] text-slate-400">100%</span>
+              </div>
+              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${pct}%`,
+                    backgroundColor: pct >= 75 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="mt-2 pt-2 border-t border-slate-100">
+            <p className="text-[10px] text-slate-400 leading-relaxed">
+              C1 = datos personales (sexo, f. nacimiento, CUIT, Depto/Partido) ·
+              C2 = título de grado · C3 = área disciplinar · C4 = cargo vigente (siempre 1).
+              completitud_i = 25 × (C1 + C2 + C3 + C4).
+            </p>
+          </div>
+
+          <div className="flex justify-end mt-2">
+            <EstadoBadge ec={ec} />
           </div>
         </>
       )}
@@ -286,6 +353,7 @@ function TablroCarreraInner() {
   const ip03 = dato?.ip03;
   const ip04 = dato?.ip04;
   const ip08 = dato?.ip08;
+  const ip09 = dato?.ip09;
   const ip13 = dato?.ip13;
 
   // IP-03: derivar sin cobertura y porcentaje solo cuando hay datos reales
@@ -337,7 +405,7 @@ function TablroCarreraInner() {
           <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Estado general de cálculo:</span>
           <EstadoBadge ec={dato.estadoGeneralCalculo} />
           <span className="text-[10px] text-slate-400 italic">
-            Estado más restrictivo entre los seis indicadores. PARCIAL puede reflejar alcance limitado de IP-13 — no indica incumplimiento académico.
+            Estado más restrictivo entre los siete indicadores. PARCIAL puede reflejar alcance limitado de IP-13 — no indica incumplimiento académico.
           </span>
         </div>
       )}
@@ -358,7 +426,7 @@ function TablroCarreraInner() {
       )}
 
       {/* Indicadores */}
-      {dato && ip01 && ip02 && ip03 && ip04 && ip08 && ip13 && (
+      {dato && ip01 && ip02 && ip03 && ip04 && ip08 && ip09 && ip13 && (
         <div className="space-y-4">
 
           {/* IP-01 + IP-02 — Plantel vigente (fila compacta) */}
@@ -477,6 +545,9 @@ function TablroCarreraInner() {
           {/* IP-04 — Materias por docente */}
           <TarjetaIP04 ip04={ip04} />
 
+          {/* IP-09 — Completitud promedio del plantel */}
+          <TarjetaIP09 ip09={ip09} />
+
           {/* IP-13 — Docentes sobreasignados */}
           <TarjetaIP13 ip13={ip13} />
 
@@ -540,8 +611,9 @@ function TablroCarreraInner() {
           {/* Nota metodológica */}
           <p className="text-[10px] text-slate-400 text-center">
             Indicadores FSD §7 — Plantel de la carrera.
-            IP-01, IP-02, IP-04 e IP-13 incluyen solo docentes activos (docente.activo=true) con vinculación APROBADA.
-            IP-13 evalúa sobreasignación a nivel de facultad (todos los roles excepto DIRECTOR_CARRERA → PARCIAL).
+            IP-01, IP-02, IP-04, IP-09 e IP-13 incluyen solo docentes activos (docente.activo=true) con vinculación APROBADA.
+            IP-09: completitud_i = 25 × (C1 + C2 + C3 + C4), C4 = 1 siempre en este universo.
+            IP-13 evalúa sobreasignación a nivel de facultad (DIRECTOR_CARRERA → PARCIAL).
             IP-03 e IP-08 basados en vinculaciones con estado APROBADA.
           </p>
 

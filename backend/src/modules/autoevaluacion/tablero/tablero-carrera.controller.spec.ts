@@ -88,6 +88,8 @@ const escenarioA: TablroCarreraResponseDto = {
     estadoCalculo: EstadoCalculo.CALCULADO,
   },
   ip08: { profesores: 6, auxiliares: 3, ratio: 2.0, estadoCalculo: EstadoCalculo.CALCULADO },
+  // IP-09: 5 docentes evaluados, completitud promedio 82%
+  ip09: { totalDocentes: 5, completitudPromedio: 82, estadoCalculo: EstadoCalculo.CALCULADO },
   // IP-13: P-03=3, 5 docentes evaluados, 1 sobreasignado (4 materias > 3)
   ip13: {
     limite: 3,
@@ -120,6 +122,7 @@ const escenarioE: TablroCarreraResponseDto = {
     estadoCalculo: EstadoCalculo.NO_APLICA,
   },
   ip08: { profesores: 0, auxiliares: 0, ratio: null, estadoCalculo: EstadoCalculo.NO_APLICA },
+  ip09: { totalDocentes: 0, completitudPromedio: null, estadoCalculo: EstadoCalculo.NO_APLICA },
   ip13: {
     limite: null,
     totalDocentes: 0,
@@ -280,7 +283,7 @@ describe('POST /autoevaluacion/tablero/carrera/:carreraId', () => {
 
   // ── Estructura del DTO ─────────────────────────────────────────────────────
 
-  it('respuesta 200 incluye todos los campos requeridos (ip01, ip02, ip03, ip04, ip08, ip13)', async () => {
+  it('respuesta 200 incluye todos los campos requeridos (ip01, ip02, ip03, ip04, ip08, ip09, ip13)', async () => {
     const res = await request(app.getHttpServer())
       .post(`/autoevaluacion/tablero/carrera/${CAR_ID}`)
       .set('x-test-user', JSON.stringify(USR_ADMIN))
@@ -298,6 +301,10 @@ describe('POST /autoevaluacion/tablero/carrera/:carreraId', () => {
         estadoCalculo: expect.any(String),
       }),
       ip08: expect.objectContaining({ profesores: expect.any(Number), auxiliares: expect.any(Number) }),
+      ip09: expect.objectContaining({
+        totalDocentes: expect.any(Number),
+        estadoCalculo: expect.any(String),
+      }),
       ip13: expect.objectContaining({
         totalDocentes: expect.any(Number),
         totalSobreasignados: expect.any(Number),
@@ -700,7 +707,7 @@ describe('IP-13 — Docentes sobreasignados (HTTP contract)', () => {
     expect(res.body.estadoGeneralCalculo).toBe(EstadoCalculo.CALCULADO);
   });
 
-  it('preserva los cinco indicadores existentes cuando se agrega ip13', async () => {
+  it('todos los indicadores presentes en la respuesta (ip01-ip13 inclusive ip09)', async () => {
     consultarCarrera = jest.fn().mockResolvedValue(escenarioA);
     app = await crearApp(consultarCarrera);
 
@@ -709,12 +716,40 @@ describe('IP-13 — Docentes sobreasignados (HTTP contract)', () => {
       .set('x-test-user', JSON.stringify(USR_ADMIN))
       .expect(200);
 
-    // Todos los indicadores anteriores siguen presentes y correctos
     expect(res.body.ip01).toBeDefined();
     expect(res.body.ip02).toBeDefined();
     expect(res.body.ip03).toBeDefined();
     expect(res.body.ip04).toBeDefined();
     expect(res.body.ip08).toBeDefined();
+    expect(res.body.ip09).toBeDefined();
     expect(res.body.ip13).toBeDefined();
+  });
+
+  it('ip09 en escenario A: totalDocentes=5, completitudPromedio=82, CALCULADO', async () => {
+    consultarCarrera = jest.fn().mockResolvedValue(escenarioA);
+    app = await crearApp(consultarCarrera);
+
+    const res = await request(app.getHttpServer())
+      .post(`/autoevaluacion/tablero/carrera/${CAR_ID}`)
+      .set('x-test-user', JSON.stringify(USR_ADMIN))
+      .expect(200);
+
+    expect(res.body.ip09.totalDocentes).toBe(5);
+    expect(res.body.ip09.completitudPromedio).toBe(82);
+    expect(res.body.ip09.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+  });
+
+  it('ip09 en escenario E: totalDocentes=0, completitudPromedio=null, NO_APLICA', async () => {
+    consultarCarrera = jest.fn().mockResolvedValue(escenarioE);
+    app = await crearApp(consultarCarrera);
+
+    const res = await request(app.getHttpServer())
+      .post(`/autoevaluacion/tablero/carrera/${CAR_ID}`)
+      .set('x-test-user', JSON.stringify(USR_ADMIN))
+      .expect(200);
+
+    expect(res.body.ip09.estadoCalculo).toBe(EstadoCalculo.NO_APLICA);
+    expect(res.body.ip09.totalDocentes).toBe(0);
+    expect(res.body.ip09.completitudPromedio).toBeNull();
   });
 });

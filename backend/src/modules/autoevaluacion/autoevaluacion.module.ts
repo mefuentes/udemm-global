@@ -12,6 +12,7 @@ import { R06EvaluadorService } from './indicadores/r06.evaluador';
 import { R07EvaluadorService } from './indicadores/r07.evaluador';
 import { R08EvaluadorService } from './indicadores/r08.evaluador';
 import { R09EvaluadorService } from './indicadores/r09.evaluador';
+import { IP09EvaluadorService } from './indicadores/ip09.evaluador';
 import { R12EvaluadorService } from './indicadores/r12.evaluador';
 import { ResponsablesService } from './responsables/responsables.service';
 import { TablroPlanService } from './tablero/tablero-plan.service';
@@ -32,6 +33,7 @@ import { TablroCarreraService } from './tablero/tablero-carrera.service';
     R08EvaluadorService,
     R09EvaluadorService,
     R12EvaluadorService,
+    IP09EvaluadorService,
     IndicadoresService,
     TablroPlanService,
     TablroCarreraService,
@@ -48,6 +50,7 @@ import { TablroCarreraService } from './tablero/tablero-carrera.service';
     R08EvaluadorService,
     R09EvaluadorService,
     R12EvaluadorService,
+    IP09EvaluadorService,
     IndicadoresService,
     TablroPlanService,
     TablroCarreraService,

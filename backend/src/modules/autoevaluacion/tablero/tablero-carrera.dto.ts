@@ -110,10 +110,26 @@ export interface ResultadoIP08 {
 }
 
 /**
+ * FSD §7, IP-09 — Completitud promedio del plantel de la carrera.
+ *
+ * completitudPromedio = round(mean(completitud_i)) donde
+ *   completitud_i = 25 × (C1 + C2 + C3 + C4), C4 = 1 por construcción del universo.
+ * Universo: docentes activos con ≥1 VinculacionCatedra APROBADA en la carrera.
+ *
+ * null cuando estadoCalculo = NO_APLICA (sin docentes en el universo).
+ */
+export interface ResultadoIP09 {
+  totalDocentes: number;
+  /** Promedio de completitud (0–100). null cuando estadoCalculo = NO_APLICA. */
+  completitudPromedio: number | null;
+  estadoCalculo: EstadoCalculo;
+}
+
+/**
  * Respuesta del endpoint POST /autoevaluacion/tablero/carrera/:carreraId.
  *
  * estadoGeneralCalculo refleja el estado más restrictivo entre IP-01, IP-02,
- * IP-03, IP-04, IP-08 e IP-13.
+ * IP-03, IP-04, IP-08, IP-09 e IP-13.
  */
 export interface TablroCarreraResponseDto {
   carreraId: string;
@@ -124,6 +140,7 @@ export interface TablroCarreraResponseDto {
   ip03: ResultadoIP03;
   ip04: ResultadoIP04;
   ip08: ResultadoIP08;
+  ip09: ResultadoIP09;
   ip13: ResultadoIP13;
   estadoGeneralCalculo: EstadoCalculo;
 }

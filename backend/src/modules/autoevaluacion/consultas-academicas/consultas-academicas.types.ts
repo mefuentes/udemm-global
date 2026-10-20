@@ -215,6 +215,39 @@ export interface DocentesParaR12 {
   docentesMultiFacultad: Set<string>;
 }
 
+// ── IP-09: completitud del plantel ────────────────────────────────────────────
+
+/**
+ * Datos de ficha docente requeridos para calcular IP-09 (Completitud promedio, FSD §6.1).
+ *
+ * C1 — seis campos nullable con reglas de excepción:
+ *   sexo, fechaNacimiento        → siempre requeridos
+ *   cuit                         → requerido, excepto si tipoDocumento = 'PASAPORTE'
+ *   pisoDepto (Depto/Partido)    → requerido, excepto si residencia ≠ Argentina
+ * C2 — tituloGrado almacena JSON [{denominacion,anio,pais,institucion}]; texto legacy → incompleto
+ * C3 — areaDisciplinarId; null → incompleto
+ * C4 — 1 por construcción del universo (VinculacionCatedra APROBADA)
+ */
+export interface DocenteVigenteIP09 {
+  docenteId: string;
+  nombre: string;
+  apellido: string;
+  sexo: string | null;
+  fechaNacimiento: Date | null;
+  cuit: string | null;
+  /** Departamento/Partido (campo pisoDepto del modelo). */
+  pisoDepto: string | null;
+  residencia: string | null;
+  tipoDocumento: string;
+  tituloGrado: string | null;
+  areaDisciplinarId: string | null;
+}
+
+/** Resultado de la consulta de docentes para IP-09. */
+export interface DocentesParaIP09 {
+  docentes: DocenteVigenteIP09[];
+}
+
 /**
  * LIMITACIONES R-03 — Recuperación de datos docentes (pendientes de resolución futura)
  *

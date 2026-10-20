@@ -62,6 +62,14 @@ export interface ResultadoIP08 {
   estadoCalculo: EstadoCalculo;
 }
 
+/** FSD §7, IP-09 — Completitud promedio del plantel de la carrera. */
+export interface ResultadoIP09 {
+  totalDocentes: number;
+  /** round(mean(completitud_i)), 0–100. null cuando estadoCalculo = NO_APLICA. */
+  completitudPromedio: number | null;
+  estadoCalculo: EstadoCalculo;
+}
+
 export interface TablroCarreraResponse {
   carreraId: string;
   /** ISO 8601 */
@@ -71,6 +79,7 @@ export interface TablroCarreraResponse {
   ip03: ResultadoIP03;
   ip04: ResultadoIP04;
   ip08: ResultadoIP08;
+  ip09: ResultadoIP09;
   ip13: ResultadoIP13;
   estadoGeneralCalculo: EstadoCalculo;
 }

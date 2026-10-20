@@ -1,10 +1,11 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ScopeService } from '../../scopes/scope.service';
+import { IP09EvaluadorService } from '../indicadores/ip09.evaluador';
 import { R06EvaluadorService } from '../indicadores/r06.evaluador';
 import { R07EvaluadorService } from '../indicadores/r07.evaluador';
 import { EstadoCalculo } from '../types/estado-calculo.types';
-import type { ResultadoIP01, ResultadoIP02, ResultadoIP03, ResultadoIP04, ResultadoIP08, ResultadoIP13, TablroCarreraResponseDto } from './tablero-carrera.dto';
+import type { ResultadoIP01, ResultadoIP02, ResultadoIP03, ResultadoIP04, ResultadoIP08, ResultadoIP09, ResultadoIP13, TablroCarreraResponseDto } from './tablero-carrera.dto';
 
 // ── Autorización ──────────────────────────────────────────────────────────────
 
@@ -77,6 +78,7 @@ export class TablroCarreraService {
     private readonly scope: ScopeService,
     private readonly r06: R06EvaluadorService,
     private readonly r07: R07EvaluadorService,
+    private readonly ip09: IP09EvaluadorService,
   ) {}
 
   async consultarCarrera(
@@ -98,12 +100,13 @@ export class TablroCarreraService {
     if (!tieneScope) throw new ForbiddenException();
 
     const fechaEvaluacion = new Date();
-    const [ip01, ip02, ip03, ip08, ip04, ip13] = await Promise.all([
+    const [ip01, ip02, ip03, ip08, ip04, ip09, ip13] = await Promise.all([
       this.calcularIP01(carreraId),
       this.calcularIP02(carreraId),
       this.calcularIP03(carreraId),
       this.calcularIP08(carreraId),
       this.calcularIP04(carreraId, usuarioId, rolNombre, fechaEvaluacion),
+      this.calcularIP09(carreraId),
       this.calcularIP13(carreraId, usuarioId, rolNombre, fechaEvaluacion),
     ]);
 
@@ -115,11 +118,12 @@ export class TablroCarreraService {
       ip03,
       ip04,
       ip08,
+      ip09,
       ip13,
       estadoGeneralCalculo: estadoMasRestrictivo(
         ip01.estadoCalculo, ip02.estadoCalculo,
         ip03.estadoCalculo, ip04.estadoCalculo, ip08.estadoCalculo,
-        ip13.estadoCalculo,
+        ip09.estadoCalculo, ip13.estadoCalculo,
       ),
     };
   }
@@ -269,6 +273,14 @@ export class TablroCarreraService {
       alcanceFacultad: v.alcanceFacultad,
       estadoCalculo: resultado.estadoCalculo ?? EstadoCalculo.NO_DETERMINABLE,
     };
+  }
+
+  /**
+   * IP-09: Completitud promedio del plantel (FSD §6.3).
+   * Delega en IP09EvaluadorService: round(mean(25×(C1+C2+C3+C4))) por docente vigente.
+   */
+  private async calcularIP09(carreraId: string): Promise<ResultadoIP09> {
+    return this.ip09.evaluarParaCarrera(carreraId);
   }
 
   /**

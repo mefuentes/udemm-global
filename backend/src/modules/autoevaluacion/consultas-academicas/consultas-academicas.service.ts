@@ -6,7 +6,9 @@ import type {
   CarreraAut,
   ConfigFacultadAut,
   DocenteFichaAut,
+  DocentesParaIP09,
   DocentesParaR12,
+  DocenteVigenteIP09,
   EstadoSeccion,
   FacultadAut,
   MateriaAut,
@@ -576,6 +578,55 @@ export class ConsultasAcademicasService {
       : new Set<string>();
 
     return { docentes, facultadId, alcanceFacultad, docentesMultiFacultad };
+  }
+
+  // ── Docentes para IP-09 (completitud del plantel) ────────────────────────
+
+  /**
+   * Docentes activos con al menos una VinculacionCatedra APROBADA en la carrera evaluada.
+   * Incluye todos los campos necesarios para evaluar C1, C2 y C3 de IP-09 (FSD §6.1).
+   * C4 = 1 por construcción del universo; no se consulta por separado.
+   * Deduplicado por docenteId: un docente con múltiples vinculaciones en la carrera
+   * se devuelve una sola vez.
+   */
+  async obtenerDocentesParaIP09(carreraId: string): Promise<DocentesParaIP09> {
+    const rows = await this.prisma.vinculacionCatedra.findMany({
+      where: { carreraId, estado: 'APROBADA', docente: { activo: true } },
+      select: {
+        docenteId: true,
+        docente: {
+          select: {
+            nombre: true,
+            apellido: true,
+            sexo: true,
+            fechaNacimiento: true,
+            cuit: true,
+            pisoDepto: true,
+            residencia: true,
+            tipoDocumento: true,
+            tituloGrado: true,
+            areaDisciplinarId: true,
+          },
+        },
+      },
+      distinct: ['docenteId'],
+    });
+
+    const docentes: DocenteVigenteIP09[] = rows.map((r) => ({
+      docenteId: r.docenteId,
+      nombre: r.docente.nombre,
+      apellido: r.docente.apellido,
+      sexo: r.docente.sexo ?? null,
+      fechaNacimiento: r.docente.fechaNacimiento ?? null,
+      cuit: r.docente.cuit ?? null,
+      pisoDepto: r.docente.pisoDepto ?? null,
+      residencia: r.docente.residencia ?? null,
+      tipoDocumento: r.docente.tipoDocumento,
+      tituloGrado: r.docente.tituloGrado ?? null,
+      areaDisciplinarId: r.docente.areaDisciplinarId ?? null,
+    }));
+
+    return { docentes };
   }
 
   /**

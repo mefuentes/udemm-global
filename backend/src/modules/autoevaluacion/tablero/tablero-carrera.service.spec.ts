@@ -3,6 +3,7 @@ import { TablroCarreraService } from './tablero-carrera.service';
 import { EstadoCalculo } from '../types/estado-calculo.types';
 import type { ResultadoR06 } from '../indicadores/r06.evaluador';
 import type { ResultadoR07 } from '../indicadores/r07.evaluador';
+import type { ResultadoIP09 } from '../indicadores/ip09.evaluador';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,20 @@ function makeR06Mock(estadoCalculo: EstadoCalculo = EstadoCalculo.CALCULADO) {
   };
 }
 
+/** Crea un mock de IP09EvaluadorService con resultado controlable. */
+function makeIP09Mock(
+  estadoCalculo: EstadoCalculo = EstadoCalculo.CALCULADO,
+  totalDocentes = 2,
+  completitudPromedio: number | null = 75,
+) {
+  const valor: ResultadoIP09 = {
+    totalDocentes: estadoCalculo === EstadoCalculo.NO_APLICA ? 0 : totalDocentes,
+    completitudPromedio: estadoCalculo === EstadoCalculo.NO_APLICA ? null : completitudPromedio,
+    estadoCalculo,
+  };
+  return { evaluarParaCarrera: jest.fn().mockResolvedValue(valor) };
+}
+
 /** Crea un mock de R07EvaluadorService con resultado controlable. */
 function makeR07Mock(
   estadoCalculo: EstadoCalculo = EstadoCalculo.CALCULADO,
@@ -127,12 +142,14 @@ function makeSvc(
   r06Estado: EstadoCalculo = EstadoCalculo.CALCULADO,
   r07Estado: EstadoCalculo = EstadoCalculo.CALCULADO,
   r07Options: { sobreasignados?: number; alcanceFacultad?: boolean; noDeterminables?: number } = {},
+  ip09Estado: EstadoCalculo = EstadoCalculo.CALCULADO,
 ) {
   return new TablroCarreraService(
     makePrisma(prismaOverrides) as any,
     makeScope(scopeValue) as any,
     makeR06Mock(r06Estado) as any,
     makeR07Mock(r07Estado, r07Options) as any,
+    makeIP09Mock(ip09Estado) as any,
   );
 }
 
@@ -331,6 +348,8 @@ describe('TablroCarreraService', () => {
         true,
         EstadoCalculo.NO_APLICA,  // IP-04 (r06)
         EstadoCalculo.NO_APLICA,  // IP-13 (r07)
+        {},
+        EstadoCalculo.NO_APLICA,  // IP-09
       ).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
       expect(res.estadoGeneralCalculo).toBe(EstadoCalculo.NO_APLICA);
     });
@@ -421,6 +440,7 @@ describe('TablroCarreraService', () => {
         makeScope() as any,
         makeR06Mock() as any,
         r07Mock as any,
+        makeIP09Mock() as any,
       );
       await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
       expect(r07Mock.evaluar).toHaveBeenCalledWith(
@@ -475,6 +495,57 @@ describe('TablroCarreraService', () => {
     });
   });
 
+  // ── IP-09 — Completitud promedio del plantel ─────────────────────────────────
+
+  describe('IP-09 — Completitud promedio del plantel', () => {
+    it('CALCULADO: retorna totalDocentes y completitudPromedio del resultado IP09', async () => {
+      const res = await makeSvc({}, true, EstadoCalculo.CALCULADO, EstadoCalculo.CALCULADO, {}, EstadoCalculo.CALCULADO)
+        .consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ip09.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+      expect(res.ip09.totalDocentes).toBe(2);
+      expect(res.ip09.completitudPromedio).toBe(75);
+    });
+
+    it('NO_APLICA: completitudPromedio null, totalDocentes 0', async () => {
+      const res = await makeSvc({}, true, EstadoCalculo.CALCULADO, EstadoCalculo.CALCULADO, {}, EstadoCalculo.NO_APLICA)
+        .consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ip09.estadoCalculo).toBe(EstadoCalculo.NO_APLICA);
+      expect(res.ip09.totalDocentes).toBe(0);
+      expect(res.ip09.completitudPromedio).toBeNull();
+    });
+
+    it('IP09EvaluadorService es invocado con el carreraId correcto', async () => {
+      const ip09Mock = makeIP09Mock();
+      const svc = new TablroCarreraService(
+        makePrisma() as any,
+        makeScope() as any,
+        makeR06Mock() as any,
+        makeR07Mock() as any,
+        ip09Mock as any,
+      );
+      await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+      expect(ip09Mock.evaluarParaCarrera).toHaveBeenCalledWith(CAR_ID);
+    });
+
+    it('estadoGeneralCalculo incluye IP-09: IP-09 NO_APLICA eleva el estado general', async () => {
+      const res = await makeSvc(
+        {
+          totalMaterias: 5,
+          materiasCubiertasIds: [{ materiaId: 'm-1' }],
+          cargosVigentes: [{ docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'Titular' } }],
+        },
+        true,
+        EstadoCalculo.CALCULADO,
+        EstadoCalculo.CALCULADO,
+        {},
+        EstadoCalculo.NO_APLICA,
+      ).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ip09.estadoCalculo).toBe(EstadoCalculo.NO_APLICA);
+      // NO_APLICA (peso 2) > CALCULADO (peso 1)
+      expect(res.estadoGeneralCalculo).toBe(EstadoCalculo.NO_APLICA);
+    });
+  });
+
   // ── IP-04 — Materias por docente ─────────────────────────────────────────────
 
   describe('IP-04 — Materias por docente', () => {
@@ -513,6 +584,7 @@ describe('TablroCarreraService', () => {
         makeScope() as any,
         r06Mock as any,
         makeR07Mock() as any,
+        makeIP09Mock() as any,
       );
       await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
       expect(r06Mock.evaluar).toHaveBeenCalledWith(
