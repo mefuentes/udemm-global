@@ -248,25 +248,65 @@ export interface DocentesParaIP09 {
   docentes: DocenteVigenteIP09[];
 }
 
+// ── R-03: tope semanal de horas docentes ─────────────────────────────────────
+
 /**
- * LIMITACIONES R-03 — Recuperación de datos docentes (pendientes de resolución futura)
+ * Datos de un docente activo con al menos una VinculacionCatedra APROBADA en el scope,
+ * necesarios para evaluar R-03 (FSD §5.3).
  *
- * R-03a: Horas de gestión almacenadas como String?
- *   El campo que registra horas de gestión docente usa tipo String en lugar de Int/Float.
- *   MOD-AUT no puede realizar sumas ni comparaciones numéricas directas sobre ese campo.
- *   Workaround al calcular: parsear con parseInt/parseFloat, propagando null si falla.
+ * horasDocenciaConocidas: suma de Materia.cargaHorariaSemanal de las vinculaciones
+ *   APROBADAS del scope con ese campo no nulo. Si alguna vinculación apunta a una
+ *   materia sin ese campo, tieneMateriaSinHoras=true y la suma puede estar subestimada.
+ * tiempoDedicacionGestionSemanal: sección 5.1 de la ficha, almacenado como String?.
+ *   Vigencia verificada mediante fechaFinGestion.
+ * desempenoActualJson: JSON de sección 6.1; cada ítem incluye dedicacionSeman:string.
+ */
+export interface DocenteVigenteR03 {
+  docenteId: string;
+  nombre: string;
+  apellido: string;
+  /** Suma de Materia.cargaHorariaSemanal de vinculaciones APROBADAS con ese campo presente. */
+  horasDocenciaConocidas: number;
+  /** true si alguna materia del docente en el scope no tiene cargaHorariaSemanal cargada. */
+  tieneMateriaSinHoras: boolean;
+  tiempoDedicacionGestionSemanal: string | null;
+  fechaFinGestion: string | null;
+  desempenoActualJson: string | null;
+}
+
+/**
+ * Resultado de la consulta de docentes para el evaluador R-03.
  *
- * R-03b: Ausencia de campo desempeñoNoAcademico
- *   No existe un campo que registre actividades fuera del aula (investigación, extensión).
- *   Los indicadores que requieren esa información no pueden calcularse con el modelo actual.
+ * alcanceFacultad=true:  docentes de TODAS las carreras de la facultad.
+ * alcanceFacultad=false: docentes de la carrera solicitada (DIRECTOR_CARRERA → PARCIAL).
+ * docentesMultiFacultad: subconjunto con vinculaciones APROBADAS en otras facultades;
+ *   sus horas de docencia en esas facultades no son visibles desde este scope.
+ */
+export interface DocentesParaR03 {
+  docentes: DocenteVigenteR03[];
+  facultadId: string;
+  alcanceFacultad: boolean;
+  docentesMultiFacultad: Set<string>;
+}
+
+/**
+ * DECISIONES DE DISEÑO R-03 — Recuperación de datos docentes (FSD §5.3)
  *
- * R-03c: Ausencia de consulta centrada en el docente
- *   ConsultasAcademicasService recupera vinculaciones por plan, no por docente.
- *   Para calcular la carga total de un docente en toda la institución se deben agregar
- *   sus vinculaciones APROBADAS a través de múltiples planes/carreras.
+ * R-03a (resuelto): tiempoDedicacionGestionSemanal en String?
+ *   Se parsea con parseInt; se rechaza si contiene caracteres no numéricos (indeterminado).
+ *   Vigencia por fechaFinGestion: vigente = fechaFin nula O estrictamente posterior a hoy.
  *
- * R-03d: Riesgo de duplicación de horas
- *   Si un docente tiene vinculaciones APROBADAS en múltiples planes que comparten cátedras,
- *   una suma directa de horasSemana puede contabilizar las mismas horas más de una vez.
- *   El consumidor de VinculacionAut debe deduplicar por (materiaId, catedraId) antes de sumar.
+ * R-03b (resuelto): Desempeño no académico
+ *   desempenoActualJson (sección 6.1) registra actividades fuera del aula.
+ *   dedicacionSeman:string no tiene validación numérica en backend; se rechaza si
+ *   no cumple /^\d+(\.\d+)?$/ (indeterminado).
+ *
+ * R-03c (resuelto): Consulta centrada en el docente
+ *   obtenerDocentesParaR03 agrega por docenteId acumulando Materia.cargaHorariaSemanal
+ *   de todas las VinculacionCatedra APROBADAS del scope.
+ *
+ * R-03d (decisión): Sin deduplicación por (materiaId, catedraId)
+ *   El FSD establece "cada asignación aporta las horas completas de la asignatura".
+ *   Dos vinculaciones del mismo docente en la misma (materia, cátedra) son datos
+ *   anómalos que MOD-DOC debe corregir en la fuente, no silenciar en el cálculo.
  */

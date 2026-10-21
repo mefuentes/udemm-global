@@ -7,8 +7,10 @@ import type {
   ConfigFacultadAut,
   DocenteFichaAut,
   DocentesParaIP09,
+  DocentesParaR03,
   DocentesParaR12,
   DocenteVigenteIP09,
+  DocenteVigenteR03,
   EstadoSeccion,
   FacultadAut,
   MateriaAut,
@@ -569,6 +571,112 @@ export class ConsultasAcademicasService {
       fechaNacimiento: r.docente.fechaNacimiento ?? null,
       sexo: r.docente.sexo ?? null,
     }));
+
+    const docentesMultiFacultad = alcanceFacultad
+      ? await this.detectarDocentesMultiFacultad(
+          docentes.map((d) => d.docenteId),
+          facultadId,
+        )
+      : new Set<string>();
+
+    return { docentes, facultadId, alcanceFacultad, docentesMultiFacultad };
+  }
+
+  // ── Docentes para R-03 (tope semanal de horas) ───────────────────────────
+
+  /**
+   * Devuelve los docentes con al menos una VinculacionCatedra APROBADA en el scope,
+   * con las horas de docencia acumuladas y los campos de ficha necesarios para R-03.
+   *
+   * Alcance:
+   * - Roles globales y DECANO: toda la facultad (alcanceFacultad=true).
+   * - DIRECTOR_CARRERA: solo la carrera solicitada (alcanceFacultad=false → PARCIAL).
+   *
+   * Horas de docencia: suma de Materia.cargaHorariaSemanal por vinculación APROBADA.
+   * Cada asignación aporta las horas completas (FSD §5.3 — sin deduplicación).
+   * Si alguna materia no tiene cargaHorariaSemanal, tieneMateriaSinHoras=true.
+   */
+  async obtenerDocentesParaR03(
+    carreraId: string,
+    usuarioId: string,
+    rolNombre: string,
+  ): Promise<DocentesParaR03> {
+    this.checkRol(rolNombre);
+
+    const carrera = await this.prisma.carrera.findUnique({
+      where: { id: carreraId },
+      select: { id: true, facultadId: true },
+    });
+    if (!carrera) throw new NotFoundException(`Carrera ${carreraId} no encontrada`);
+
+    const tieneScope = await this.scope.tieneScopeCarrera(usuarioId, rolNombre, carreraId);
+    if (!tieneScope) throw new ForbiddenException();
+
+    const { facultadId } = carrera;
+
+    const ROLES_ALCANCE_FACULTAD = new Set([
+      'ADMINISTRADOR_SISTEMA',
+      'SECRETARIA_ACADEMICA',
+      'RECTORADO',
+      'DECANO',
+    ]);
+    const alcanceFacultad = ROLES_ALCANCE_FACULTAD.has(rolNombre);
+
+    const rows = await this.prisma.vinculacionCatedra.findMany({
+      where: {
+        ...(alcanceFacultad ? { facultadId } : { carreraId }),
+        estado: 'APROBADA',
+        docente: { activo: true },
+      },
+      select: {
+        docenteId: true,
+        materia: { select: { cargaHorariaSemanal: true } },
+        docente: {
+          select: {
+            nombre: true,
+            apellido: true,
+            tiempoDedicacionGestionSemanal: true,
+            fechaFinGestion: true,
+            desempenoActualJson: true,
+          },
+        },
+      },
+    });
+
+    const porDocente = new Map<string, {
+      nombre: string;
+      apellido: string;
+      horasDocenciaConocidas: number;
+      tieneMateriaSinHoras: boolean;
+      tiempoDedicacionGestionSemanal: string | null;
+      fechaFinGestion: string | null;
+      desempenoActualJson: string | null;
+    }>();
+
+    for (const v of rows) {
+      if (!porDocente.has(v.docenteId)) {
+        porDocente.set(v.docenteId, {
+          nombre: v.docente.nombre,
+          apellido: v.docente.apellido,
+          horasDocenciaConocidas: 0,
+          tieneMateriaSinHoras: false,
+          tiempoDedicacionGestionSemanal: v.docente.tiempoDedicacionGestionSemanal ?? null,
+          fechaFinGestion: v.docente.fechaFinGestion ?? null,
+          desempenoActualJson: v.docente.desempenoActualJson ?? null,
+        });
+      }
+      const entry = porDocente.get(v.docenteId)!;
+      const horas = v.materia?.cargaHorariaSemanal;
+      if (horas === null || horas === undefined) {
+        entry.tieneMateriaSinHoras = true;
+      } else {
+        entry.horasDocenciaConocidas += horas;
+      }
+    }
+
+    const docentes: DocenteVigenteR03[] = Array.from(porDocente.entries()).map(
+      ([docenteId, d]) => ({ docenteId, ...d }),
+    );
 
     const docentesMultiFacultad = alcanceFacultad
       ? await this.detectarDocentesMultiFacultad(

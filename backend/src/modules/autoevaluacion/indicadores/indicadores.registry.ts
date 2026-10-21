@@ -123,9 +123,7 @@ export class RegistroIndicadores {
       tipo: 'ALERTA',
       severidad: 'ALTA',
       alcance: 'DOCENTE',
-      estadoImplementacion: 'NO_IMPLEMENTADO',
-      motivoPendiente:
-        'R-03: tiempoGestionAcademica y dedicacionDeclaradaSemanal son String? — no existe campo numérico para desempeño no académico (R-03b). Riesgo de duplicación de horas (R-03d).',
+      estadoImplementacion: 'IMPLEMENTADO',
     });
 
     this.registrar({
