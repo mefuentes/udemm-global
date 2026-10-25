@@ -15,6 +15,9 @@ const PLAN_BASE = {
   horasMinTB: null,
   horasMinTA: null,
   horasMinCTX: null,
+  requierePPS: null,
+  requierePI: null,
+  porcentajeMinFormacion: null,
 };
 
 const PLAN_CON_UMBRALES = {
@@ -24,6 +27,13 @@ const PLAN_CON_UMBRALES = {
   horasMinTB: 104,
   horasMinTA: 168,
   horasMinCTX: 320,
+};
+
+const PLAN_CON_CONFIG_FORMACION = {
+  ...PLAN_BASE,
+  requierePPS: true,
+  requierePI: false,
+  porcentajeMinFormacion: 15,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -175,6 +185,60 @@ describe('ConfigPlanService — actualizarUmbrales', () => {
 
       expect(updateMock).not.toHaveBeenCalled();
       expect(findUniqueOrThrowMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Caso 9: campos R-13 (formación práctica) — nullable semantics', () => {
+    it('guarda requierePPS=true, requierePI=false, porcentajeMinFormacion=15', async () => {
+      const updateMock = jest.fn().mockResolvedValue(PLAN_CON_CONFIG_FORMACION);
+      const prisma = makePrisma({
+        planEstudio: {
+          findUnique: jest.fn().mockResolvedValue({ id: PLAN_ID }),
+          findUniqueOrThrow: jest.fn(),
+          update: updateMock,
+        },
+      });
+      const service = makeService(prisma, makeScope());
+      await service.actualizarUmbrales(PLAN_ID, {
+        requierePPS: true,
+        requierePI: false,
+        porcentajeMinFormacion: 15,
+      });
+      const data = updateMock.mock.calls[0][0].data;
+      expect(data.requierePPS).toBe(true);
+      expect(data.requierePI).toBe(false);
+      expect(data.porcentajeMinFormacion).toBe(15);
+    });
+
+    it('null en requierePPS borra el campo (escribe null en DB)', async () => {
+      const updateMock = jest.fn().mockResolvedValue(PLAN_BASE);
+      const prisma = makePrisma({
+        planEstudio: {
+          findUnique: jest.fn().mockResolvedValue({ id: PLAN_ID }),
+          findUniqueOrThrow: jest.fn(),
+          update: updateMock,
+        },
+      });
+      const service = makeService(prisma, makeScope());
+      await service.actualizarUmbrales(PLAN_ID, { requierePPS: null });
+      const data = updateMock.mock.calls[0][0].data;
+      expect(data.requierePPS).toBeNull();
+      expect('requierePI' in data).toBe(false);
+    });
+
+    it('obtenerUmbrales devuelve los campos R-13', async () => {
+      const prisma = makePrisma({
+        planEstudio: {
+          findUnique: jest.fn().mockResolvedValue(PLAN_CON_CONFIG_FORMACION),
+          findUniqueOrThrow: jest.fn(),
+          update: jest.fn(),
+        },
+      });
+      const service = makeService(prisma, makeScope());
+      const res = await service.obtenerUmbrales(PLAN_ID, USUARIO_ID, 'ADMINISTRADOR_SISTEMA');
+      expect(res.requierePPS).toBe(true);
+      expect(res.requierePI).toBe(false);
+      expect(res.porcentajeMinFormacion).toBe(15);
     });
   });
 });

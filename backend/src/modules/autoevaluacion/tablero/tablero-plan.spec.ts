@@ -20,10 +20,20 @@ import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { EstadoCalculo } from '../types/estado-calculo.types';
 import type { ResultadoIndicador } from '../indicadores/indicadores.types';
+import type { ResultadoR02 } from '../indicadores/r02.evaluador';
 import type { ResultadoR08 } from '../indicadores/r08.evaluador';
 import type { ResultadoR09 } from '../indicadores/r09.evaluador';
+import type { ResultadoR11 } from '../indicadores/r11.evaluador';
+import type { ResultadoR13 } from '../indicadores/r13.evaluador';
+import type { ResultadoR14 } from '../indicadores/r14.evaluador';
 import { TablroPlanService } from './tablero-plan.service';
 import { TablroCarreraService } from './tablero-carrera.service';
+import { TablroFacultadService } from './tablero-facultad.service';
+import { AnalisisService } from '../analisis/analisis.service';
+import { AlertasService } from '../alertas/alertas.service';
+import { ExportacionesService } from '../exportaciones/exportaciones.service';
+import { FichaDocenteService } from '../ficha-docente/ficha-docente.service';
+import { ReglasCatalogoService } from '../reglas/reglas-catalogo.service';
 
 // ── Constantes ───────────────────────────────────────────────────────────────
 
@@ -49,6 +59,26 @@ class MockJwtGuard {
     req.user = JSON.parse(header);
     return true;
   }
+}
+
+// ── Fixtures R-02 ─────────────────────────────────────────────────────────
+
+function mkR02(partial: Partial<ResultadoR02> = {}, estado = EstadoCalculo.CALCULADO): ResultadoIndicador<ResultadoR02> {
+  return {
+    codigo: 'R-02',
+    contextoId: PLAN_ID,
+    tipoContexto: 'PLAN',
+    estadoImplementacion: 'IMPLEMENTADO',
+    estadoCalculo: estado,
+    valor: {
+      paresConAlerta: [],
+      paresInciertos: [],
+      totalMaterias: 0,
+      ...partial,
+    },
+    datosFaltantes: [],
+    fechaEvaluacion: FECHA,
+  };
 }
 
 // ── Fixtures R-08 ─────────────────────────────────────────────────────────
@@ -119,6 +149,86 @@ function mkR09(
   };
 }
 
+// ── Fixtures R-11 ─────────────────────────────────────────────────────────
+
+function mkR11(partial: Partial<ResultadoR11> = {}, estado = EstadoCalculo.CALCULADO): ResultadoIndicador<ResultadoR11> {
+  return {
+    codigo: 'R-11',
+    contextoId: PLAN_ID,
+    tipoContexto: 'PLAN',
+    estadoImplementacion: 'IMPLEMENTADO',
+    estadoCalculo: estado,
+    valor: {
+      planEstudioId: PLAN_ID,
+      totalMaterias: 0,
+      totalConPrograma: 0,
+      totalSinPrograma: 0,
+      totalInconsistencias: 0,
+      totalAlta: 0,
+      totalMedia: 0,
+      inconsistencias: [],
+      sinPrograma: [],
+      estadoCalculo: estado,
+      ...partial,
+    },
+    datosFaltantes: [],
+    fechaEvaluacion: FECHA,
+  };
+}
+
+// ── Fixtures R-13 ─────────────────────────────────────────────────────────
+
+function mkR13(partial: Partial<ResultadoR13> = {}, estado = EstadoCalculo.CALCULADO): ResultadoIndicador<ResultadoR13> {
+  return {
+    codigo: 'R-13',
+    contextoId: PLAN_ID,
+    tipoContexto: 'PLAN',
+    estadoImplementacion: 'IMPLEMENTADO',
+    estadoCalculo: estado,
+    valor: {
+      planEstudioId: PLAN_ID,
+      totalMaterias: 0,
+      porTipo: { OBLIGATORIA: 0, ELECTIVA: 0, PPS: 0, PI: 0, OTRO: 0 },
+      tienePPS: false,
+      tienePI: false,
+      horasPPS: null,
+      horasPI: null,
+      materiasPPS: [],
+      materiasPI: [],
+      configuracionPlan: { requierePPS: null, requierePI: null, porcentajeMinFormacion: null },
+      violacionesFormacion: [],
+      estadoCalculo: estado,
+      ...partial,
+    },
+    datosFaltantes: [],
+    fechaEvaluacion: FECHA,
+  };
+}
+
+// ── Fixtures R-14 ─────────────────────────────────────────────────────────
+
+function mkR14(partial: Partial<ResultadoR14> = {}, estado = EstadoCalculo.CALCULADO): ResultadoIndicador<ResultadoR14> {
+  return {
+    codigo: 'R-14',
+    contextoId: PLAN_ID,
+    tipoContexto: 'PLAN',
+    estadoImplementacion: 'IMPLEMENTADO',
+    estadoCalculo: estado,
+    valor: {
+      planEstudioId: PLAN_ID,
+      totalMaterias: 0,
+      totalEvaluadas: 0,
+      totalSinDatos: 0,
+      totalConAlerta: 0,
+      enAlerta: [],
+      estadoCalculo: estado,
+      ...partial,
+    },
+    datosFaltantes: [],
+    fechaEvaluacion: FECHA,
+  };
+}
+
 // ── Factory HTTP ──────────────────────────────────────────────────────────
 
 async function crearApp(consultarPlan: jest.Mock): Promise<INestApplication> {
@@ -145,6 +255,16 @@ async function crearApp(consultarPlan: jest.Mock): Promise<INestApplication> {
       { provide: RegistroIndicadores,   useValue: { listar: jest.fn().mockReturnValue([]) } },
       { provide: TablroPlanService,     useValue: { consultarPlan } },
       { provide: TablroCarreraService,  useValue: { consultarCarrera: jest.fn() } },
+      { provide: TablroFacultadService, useValue: { consultarFacultad: jest.fn() } },
+      { provide: AnalisisService, useValue: {
+        ejecutarFacultad: jest.fn(), ejecutarCarrera: jest.fn(), ejecutarPlan: jest.fn(),
+        obtenerHistorialFacultad: jest.fn(), obtenerHistorialCarrera: jest.fn(), obtenerHistorialPlan: jest.fn(),
+        obtenerDetalle: jest.fn(),
+      } },
+      { provide: AlertasService, useValue: { obtenerBandeja: jest.fn().mockResolvedValue({ total: 0, pagina: 1, porPagina: 20, items: [] }) } },
+      { provide: ExportacionesService, useValue: { exportarPorEjecucion: jest.fn(), exportarPorEntidad: jest.fn() } },
+      { provide: FichaDocenteService, useValue: { obtenerFicha: jest.fn() } },
+      { provide: ReglasCatalogoService, useValue: { listarCatalogo: jest.fn().mockReturnValue([]), obtenerFacultadesConConfig: jest.fn().mockResolvedValue([]) } },
     ],
   })
     .overrideGuard(JwtAuthGuard).useClass(MockJwtGuard)
@@ -171,7 +291,11 @@ describe('POST /autoevaluacion/tablero/plan/:planEstudioId', () => {
     ipl01: { horasTotal: 2400, horasMinimas: 2000, diferencia: 400, cumple: true, estadoCalculo: 'CALCULADO' },
     ipl02: { bloquesCumplen: 4, bloquesConUmbral: 4, estadoCalculo: 'CALCULADO' },
     ipl03: { sinResponsable: 0, inciertas: 0, conResponsable: 5, totalMaterias: 5, estadoCalculo: 'CALCULADO' },
+    ipl04: { paresConAlerta: 0, paresInciertos: 0, totalMaterias: 0, estadoCalculo: 'CALCULADO' },
     ipl05: { bloques: [], estadoCalculo: 'CALCULADO' },
+    r11: { planEstudioId: PLAN_ID, totalMaterias: 0, totalConPrograma: 0, totalSinPrograma: 0, totalInconsistencias: 0, totalAlta: 0, totalMedia: 0, inconsistencias: [], sinPrograma: [], estadoCalculo: 'CALCULADO' },
+    r13: { planEstudioId: PLAN_ID, totalMaterias: 0, porTipo: { OBLIGATORIA: 0, ELECTIVA: 0, PPS: 0, PI: 0, OTRO: 0 }, tienePPS: false, tienePI: false, horasPPS: null, horasPI: null, materiasPPS: [], materiasPI: [], estadoCalculo: 'CALCULADO' },
+    r14: { planEstudioId: PLAN_ID, totalMaterias: 0, totalEvaluadas: 0, totalSinDatos: 0, totalConAlerta: 0, enAlerta: [], estadoCalculo: 'CALCULADO' },
     estadoGeneralCalculo: 'CALCULADO',
     datosFaltantes: [],
     advertencias: [],
@@ -269,6 +393,9 @@ describe('POST /autoevaluacion/tablero/plan/:planEstudioId', () => {
       ipl02: expect.objectContaining({ bloquesCumplen: expect.any(Number) }),
       ipl03: expect.objectContaining({ sinResponsable: expect.any(Number) }),
       ipl05: expect.objectContaining({ bloques: expect.any(Array) }),
+      r11: expect.objectContaining({ totalInconsistencias: expect.any(Number) }),
+      r13: expect.objectContaining({ tienePPS: expect.any(Boolean) }),
+      r14: expect.objectContaining({ totalConAlerta: expect.any(Number) }),
       estadoGeneralCalculo: expect.any(String),
       datosFaltantes: expect.any(Array),
       advertencias: expect.any(Array),
@@ -304,10 +431,21 @@ describe('TablroPlanService', () => {
 
   // ── Helpers de fixture ────────────────────────────────────────────────────
 
-  function configEvaluar(r08: ResultadoIndicador<ResultadoR08>, r09: ResultadoIndicador<ResultadoR09>) {
+  function configEvaluar(
+    r08: ResultadoIndicador<ResultadoR08>,
+    r09: ResultadoIndicador<ResultadoR09>,
+    r02: ResultadoIndicador<ResultadoR02> = mkR02(),
+    r11: ResultadoIndicador<ResultadoR11> = mkR11(),
+    r13: ResultadoIndicador<ResultadoR13> = mkR13(),
+    r14: ResultadoIndicador<ResultadoR14> = mkR14(),
+  ) {
     mockIndicadores.evaluar.mockImplementation((s: { codigoIndicador: string }) => {
+      if (s.codigoIndicador === 'R-02') return Promise.resolve(r02);
       if (s.codigoIndicador === 'R-08') return Promise.resolve(r08);
       if (s.codigoIndicador === 'R-09') return Promise.resolve(r09);
+      if (s.codigoIndicador === 'R-11') return Promise.resolve(r11);
+      if (s.codigoIndicador === 'R-13') return Promise.resolve(r13);
+      if (s.codigoIndicador === 'R-14') return Promise.resolve(r14);
       return Promise.reject(new Error(`Indicador inesperado: ${s.codigoIndicador}`));
     });
   }
@@ -562,11 +700,120 @@ describe('TablroPlanService', () => {
     it('NO_DETERMINABLE domina sobre CALCULADO', async () => {
       // R-08 falla con error interno → IPL-03 = NO_DETERMINABLE
       mockIndicadores.evaluar.mockImplementation((s: { codigoIndicador: string }) => {
+        if (s.codigoIndicador === 'R-02') return Promise.resolve(mkR02());
         if (s.codigoIndicador === 'R-08') return Promise.reject(new Error('DB error'));
+        if (s.codigoIndicador === 'R-11') return Promise.resolve(mkR11());
+        if (s.codigoIndicador === 'R-13') return Promise.resolve(mkR13());
+        if (s.codigoIndicador === 'R-14') return Promise.resolve(mkR14());
         return Promise.resolve(mkR09(2400, { horasMinTotales: 2000, CB: 400 }, { CB: 600 }));
       });
       const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
       expect(res.estadoGeneralCalculo).toBe(EstadoCalculo.NO_DETERMINABLE);
+    });
+  });
+
+  // ── R-11 — inconsistencias en programas ──────────────────────────────────
+
+  describe('R-11 derivación', () => {
+    it('r11 CALCULADO → res.r11 contiene el valor del indicador', async () => {
+      const inc = {
+        materiaId: 'm1', nombre: 'Álgebra', codigo: 'ALG',
+        estadoPrograma: 'APROBADO', seccionesCompletas: 5, seccionesPendientes: 1,
+        prioridad: 'ALTA' as const,
+      };
+      configEvaluar(
+        mkR08(),
+        mkR09(2400),
+        mkR02(),
+        mkR11({ totalAlta: 1, totalInconsistencias: 1, inconsistencias: [inc] }),
+      );
+      const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
+      expect(res.r11.totalAlta).toBe(1);
+      expect(res.r11.inconsistencias[0].prioridad).toBe('ALTA');
+      expect(res.r11.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+    });
+
+    it('r11 falla con error interno → r11 NO_DETERMINABLE, no afecta al resto', async () => {
+      mockIndicadores.evaluar.mockImplementation((s: { codigoIndicador: string }) => {
+        if (s.codigoIndicador === 'R-02') return Promise.resolve(mkR02());
+        if (s.codigoIndicador === 'R-08') return Promise.resolve(mkR08());
+        if (s.codigoIndicador === 'R-09') return Promise.resolve(mkR09(2400));
+        if (s.codigoIndicador === 'R-11') return Promise.reject(new Error('DB error'));
+        if (s.codigoIndicador === 'R-13') return Promise.resolve(mkR13());
+        if (s.codigoIndicador === 'R-14') return Promise.resolve(mkR14());
+        return Promise.reject(new Error('unexpected'));
+      });
+      const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
+      expect(res.r11.estadoCalculo).toBe(EstadoCalculo.NO_DETERMINABLE);
+      expect(res.r11.totalMaterias).toBe(0);
+    });
+  });
+
+  // ── R-13 — formación práctica ─────────────────────────────────────────────
+
+  describe('R-13 derivación', () => {
+    it('r13 CALCULADO con PPS → res.r13 contiene tienePPS=true', async () => {
+      configEvaluar(
+        mkR08(),
+        mkR09(2400),
+        mkR02(),
+        mkR11(),
+        mkR13({ tienePPS: true, porTipo: { OBLIGATORIA: 2, ELECTIVA: 0, PPS: 1, PI: 0, OTRO: 0 }, totalMaterias: 3 }),
+      );
+      const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
+      expect(res.r13.tienePPS).toBe(true);
+      expect(res.r13.porTipo.PPS).toBe(1);
+    });
+
+    it('r13 PARCIAL → estadoCalculo=PARCIAL en r13, contribuye a estadoGeneralCalculo', async () => {
+      configEvaluar(
+        mkR08(),
+        mkR09(2400),
+        mkR02(),
+        mkR11(),
+        mkR13({}, EstadoCalculo.PARCIAL),
+      );
+      const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
+      expect(res.r13.estadoCalculo).toBe(EstadoCalculo.PARCIAL);
+      const peso: Record<string, number> = { CALCULADO: 1, NO_APLICA: 2, PARCIAL: 3, NO_DETERMINABLE: 4 };
+      expect(peso[res.estadoGeneralCalculo]).toBeGreaterThanOrEqual(peso[EstadoCalculo.PARCIAL]);
+    });
+  });
+
+  // ── R-14 — horas de formación práctica ───────────────────────────────────
+
+  describe('R-14 derivación', () => {
+    it('r14 con alerta → res.r14.enAlerta contiene la materia', async () => {
+      const alerta = {
+        materiaId: 'm1', nombre: 'Álgebra', codigo: 'ALG',
+        horasFormacionPractica: 80, horasTotal: 64, exceso: 16,
+      };
+      configEvaluar(
+        mkR08(),
+        mkR09(2400),
+        mkR02(),
+        mkR11(),
+        mkR13(),
+        mkR14({ totalConAlerta: 1, enAlerta: [alerta] }),
+      );
+      const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
+      expect(res.r14.totalConAlerta).toBe(1);
+      expect(res.r14.enAlerta[0].exceso).toBe(16);
+    });
+
+    it('r14 falla → r14 NO_DETERMINABLE, planEstudioId vacío', async () => {
+      mockIndicadores.evaluar.mockImplementation((s: { codigoIndicador: string }) => {
+        if (s.codigoIndicador === 'R-02') return Promise.resolve(mkR02());
+        if (s.codigoIndicador === 'R-08') return Promise.resolve(mkR08());
+        if (s.codigoIndicador === 'R-09') return Promise.resolve(mkR09(2400));
+        if (s.codigoIndicador === 'R-11') return Promise.resolve(mkR11());
+        if (s.codigoIndicador === 'R-13') return Promise.resolve(mkR13());
+        if (s.codigoIndicador === 'R-14') return Promise.reject(new Error('DB error'));
+        return Promise.reject(new Error('unexpected'));
+      });
+      const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
+      expect(res.r14.estadoCalculo).toBe(EstadoCalculo.NO_DETERMINABLE);
+      expect(res.r14.enAlerta).toHaveLength(0);
     });
   });
 });

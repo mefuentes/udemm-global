@@ -30,6 +30,12 @@ import { IndicadoresService } from '../indicadores/indicadores.service';
 import { RegistroIndicadores } from '../indicadores/indicadores.registry';
 import { TablroPlanService } from './tablero-plan.service';
 import { TablroCarreraService } from './tablero-carrera.service';
+import { TablroFacultadService } from './tablero-facultad.service';
+import { AnalisisService } from '../analisis/analisis.service';
+import { AlertasService } from '../alertas/alertas.service';
+import { ExportacionesService } from '../exportaciones/exportaciones.service';
+import { FichaDocenteService } from '../ficha-docente/ficha-docente.service';
+import { ReglasCatalogoService } from '../reglas/reglas-catalogo.service';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { EstadoCalculo } from '../types/estado-calculo.types';
@@ -72,7 +78,7 @@ const escenarioA: TablroCarreraResponseDto = {
   ip01: { total: 5, estadoCalculo: EstadoCalculo.CALCULADO },
   ip02: { total: 8, estadoCalculo: EstadoCalculo.CALCULADO },
   ip03: { cubiertas: 12, total: 15, estadoCalculo: EstadoCalculo.CALCULADO },
-  // IP-04: 5 docentes con [1,2,3,4,5] materias → mediana=3, promedio=3, máximo=5
+  // IP-04/R-15: 5 docentes con [1,2,3,4,5] materias → mediana=3, promedio=3, máximo=5; P-03=3 → 2 alertas
   ip04: {
     totalDocentes: 5,
     mediana: 3,
@@ -85,11 +91,28 @@ const escenarioA: TablroCarreraResponseDto = {
       { docenteId: 'd-2', nombre: 'Doc B', nMaterias: 2 },
       { docenteId: 'd-1', nombre: 'Doc A', nMaterias: 1 },
     ],
+    limite: 3,
+    totalEnAlerta: 2,
+    enAlerta: [
+      { docenteId: 'd-5', nombre: 'Doc E', nMaterias: 5, exceso: 2 },
+      { docenteId: 'd-4', nombre: 'Doc D', nMaterias: 4, exceso: 1 },
+    ],
     estadoCalculo: EstadoCalculo.CALCULADO,
   },
   ip08: { profesores: 6, auxiliares: 3, ratio: 2.0, estadoCalculo: EstadoCalculo.CALCULADO },
   // IP-09: 5 docentes evaluados, completitud promedio 82%
   ip09: { totalDocentes: 5, completitudPromedio: 82, estadoCalculo: EstadoCalculo.CALCULADO },
+  // IP-10: sin alertas → puntaje=100
+  ip10: {
+    carreraId: CAR_ID,
+    puntaje: 100,
+    componenteA: 0,
+    componenteM: 0,
+    alertasR03: 0,
+    alertasR04Penalizables: 0,
+    alertasR07: 0,
+    estadoCalculo: EstadoCalculo.CALCULADO,
+  },
   // IP-13: P-03=3, 5 docentes evaluados, 1 sobreasignado (4 materias > 3)
   ip13: {
     limite: 3,
@@ -97,6 +120,29 @@ const escenarioA: TablroCarreraResponseDto = {
     totalSobreasignados: 1,
     sobreasignados: [{ docenteId: 'd-5', nombre: 'Doc E', nMaterias: 4, exceso: 1 }],
     totalNoDeterminables: 0,
+    alcanceFacultad: true,
+    estadoCalculo: EstadoCalculo.CALCULADO,
+  },
+  // R-10: 5 docentes, umbral 20h, 0 con baja dedicación
+  r10: {
+    carreraId: CAR_ID,
+    umbral: 20,
+    totalDocentes: 5,
+    totalEnAlerta: 0,
+    totalInciertos: 0,
+    enAlerta: [],
+    alcanceFacultad: true,
+    estadoCalculo: EstadoCalculo.CALCULADO,
+  },
+  // R-12: 5 docentes, 1 con ficha incompleta (datos personales faltantes)
+  r12: {
+    carreraId: CAR_ID,
+    facultadId: 'fac-01',
+    totalDocentes: 5,
+    totalIncompletos: 1,
+    incompletos: [{ docenteId: 'd-1', nombre: 'Doc A', faltantes: ['personales'] }],
+    totalNoDeterminables: 0,
+    noDeterminables: [],
     alcanceFacultad: true,
     estadoCalculo: EstadoCalculo.CALCULADO,
   },
@@ -119,16 +165,50 @@ const escenarioE: TablroCarreraResponseDto = {
     promedio: null,
     maximo: null,
     distribucion: [],
+    limite: null,
+    totalEnAlerta: 0,
+    enAlerta: [],
     estadoCalculo: EstadoCalculo.NO_APLICA,
   },
   ip08: { profesores: 0, auxiliares: 0, ratio: null, estadoCalculo: EstadoCalculo.NO_APLICA },
   ip09: { totalDocentes: 0, completitudPromedio: null, estadoCalculo: EstadoCalculo.NO_APLICA },
+  ip10: {
+    carreraId: CAR_ID,
+    puntaje: 100,
+    componenteA: 0,
+    componenteM: 0,
+    alertasR03: 0,
+    alertasR04Penalizables: 0,
+    alertasR07: 0,
+    estadoCalculo: EstadoCalculo.NO_APLICA,
+  },
   ip13: {
     limite: null,
     totalDocentes: 0,
     totalSobreasignados: 0,
     sobreasignados: [],
     totalNoDeterminables: 0,
+    alcanceFacultad: true,
+    estadoCalculo: EstadoCalculo.NO_APLICA,
+  },
+  r10: {
+    carreraId: CAR_ID,
+    umbral: 20,
+    totalDocentes: 0,
+    totalEnAlerta: 0,
+    totalInciertos: 0,
+    enAlerta: [],
+    alcanceFacultad: true,
+    estadoCalculo: EstadoCalculo.NO_APLICA,
+  },
+  r12: {
+    carreraId: CAR_ID,
+    facultadId: 'fac-01',
+    totalDocentes: 0,
+    totalIncompletos: 0,
+    incompletos: [],
+    totalNoDeterminables: 0,
+    noDeterminables: [],
     alcanceFacultad: true,
     estadoCalculo: EstadoCalculo.NO_APLICA,
   },
@@ -183,6 +263,16 @@ async function crearApp(consultarCarrera: jest.Mock): Promise<INestApplication> 
       { provide: RegistroIndicadores,   useValue: { listar: jest.fn().mockReturnValue([]) } },
       { provide: TablroPlanService,     useValue: { consultarPlan: jest.fn() } },
       { provide: TablroCarreraService,  useValue: { consultarCarrera } },
+      { provide: TablroFacultadService, useValue: { consultarFacultad: jest.fn() } },
+      { provide: AnalisisService, useValue: {
+        ejecutarFacultad: jest.fn(), ejecutarCarrera: jest.fn(), ejecutarPlan: jest.fn(),
+        obtenerHistorialFacultad: jest.fn(), obtenerHistorialCarrera: jest.fn(), obtenerHistorialPlan: jest.fn(),
+        obtenerDetalle: jest.fn(),
+      } },
+      { provide: AlertasService, useValue: { obtenerBandeja: jest.fn().mockResolvedValue({ total: 0, pagina: 1, porPagina: 20, items: [] }) } },
+      { provide: ExportacionesService, useValue: { exportarPorEjecucion: jest.fn(), exportarPorEntidad: jest.fn() } },
+      { provide: FichaDocenteService, useValue: { obtenerFicha: jest.fn() } },
+      { provide: ReglasCatalogoService, useValue: { listarCatalogo: jest.fn().mockReturnValue([]), obtenerFacultadesConConfig: jest.fn().mockResolvedValue([]) } },
     ],
   })
     .overrideGuard(JwtAuthGuard).useClass(MockJwtGuard)
@@ -283,7 +373,7 @@ describe('POST /autoevaluacion/tablero/carrera/:carreraId', () => {
 
   // ── Estructura del DTO ─────────────────────────────────────────────────────
 
-  it('respuesta 200 incluye todos los campos requeridos (ip01, ip02, ip03, ip04, ip08, ip09, ip13)', async () => {
+  it('respuesta 200 incluye todos los campos requeridos (ip01–ip13, r10, r12)', async () => {
     const res = await request(app.getHttpServer())
       .post(`/autoevaluacion/tablero/carrera/${CAR_ID}`)
       .set('x-test-user', JSON.stringify(USR_ADMIN))
@@ -309,6 +399,18 @@ describe('POST /autoevaluacion/tablero/carrera/:carreraId', () => {
         totalDocentes: expect.any(Number),
         totalSobreasignados: expect.any(Number),
         sobreasignados: expect.any(Array),
+        estadoCalculo: expect.any(String),
+      }),
+      r10: expect.objectContaining({
+        totalDocentes: expect.any(Number),
+        totalEnAlerta: expect.any(Number),
+        enAlerta: expect.any(Array),
+        estadoCalculo: expect.any(String),
+      }),
+      r12: expect.objectContaining({
+        totalDocentes: expect.any(Number),
+        totalIncompletos: expect.any(Number),
+        incompletos: expect.any(Array),
         estadoCalculo: expect.any(String),
       }),
       estadoGeneralCalculo: expect.any(String),
@@ -723,6 +825,7 @@ describe('IP-13 — Docentes sobreasignados (HTTP contract)', () => {
     expect(res.body.ip08).toBeDefined();
     expect(res.body.ip09).toBeDefined();
     expect(res.body.ip13).toBeDefined();
+    expect(res.body.r12).toBeDefined();
   });
 
   it('ip09 en escenario A: totalDocentes=5, completitudPromedio=82, CALCULADO', async () => {

@@ -2,11 +2,18 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ScopeService } from '../../scopes/scope.service';
 import { R02EvaluadorService } from './r02.evaluador';
+import { R03EvaluadorService } from './r03.evaluador';
+import { R04EvaluadorService } from './r04.evaluador';
 import { R06EvaluadorService } from './r06.evaluador';
 import { R07EvaluadorService } from './r07.evaluador';
 import { R08EvaluadorService } from './r08.evaluador';
 import { R09EvaluadorService } from './r09.evaluador';
+import { R10EvaluadorService } from './r10.evaluador';
+import { R11EvaluadorService } from './r11.evaluador';
 import { R12EvaluadorService } from './r12.evaluador';
+import { R13EvaluadorService } from './r13.evaluador';
+import { R14EvaluadorService } from './r14.evaluador';
+import { R15EvaluadorService } from './r15.evaluador';
 import { RegistroIndicadores } from './indicadores.registry';
 import type { AlcanceIndicador, ContextoEvaluacion, ResultadoIndicador } from './indicadores.types';
 import { resultadoNoImplementado } from './indicadores.types';
@@ -56,18 +63,32 @@ export class IndicadoresService {
     private readonly registro: RegistroIndicadores,
     private readonly prisma: PrismaService,
     private readonly r02: R02EvaluadorService,
-    private readonly r08: R08EvaluadorService,
-    private readonly r09: R09EvaluadorService,
+    private readonly r03: R03EvaluadorService,
+    private readonly r04: R04EvaluadorService,
     private readonly r06: R06EvaluadorService,
     private readonly r07: R07EvaluadorService,
+    private readonly r08: R08EvaluadorService,
+    private readonly r09: R09EvaluadorService,
+    private readonly r10: R10EvaluadorService,
+    private readonly r11: R11EvaluadorService,
     private readonly r12: R12EvaluadorService,
+    private readonly r13: R13EvaluadorService,
+    private readonly r14: R14EvaluadorService,
+    private readonly r15: R15EvaluadorService,
   ) {
     this.registro.asignarEvaluador('R-02', r02);
+    this.registro.asignarEvaluador('R-03', r03);
+    this.registro.asignarEvaluador('R-04', r04);
     this.registro.asignarEvaluador('R-06', r06);
     this.registro.asignarEvaluador('R-07', r07);
     this.registro.asignarEvaluador('R-08', r08);
     this.registro.asignarEvaluador('R-09', r09);
+    this.registro.asignarEvaluador('R-10', r10);
+    this.registro.asignarEvaluador('R-11', r11);
     this.registro.asignarEvaluador('R-12', r12);
+    this.registro.asignarEvaluador('R-13', r13);
+    this.registro.asignarEvaluador('R-14', r14);
+    this.registro.asignarEvaluador('R-15', r15);
   }
 
   async evaluar(solicitud: SolicitudEvaluacion): Promise<ResultadoIndicador<unknown>> {
@@ -122,6 +143,7 @@ export class IndicadoresService {
         throw new NotFoundException(`Plan ${contexto.planEstudioId} no encontrado`);
       }
       carreraIdTarget = plan.carreraId;
+      contexto.carreraId = carreraIdTarget;
     }
 
     if (!carreraIdTarget) {

@@ -18,13 +18,15 @@ export type SeveridadIndicador = 'ALTA' | 'MEDIA' | 'INFORMATIVA' | 'NINGUNA';
 
 /**
  * Estado de codificación del indicador.
- * Distingue entre "la regla existe pero no está codificada aún" (NO_IMPLEMENTADO)
- * y "la regla está codificada y puede calcularse" (IMPLEMENTADO).
+ * IMPLEMENTADO:    evaluador operativo e integrado en su ámbito correspondiente.
+ * PARCIAL:         evaluador operativo pero con requisitos del FSD no cubiertos
+ *                  (campo de schema ausente, alcance menor al definido, etc.).
+ * NO_IMPLEMENTADO: regla definida en el catálogo pero sin evaluador activo.
  *
  * No confundir con EstadoCalculo, que describe la confiabilidad del resultado
  * cuando la regla YA está implementada.
  */
-export type EstadoImplementacion = 'IMPLEMENTADO' | 'NO_IMPLEMENTADO';
+export type EstadoImplementacion = 'IMPLEMENTADO' | 'PARCIAL' | 'NO_IMPLEMENTADO';
 
 // ── Contexto de evaluación ────────────────────────────────────────────────────
 

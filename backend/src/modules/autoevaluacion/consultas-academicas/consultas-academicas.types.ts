@@ -178,6 +178,24 @@ export interface VinculacionesParaR07 {
   docentesMultiFacultad: Set<string>;
 }
 
+// ── R-13: configuración de formación práctica ─────────────────────────────────
+
+/**
+ * Configuración de formación práctica de un Plan de Estudio (FSD §6.3).
+ * Todos los campos son nullable: null = no configurado ≠ false = explícitamente no requerido.
+ *
+ * Usado por R-13 para evaluar cumplimiento de mínimos de PPS, PI y porcentaje práctico.
+ */
+export interface ConfigFormacionPracticaAut {
+  planEstudioId: string;
+  /** null = no configurado; true = requerido; false = explícitamente no requerido */
+  requierePPS: boolean | null;
+  /** null = no configurado; true = requerido; false = explícitamente no requerido */
+  requierePI: boolean | null;
+  /** null = no configurado; 0–100 = porcentaje mínimo de horas prácticas sobre total del plan */
+  porcentajeMinFormacion: number | null;
+}
+
 // ── R-12: ficha de docente ────────────────────────────────────────────────────
 
 /**
@@ -310,3 +328,75 @@ export interface DocentesParaR03 {
  *   Dos vinculaciones del mismo docente en la misma (materia, cátedra) son datos
  *   anómalos que MOD-DOC debe corregir en la fuente, no silenciar en el cálculo.
  */
+
+// ── R-04: cargos sin actividad curricular ─────────────────────────────────────
+
+/**
+ * Cargo institucional vigente de un docente al fechaCalculo (filtrado por K-D6 en la consulta).
+ * tieneActividadEnPlan: al menos una VinculacionCatedra APROBADA en el plan evaluado
+ *   tiene cargoDocenteId = este cargoDocenteId.
+ */
+export interface CargoVigenteR04 {
+  cargoDocenteId: string;
+  cargoNombre: string;
+  designacion: string | null;
+  fechaInicio: Date;
+  fechaFin: Date | null;
+  verificado: boolean;
+  tieneActividadEnPlan: boolean;
+}
+
+/**
+ * Docente del plantel del plan con sus cargos vigentes al fechaCalculo.
+ * Solo se incluyen docentes con al menos una VinculacionCatedra APROBADA en el plan.
+ */
+export interface DocenteConCargosR04 {
+  docenteId: string;
+  nombre: string;
+  apellido: string;
+  /** true = secretaría confirmó que los cargos en CargoDocente son exhaustivos. */
+  relevamientoCargosCompleto: boolean;
+  cargosVigentes: CargoVigenteR04[];
+}
+
+/** Resultado de la consulta de cargos para el evaluador R-04. */
+export interface CargosParaR04 {
+  docentes: DocenteConCargosR04[];
+  planEstudioId: string;
+  carreraId: string;
+}
+
+// ── R-11 / R-13 / R-14: materias con programa de asignatura ──────────────────
+
+/**
+ * Estado consolidado de una materia del plan junto con su programa de asignatura.
+ * Usado por R-11 (inconsistencias), R-13 (formación práctica) y R-14 (horas).
+ *
+ * Cuando tienePrograma=false, todos los campos derivados del programa son null/0.
+ * seccionesCompletas es un conteo derivado [0–6], siempre presente.
+ */
+export interface MateriaProgramaAut {
+  materiaId: string;
+  materiaNombre: string;
+  materiaCodigo: string;
+  /** Valor del campo Materia.tipoAsignatura; default 'OBLIGATORIA'. */
+  tipoAsignatura: string;
+  /** null preservado — nunca convertido a 0. */
+  cargaHorariaTotal: number | null;
+  tienePrograma: boolean;
+  /** null cuando tienePrograma=false. */
+  estadoPrograma: string | null;
+  /** null cuando tienePrograma=false. */
+  secciones: SeccionesPrograma | null;
+  /** Conteo de secciones con estado 'COMPLETO'. 0 cuando tienePrograma=false. */
+  seccionesCompletas: number;
+  fechaAprobacion: Date | null;
+  anioVigencia: number | null;
+  /**
+   * JSON raw de ProgramaAsignatura.formacionPracticaJson.
+   * Estructura: Array<{ intensidad: string; horasClase: number }>.
+   * null cuando no hay programa o el campo no fue cargado.
+   * Usado por R-14 para derivar horasFormacionPractica.
+   */
+  formacionPracticaJson: string | null;
+}

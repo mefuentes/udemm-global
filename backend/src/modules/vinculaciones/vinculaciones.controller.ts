@@ -19,6 +19,7 @@ import { CrearVinculacionDto } from './dto/crear-vinculacion.dto';
 import { FiltrarVinculacionesDto } from './dto/filtrar-vinculaciones.dto';
 import { DesvincularVinculacionDto } from './dto/desvincular-vinculacion.dto';
 import { RechazarVinculacionDto } from './dto/rechazar-vinculacion.dto';
+import { AsociarCargoInstitucionalDto } from './dto/asociar-cargo-institucional.dto';
 
 // Roles que pueden leer (incluye DOCENTE — el servicio filtra automáticamente)
 const ROLES_LEER = [
@@ -71,6 +72,15 @@ export class VinculacionesController {
     @Req() req: any,
   ) {
     return this.service.rechazar(id, dto, req.user.id, req.user?.rol?.nombre ?? '');
+  }
+
+  @Patch(':id/cargo-institucional')
+  @Roles('ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA')
+  asociarCargoInstitucional(
+    @Param('id') id: string,
+    @Body() dto: AsociarCargoInstitucionalDto,
+  ) {
+    return this.service.asociarCargoInstitucional(id, dto.cargoDocenteId);
   }
 
   @Patch(':id/desvincular')

@@ -4,7 +4,19 @@ import { Suspense, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetch, mensajeErrorHttp } from '@/lib/api';
-import type { EstadoCalculo, ResultadoIP04, ResultadoIP09, ResultadoIP13, TablroCarreraResponse } from './types';
+import type {
+  DocenteAlertaR10,
+  DocenteAlertaR12,
+  EstadoCalculo,
+  ResultadoIP04,
+  ResultadoIP09,
+  ResultadoIP10,
+  ResultadoIP13,
+  ResultadoR10,
+  ResultadoR12,
+  TablroCarreraResponse,
+} from './types';
+import type { HistorialAnalisis, ItemHistorial, MetadataEjecucion } from '../../../analisis/analisis.types';
 
 // ── Helpers visuales ─────────────────────────────────────────────────────────
 
@@ -140,6 +152,206 @@ function TarjetaIP04({ ip04 }: { ip04: ResultadoIP04 }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ── IP-10: Consistencia del plantel docente ───────────────────────────────────
+
+function TarjetaIP10({ ip10 }: { ip10: ResultadoIP10 }) {
+  const ec = ip10.estadoCalculo;
+  const puntaje = ip10.puntaje;
+  const colorPuntaje =
+    puntaje >= 80 ? 'text-emerald-700' :
+    puntaje >= 50 ? 'text-amber-700' :
+    'text-red-700';
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <EtiquetaIndicador codigo="IP-10" titulo="Consistencia del plantel docente" />
+      {ec === 'NO_APLICA' ? (
+        <p className="text-xs text-sky-700 bg-sky-50 border border-sky-200 rounded-lg p-3">Sin plantel activo. No aplica la evaluación.</p>
+      ) : (
+        <>
+          <div className="flex items-center gap-4 mb-3">
+            <div className="text-center flex-shrink-0">
+              <p className={`text-4xl font-black tabular-nums ${colorPuntaje}`}>{puntaje}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">/ 100</p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 flex-1">
+              <Metrica label="Alertas ALTA (A)" valor={ip10.componenteA} destaca={ip10.componenteA > 0} />
+              <Metrica label="Alertas MEDIA (M)" valor={ip10.componenteM} destaca={ip10.componenteM > 0} />
+              <Metrica label="R-03 tope" valor={ip10.alertasR03} destaca={ip10.alertasR03 > 0} />
+              <Metrica label="R-04 penalizables" valor={ip10.alertasR04Penalizables} destaca={ip10.alertasR04Penalizables > 0} />
+              <Metrica label="R-07 sobreasign." valor={ip10.alertasR07} destaca={ip10.alertasR07 > 0} />
+            </div>
+          </div>
+          <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+            <p className="text-[11px] text-slate-500">
+              Fórmula: <span className="font-mono">max(0, 100 − 25×A − 10×M)</span>.
+              A = alertas ALTA penalizables (R-03 + R-04). M = alertas MEDIA (R-07).
+            </p>
+          </div>
+          <div className="flex justify-end mt-2">
+            <EstadoBadge ec={ec} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── R-10: Docentes con baja dedicación horaria ────────────────────────────────
+
+function FilaAlertaR10({ d }: { d: DocenteAlertaR10 }) {
+  return (
+    <tr className="hover:bg-slate-50/60">
+      <td className="px-3 py-1.5 text-xs text-slate-700">
+        <Link href={`/autoevaluacion/ficha-docente/${d.docenteId}`} className="hover:underline text-[#0f4c81]">{d.nombre}</Link>
+      </td>
+      <td className="px-3 py-1.5 text-right tabular-nums text-xs text-slate-600">{d.horasConocidas} h</td>
+      <td className="px-3 py-1.5 text-right tabular-nums text-xs text-amber-700 font-semibold">{d.umbral} h</td>
+    </tr>
+  );
+}
+
+function TarjetaR10({ r10 }: { r10: ResultadoR10 }) {
+  const ec = r10.estadoCalculo;
+  if (ec === 'NO_APLICA') {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <EtiquetaIndicador codigo="R-10" titulo="Docentes con baja dedicación horaria" />
+        <p className="text-xs text-sky-700 bg-sky-50 border border-sky-200 rounded-lg p-3">Sin plantel activo. No aplica la evaluación.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <EtiquetaIndicador codigo="R-10" titulo="Docentes con baja dedicación horaria" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <Metrica label="Total docentes" valor={r10.totalDocentes} />
+        <Metrica label="En alerta" valor={r10.totalEnAlerta} destaca={r10.totalEnAlerta > 0} />
+        <Metrica label="Inciertos" valor={r10.totalInciertos} />
+        <Metrica label={`Umbral (< ${r10.umbral} h)`} valor={`${r10.umbral} h`} />
+      </div>
+      {r10.totalEnAlerta === 0 && ec === 'CALCULADO' && (
+        <p className="mt-2 text-xs text-emerald-700 flex items-center gap-1.5">
+          <span className="text-emerald-500">✓</span> Sin docentes con baja dedicación horaria.
+        </p>
+      )}
+      {!r10.alcanceFacultad && (
+        <div className="mt-2 p-2 rounded-lg bg-amber-50 border border-amber-200">
+          <p className="text-[11px] text-amber-700">Evaluación parcial — el Director de Carrera solo ve su carrera (PARCIAL).</p>
+        </div>
+      )}
+      {r10.enAlerta.length > 0 && (
+        <details className="mt-3 group">
+          <summary className="cursor-pointer text-[11px] font-semibold text-slate-500 hover:text-slate-700 select-none list-none flex items-center gap-1.5">
+            <span className="inline-block transition-transform group-open:rotate-90">▶</span>
+            Docentes con alerta ({r10.enAlerta.length})
+          </summary>
+          <div className="mt-2 overflow-x-auto rounded-lg border border-slate-100">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="text-left px-3 py-1.5 font-semibold text-slate-500">Docente</th>
+                  <th className="text-right px-3 py-1.5 font-semibold text-slate-500">Hs. conocidas</th>
+                  <th className="text-right px-3 py-1.5 font-semibold text-amber-600">Umbral</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r10.enAlerta.map(d => <FilaAlertaR10 key={d.docenteId} d={d} />)}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+      <div className="flex justify-end mt-2">
+        <EstadoBadge ec={ec} />
+      </div>
+    </div>
+  );
+}
+
+// ── R-12: Campos obligatorios faltantes en ficha docente ──────────────────────
+
+const ITEM_FICHA_LABEL: Record<string, string> = {
+  personales: 'Datos personales',
+  formacionGrado: 'Título de grado',
+  areaDesempeno: 'Área disciplinar',
+};
+
+function FilaAlertaR12({ d }: { d: DocenteAlertaR12 }) {
+  return (
+    <tr className="hover:bg-slate-50/60">
+      <td className="px-3 py-1.5 text-xs text-slate-700">
+        <Link href={`/autoevaluacion/ficha-docente/${d.docenteId}`} className="hover:underline text-[#0f4c81]">{d.nombre}</Link>
+      </td>
+      <td className="px-3 py-1.5 text-xs text-slate-600">
+        {d.faltantes.map(f => ITEM_FICHA_LABEL[f] ?? f).join(', ')}
+      </td>
+    </tr>
+  );
+}
+
+function TarjetaR12({ r12 }: { r12: ResultadoR12 }) {
+  const ec = r12.estadoCalculo;
+  if (ec === 'NO_APLICA') {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <EtiquetaIndicador codigo="R-12" titulo="Campos obligatorios en ficha docente" />
+        <p className="text-xs text-sky-700 bg-sky-50 border border-sky-200 rounded-lg p-3">Sin plantel activo. No aplica la evaluación.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <EtiquetaIndicador codigo="R-12" titulo="Campos obligatorios en ficha docente" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <Metrica label="Total docentes" valor={r12.totalDocentes} />
+        <Metrica label="Incompletos" valor={r12.totalIncompletos} destaca={r12.totalIncompletos > 0} />
+        <Metrica label="No determinables" valor={r12.totalNoDeterminables} />
+      </div>
+      {r12.totalIncompletos === 0 && ec === 'CALCULADO' && (
+        <p className="mt-2 text-xs text-emerald-700 flex items-center gap-1.5">
+          <span className="text-emerald-500">✓</span> Todos los docentes tienen la ficha completa.
+        </p>
+      )}
+      {!r12.alcanceFacultad && (
+        <div className="mt-2 p-2 rounded-lg bg-amber-50 border border-amber-200">
+          <p className="text-[11px] text-amber-700">Evaluación parcial — el Director de Carrera solo ve su carrera (PARCIAL).</p>
+        </div>
+      )}
+      {r12.noDeterminables.length > 0 && (
+        <div className="mt-2 p-2 rounded-lg bg-slate-50 border border-slate-200">
+          <p className="text-[11px] text-slate-600">
+            {r12.noDeterminables.length} docente(s) con asignaciones cross-facultad no pudieron evaluarse.
+          </p>
+        </div>
+      )}
+      {r12.incompletos.length > 0 && (
+        <details className="mt-3 group">
+          <summary className="cursor-pointer text-[11px] font-semibold text-slate-500 hover:text-slate-700 select-none list-none flex items-center gap-1.5">
+            <span className="inline-block transition-transform group-open:rotate-90">▶</span>
+            Fichas incompletas ({r12.incompletos.length})
+          </summary>
+          <div className="mt-2 overflow-x-auto rounded-lg border border-slate-100">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="text-left px-3 py-1.5 font-semibold text-slate-500">Docente</th>
+                  <th className="text-left px-3 py-1.5 font-semibold text-slate-500">Campos faltantes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r12.incompletos.map(d => <FilaAlertaR12 key={d.docenteId} d={d} />)}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+      <div className="flex justify-end mt-2">
+        <EstadoBadge ec={ec} />
+      </div>
     </div>
   );
 }
@@ -299,7 +511,9 @@ function TarjetaIP13({ ip13 }: { ip13: ResultadoIP13 }) {
                   <tbody>
                     {ip13.sobreasignados.map((d, i) => (
                       <tr key={d.docenteId} className={i % 2 === 0 ? '' : 'bg-slate-50/60'}>
-                        <td className="px-3 py-1.5 text-slate-700">{d.nombre}</td>
+                        <td className="px-3 py-1.5 text-slate-700">
+                          <Link href={`/autoevaluacion/ficha-docente/${d.docenteId}`} className="hover:underline text-[#0f4c81]">{d.nombre}</Link>
+                        </td>
                         <td className="px-3 py-1.5 text-right font-mono tabular-nums text-slate-700">{d.nMaterias}</td>
                         <td className="px-3 py-1.5 text-right font-mono tabular-nums text-red-600 font-semibold">+{d.exceso}</td>
                       </tr>
@@ -331,6 +545,66 @@ function TablroCarreraInner() {
   const [error,    setError]    = useState<string | null>(null);
   const [dato,     setDato]     = useState<TablroCarreraResponse | null>(null);
 
+  const [corriendo,       setCorriendo]       = useState(false);
+  const [errorAnalisis,   setErrorAnalisis]   = useState<string | null>(null);
+  const [ultimaEjecucion, setUltimaEjecucion] = useState<MetadataEjecucion | null>(null);
+  const [historial,       setHistorial]       = useState<HistorialAnalisis | null>(null);
+  const [cargandoHist,    setCargandoHist]    = useState(false);
+  const [paginaHistorial, setPaginaHistorial] = useState(1);
+  const [exportando,      setExportando]      = useState<string | null>(null);
+  const [errorExport,     setErrorExport]     = useState<string | null>(null);
+
+  async function exportar(formato: 'pdf' | 'xlsx', ejecucionId?: string) {
+    const key = ejecucionId ? `${ejecucionId}-${formato}` : formato;
+    setExportando(key);
+    setErrorExport(null);
+    try {
+      const url = ejecucionId
+        ? `/autoevaluacion/exportar/ejecucion/${ejecucionId}/${formato}`
+        : `/autoevaluacion/exportar/carrera/${carreraId}/${formato}`;
+      const res = await apiFetch(url);
+      if (!res.ok) { setErrorExport('Error al generar la exportación'); return; }
+      const blob = await res.blob();
+      const cd   = res.headers.get('Content-Disposition') ?? '';
+      const name = cd.match(/filename="([^"]+)"/)?.[1] ?? `exportacion.${formato}`;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch { setErrorExport('Error de red al exportar'); }
+    finally { setExportando(null); }
+  }
+
+  async function correrAnalisis() {
+    setCorriendo(true);
+    setErrorAnalisis(null);
+    try {
+      const res  = await apiFetch(`/autoevaluacion/analisis/carrera/${carreraId}`, { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error al ejecutar análisis'));
+      setUltimaEjecucion((data as { metadata: MetadataEjecucion }).metadata);
+      cargarHistorial().catch(() => {});
+    } catch (e) {
+      setErrorAnalisis((e as Error).message);
+    } finally {
+      setCorriendo(false);
+    }
+  }
+
+  async function cargarHistorial() {
+    setCargandoHist(true);
+    try {
+      const res  = await apiFetch(`/autoevaluacion/analisis/carrera/${carreraId}/historial?pagina=${paginaHistorial}&porPagina=10`);
+      const data = await res.json().catch(() => null);
+      if (res.ok) setHistorial(data as HistorialAnalisis);
+    } finally {
+      setCargandoHist(false);
+    }
+  }
+
+  useEffect(() => { if (carreraId) cargarHistorial(); }, [carreraId, paginaHistorial]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function cargar() {
     setCargando(true);
     setError(null);
@@ -354,7 +628,10 @@ function TablroCarreraInner() {
   const ip04 = dato?.ip04;
   const ip08 = dato?.ip08;
   const ip09 = dato?.ip09;
+  const ip10 = dato?.ip10;
   const ip13 = dato?.ip13;
+  const r10  = dato?.r10;
+  const r12  = dato?.r12;
 
   // IP-03: derivar sin cobertura y porcentaje solo cuando hay datos reales
   const sinCobertura = ip03 && ip03.total > 0 ? ip03.total - ip03.cubiertas : null;
@@ -405,7 +682,7 @@ function TablroCarreraInner() {
           <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Estado general de cálculo:</span>
           <EstadoBadge ec={dato.estadoGeneralCalculo} />
           <span className="text-[10px] text-slate-400 italic">
-            Estado más restrictivo entre los siete indicadores. PARCIAL puede reflejar alcance limitado de IP-13 — no indica incumplimiento académico.
+            Estado más restrictivo entre los 10 indicadores. PARCIAL puede reflejar alcance limitado (IP-13, R-10, R-12) — no indica incumplimiento académico.
           </span>
         </div>
       )}
@@ -426,7 +703,7 @@ function TablroCarreraInner() {
       )}
 
       {/* Indicadores */}
-      {dato && ip01 && ip02 && ip03 && ip04 && ip08 && ip09 && ip13 && (
+      {dato && ip01 && ip02 && ip03 && ip04 && ip08 && ip09 && ip10 && ip13 && r10 && r12 && (
         <div className="space-y-4">
 
           {/* IP-01 + IP-02 — Plantel vigente (fila compacta) */}
@@ -548,8 +825,17 @@ function TablroCarreraInner() {
           {/* IP-09 — Completitud promedio del plantel */}
           <TarjetaIP09 ip09={ip09} />
 
+          {/* IP-10 — Consistencia del plantel docente */}
+          <TarjetaIP10 ip10={ip10} />
+
           {/* IP-13 — Docentes sobreasignados */}
           <TarjetaIP13 ip13={ip13} />
+
+          {/* R-10 — Docentes con baja dedicación horaria */}
+          <TarjetaR10 r10={r10} />
+
+          {/* R-12 — Campos obligatorios en ficha docente */}
+          <TarjetaR12 r12={r12} />
 
           {/* IP-08 — Relación profesores / auxiliares */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
@@ -610,15 +896,120 @@ function TablroCarreraInner() {
 
           {/* Nota metodológica */}
           <p className="text-[10px] text-slate-400 text-center">
-            Indicadores FSD §7 — Plantel de la carrera.
-            IP-01, IP-02, IP-04, IP-09 e IP-13 incluyen solo docentes activos (docente.activo=true) con vinculación APROBADA.
-            IP-09: completitud_i = 25 × (C1 + C2 + C3 + C4), C4 = 1 siempre en este universo.
-            IP-13 evalúa sobreasignación a nivel de facultad (DIRECTOR_CARRERA → PARCIAL).
-            IP-03 e IP-08 basados en vinculaciones con estado APROBADA.
+            Indicadores FSD §7 y MOD-AUT §3–5 — Plantel de la carrera.
+            IP-01, IP-02, IP-04, IP-09, IP-10, IP-13, R-10, R-12 incluyen solo docentes activos con vinculación APROBADA.
+            IP-09: completitud_i = 25 × (C1 + C2 + C3 + C4). IP-10: max(0, 100 − 25×A − 10×M).
+            IP-13, R-10 y R-12: alcance facultad completa; DIRECTOR_CARRERA → PARCIAL.
           </p>
 
         </div>
       )}
+
+      {/* ── Panel: Correr análisis ─────────────────────────────────────── */}
+      <div className="mt-6 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <div className="flex items-center justify-between gap-4 mb-3">
+          <div>
+            <p className="text-xs font-bold text-slate-700">Análisis explícito de la carrera</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Ejecuta y guarda una evaluación completa. Los resultados quedan disponibles en el historial.
+            </p>
+          </div>
+          <button
+            onClick={correrAnalisis}
+            disabled={corriendo || !dato}
+            className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold bg-[#0f4c81] text-white hover:bg-[#0f4c81]/90 active:bg-[#0f4c81]/80 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {corriendo ? <IcSpinner sm /> : null}
+            {corriendo ? 'Ejecutando...' : 'Correr análisis'}
+          </button>
+        </div>
+
+        {errorAnalisis && (
+          <div className="p-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 mb-3">
+            {errorAnalisis}
+          </div>
+        )}
+
+        {ultimaEjecucion && (
+          <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs space-y-1 mb-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-emerald-600 font-bold text-[11px]">✓ Guardado</span>
+              <EstadoBadge ec={ultimaEjecucion.estadoCalculo} />
+              <span className="text-[10px] font-mono text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                {ultimaEjecucion.ejecucionId.slice(0, 8)}…
+              </span>
+            </div>
+            <p className="text-slate-500">{formatFecha(ultimaEjecucion.fechaEjecucion)}</p>
+          </div>
+        )}
+
+        {/* Exportar carrera */}
+        <div className="border-t border-slate-100 pt-3 mb-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">Exportar última ejecución</p>
+          {errorExport && <p className="text-[11px] text-red-600 mb-2">{errorExport}</p>}
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => exportar('pdf')} disabled={!!exportando} className="flex items-center gap-1 text-[11px] font-semibold text-white bg-[#0f4c81] hover:bg-[#0f4c81]/90 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+              {exportando === 'pdf' ? <IcSpinner sm /> : null} PDF
+            </button>
+            <button onClick={() => exportar('xlsx')} disabled={!!exportando} className="flex items-center gap-1 text-[11px] font-semibold text-[#0f4c81] bg-white border border-[#0f4c81]/30 hover:bg-[#0f4c81]/5 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+              {exportando === 'xlsx' ? <IcSpinner sm /> : null} Excel
+            </button>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-100 pt-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Historial de ejecuciones</p>
+            {cargandoHist && <IcSpinner sm />}
+          </div>
+          {historial && historial.items.length === 0 && !cargandoHist && (
+            <p className="text-[11px] text-slate-400 italic">Sin ejecuciones registradas para esta carrera.</p>
+          )}
+          {historial && historial.items.length > 0 && (
+            <div className="space-y-1.5">
+              {historial.items.map((item: ItemHistorial) => (
+                <div key={item.ejecucionId} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 border border-slate-100 text-xs flex-wrap">
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${item.estadoEjecucion === 'COMPLETADO' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                    {item.estadoEjecucion}
+                  </span>
+                  {item.estadoCalculo && <EstadoBadge ec={item.estadoCalculo} />}
+                  <span className="text-slate-500 text-[11px]">{formatFecha(item.fechaInicio)}</span>
+                  <span className="font-mono text-[10px] text-slate-300">{item.ejecucionId.slice(0, 8)}…</span>
+                  {item.errores && <span className="text-red-500 text-[10px]">{item.errores}</span>}
+                  {item.estadoEjecucion === 'COMPLETADO' && (
+                    <div className="ml-auto flex gap-1">
+                      <button onClick={() => exportar('pdf', item.ejecucionId)} disabled={!!exportando} className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40">PDF</button>
+                      <button onClick={() => exportar('xlsx', item.ejecucionId)} disabled={!!exportando} className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40">XLS</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {historial.total > historial.porPagina && (
+                <div className="flex items-center justify-between mt-1">
+                  <button
+                    onClick={() => setPaginaHistorial((p) => Math.max(1, p - 1))}
+                    disabled={paginaHistorial <= 1 || cargandoHist}
+                    className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    ← Anterior
+                  </button>
+                  <span className="text-[10px] text-slate-400">
+                    {historial.porPagina * (paginaHistorial - 1) + 1}–{Math.min(historial.porPagina * paginaHistorial, historial.total)} de {historial.total}
+                  </span>
+                  <button
+                    onClick={() => setPaginaHistorial((p) => p + 1)}
+                    disabled={paginaHistorial * historial.porPagina >= historial.total || cargandoHist}
+                    className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Siguiente →
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
     </div>
   );
 }

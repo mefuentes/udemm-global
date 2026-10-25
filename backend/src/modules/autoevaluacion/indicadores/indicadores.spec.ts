@@ -3,11 +3,18 @@ import { EstadoCalculo } from '../types/estado-calculo.types';
 import { RegistroIndicadores } from './indicadores.registry';
 import { IndicadoresService } from './indicadores.service';
 import { R02EvaluadorService } from './r02.evaluador';
+import { R03EvaluadorService } from './r03.evaluador';
+import { R04EvaluadorService } from './r04.evaluador';
 import { R06EvaluadorService } from './r06.evaluador';
 import { R07EvaluadorService } from './r07.evaluador';
 import { R08EvaluadorService } from './r08.evaluador';
 import { R09EvaluadorService } from './r09.evaluador';
+import { R10EvaluadorService } from './r10.evaluador';
+import { R11EvaluadorService } from './r11.evaluador';
 import { R12EvaluadorService } from './r12.evaluador';
+import { R13EvaluadorService } from './r13.evaluador';
+import { R14EvaluadorService } from './r14.evaluador';
+import { R15EvaluadorService } from './r15.evaluador';
 import type {
   AlcanceIndicador,
   ContextoEvaluacion,
@@ -106,10 +113,63 @@ function makeR07Stub(): R07EvaluadorService {
   );
 }
 
+function makeR04Stub(): R04EvaluadorService {
+  return new R04EvaluadorService(
+    {
+      obtenerCargosParaR04: jest.fn().mockResolvedValue({ docentes: [], planEstudioId: PLAN_ID, carreraId: CAR_ID }),
+    } as any,
+  );
+}
+
+function makeR11Stub(): R11EvaluadorService {
+  return new R11EvaluadorService(
+    { obtenerMateriasProgramasDePlan: jest.fn().mockResolvedValue([]) } as any,
+  );
+}
+
 function makeR12Stub(): R12EvaluadorService {
   return new R12EvaluadorService(
     {
       obtenerDocentesParaR12: jest.fn().mockResolvedValue({ docentes: [], facultadId: 'fac-test', alcanceFacultad: true, docentesMultiFacultad: new Set() }),
+    } as any,
+  );
+}
+
+function makeR13Stub(): R13EvaluadorService {
+  return new R13EvaluadorService(
+    { obtenerMateriasDePlan: jest.fn().mockResolvedValue([]) } as any,
+  );
+}
+
+function makeR14Stub(): R14EvaluadorService {
+  return new R14EvaluadorService(
+    { obtenerMateriasProgramasDePlan: jest.fn().mockResolvedValue([]) } as any,
+  );
+}
+
+function makeR03Stub(): R03EvaluadorService {
+  return new R03EvaluadorService(
+    {
+      obtenerDocentesParaR03: jest.fn().mockResolvedValue({ docentes: [], facultadId: 'fac-test', alcanceFacultad: true, docentesMultiFacultad: new Set() }),
+      obtenerConfigDeCarrera: jest.fn().mockResolvedValue(null),
+    } as any,
+  );
+}
+
+function makeR10Stub(): R10EvaluadorService {
+  return new R10EvaluadorService(
+    {
+      obtenerDocentesParaR03: jest.fn().mockResolvedValue({ docentes: [], facultadId: 'fac-test', alcanceFacultad: true, docentesMultiFacultad: new Set() }),
+      obtenerConfigDeCarrera: jest.fn().mockResolvedValue(null),
+    } as any,
+  );
+}
+
+function makeR15Stub(): R15EvaluadorService {
+  return new R15EvaluadorService(
+    {
+      obtenerVinculacionesDeCarrera: jest.fn().mockResolvedValue([]),
+      obtenerConfigDeCarrera: jest.fn().mockResolvedValue(null),
     } as any,
   );
 }
@@ -124,17 +184,27 @@ function makeSvc(
   r06?: R06EvaluadorService,
   r07?: R07EvaluadorService,
   r12?: R12EvaluadorService,
+  r04?: R04EvaluadorService,
+  r10Override?: R10EvaluadorService,
+  r03Override?: R03EvaluadorService,
 ) {
   return new IndicadoresService(
     scope as any,
     registro,
     prisma as any,
     r02 ?? makeR02Stub(),
-    r08 ?? makeR08Stub(),
-    r09 ?? makeR09Stub(),
+    r03Override ?? makeR03Stub(),
+    r04 ?? makeR04Stub(),
     r06 ?? makeR06Stub(),
     r07 ?? makeR07Stub(),
+    r08 ?? makeR08Stub(),
+    r09 ?? makeR09Stub(),
+    r10Override ?? makeR10Stub(),
+    makeR11Stub(),
     r12 ?? makeR12Stub(),
+    makeR13Stub(),
+    makeR14Stub(),
+    makeR15Stub(),
   );
 }
 
@@ -153,7 +223,7 @@ describe('RegistroIndicadores', () => {
     const def = registro.obtener('R-09');
     expect(def).toBeDefined();
     expect(def!.codigo).toBe('R-09');
-    expect(def!.estadoImplementacion).toBe('NO_IMPLEMENTADO');
+    expect(def!.estadoImplementacion).toBe('IMPLEMENTADO');
     expect(def!.alcance).toBe('PLAN');
   });
 
@@ -182,7 +252,7 @@ describe('RegistroIndicadores', () => {
     }).toThrow(/duplicado|R-09/i);
   });
 
-  it('lista todos los indicadores definidos (R-02..R-12 sin R-01 ni R-05)', () => {
+  it('lista todos los indicadores definidos (R-02..R-15 sin R-01, R-05)', () => {
     const lista = registro.listar();
     const codigos = lista.map(d => d.codigo);
     // Indicadores que deben existir
@@ -196,18 +266,23 @@ describe('RegistroIndicadores', () => {
     expect(codigos).toContain('R-10');
     expect(codigos).toContain('R-11');
     expect(codigos).toContain('R-12');
+    expect(codigos).toContain('R-13');
+    expect(codigos).toContain('R-14');
+    expect(codigos).toContain('R-15');
     // Indicadores eliminados en MOD-DOC v8.1
     expect(codigos).not.toContain('R-01');
     expect(codigos).not.toContain('R-05');
   });
 
-  it('el registro inicial tiene todos los indicadores en NO_IMPLEMENTADO (excepto R-03, ya implementado)', () => {
-    // R-03 se registra directamente como IMPLEMENTADO (fase 2B.18-C).
-    // Todos los demás indicadores están pendientes de cableado.
-    const lista = registro.listar();
-    const pendientes = lista.filter(d => d.codigo !== 'R-03');
-    expect(pendientes.every(d => d.estadoImplementacion === 'NO_IMPLEMENTADO')).toBe(true);
-    expect(registro.obtener('R-03')!.estadoImplementacion).toBe('IMPLEMENTADO');
+  it('estado inicial post-IMPL-15B: todos los 13 indicadores son IMPLEMENTADO sin motivoPendiente', () => {
+    for (const d of registro.listar()) {
+      expect(d.estadoImplementacion).toBe('IMPLEMENTADO');
+      expect(d.motivoPendiente).toBeUndefined();
+    }
+    // R-13: completamente implementado tras IMPL-14B (campos schema disponibles)
+    const r13 = registro.obtener('R-13')!;
+    expect(r13.estadoImplementacion).toBe('IMPLEMENTADO');
+    expect(r13.motivoPendiente).toBeUndefined();
   });
 
   it('tieneEvaluador devuelve false cuando no hay evaluador asignado', () => {
@@ -222,6 +297,28 @@ describe('RegistroIndicadores', () => {
     const def = registro.obtener('R-09')!;
     expect(def.estadoImplementacion).toBe('IMPLEMENTADO');
     expect(def.motivoPendiente).toBeUndefined();
+  });
+
+  it('asignarEvaluador para indicador PARCIAL mantiene estado PARCIAL y preserva motivoPendiente', () => {
+    // Inyectamos un indicador sintético PARCIAL usando la API interna (acceso privado permitido en tests)
+    (registro as any).registrar({
+      codigo: 'R-XX-TEST',
+      nombre: 'Indicador PARCIAL sintético',
+      descripcion: 'Para verificar el invariante de no-promoción desde PARCIAL',
+      tipo: 'ALERTA',
+      severidad: 'MEDIA',
+      alcance: 'PLAN',
+      grupo: 'PLANES',
+      estadoImplementacion: 'PARCIAL',
+      motivoPendiente: 'Dependencia pendiente sintética de test',
+      parametros: [],
+    });
+    const mockEvaluador: IndicadorEvaluador<number> = { evaluar: jest.fn() };
+    registro.asignarEvaluador('R-XX-TEST', mockEvaluador);
+    expect(registro.tieneEvaluador('R-XX-TEST')).toBe(true);
+    const def = registro.obtener('R-XX-TEST')!;
+    expect(def.estadoImplementacion).toBe('PARCIAL');
+    expect(def.motivoPendiente).toBeTruthy();
   });
 
   it('asignarEvaluador lanza Error para código inexistente', () => {
@@ -333,10 +430,10 @@ describe('IndicadoresService — autorización y scope', () => {
     async (rol) => {
       const reg = new RegistroIndicadores();
       const resultado = await makeSvc(makeScope(), makePrisma(), reg).evaluar({
-        codigoIndicador: 'R-11',
+        codigoIndicador: 'R-10',
         contexto: makeContexto({ rolNombre: rol }),
       });
-      expect(resultado.estadoImplementacion).toBe('NO_IMPLEMENTADO');
+      expect(resultado.codigo).toBe('R-10');
     },
   );
 
@@ -344,10 +441,10 @@ describe('IndicadoresService — autorización y scope', () => {
     const reg = new RegistroIndicadores();
     const scope = makeScope({ tieneScope: true });
     const resultado = await makeSvc(scope, makePrisma(), reg).evaluar({
-      codigoIndicador: 'R-11',
+      codigoIndicador: 'R-10',
       contexto: makeContexto({ rolNombre: DECANO, carreraId: CAR_ID }),
     });
-    expect(resultado.estadoImplementacion).toBe('NO_IMPLEMENTADO');
+    expect(resultado.codigo).toBe('R-10');
     expect(scope.tieneScopeCarrera).toHaveBeenCalledWith(USR, DECANO, CAR_ID);
   });
 
@@ -366,10 +463,10 @@ describe('IndicadoresService — autorización y scope', () => {
     const reg = new RegistroIndicadores();
     const scope = makeScope({ tieneScope: true });
     const resultado = await makeSvc(scope, makePrisma(), reg).evaluar({
-      codigoIndicador: 'R-11',
+      codigoIndicador: 'R-10',
       contexto: makeContexto({ rolNombre: DIRECTOR, carreraId: CAR_ID }),
     });
-    expect(resultado.estadoImplementacion).toBe('NO_IMPLEMENTADO');
+    expect(resultado.codigo).toBe('R-10');
   });
 
   it('DIRECTOR_CARRERA fuera de su carrera → ForbiddenException', async () => {
@@ -434,14 +531,14 @@ describe('IndicadoresService — autorización y scope', () => {
       planEstudio: { findUnique: jest.fn().mockResolvedValue({ carreraId: CAR_ID }) },
     });
     const resultado = await makeSvc(scope, prisma, reg).evaluar({
-      codigoIndicador: 'R-11',
+      codigoIndicador: 'R-10',
       contexto: makeContexto({ rolNombre: DIRECTOR, carreraId: undefined, planEstudioId: PLAN_ID }),
     });
     expect(prisma.planEstudio.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: PLAN_ID } }),
     );
     expect(scope.tieneScopeCarrera).toHaveBeenCalledWith(USR, DIRECTOR, CAR_ID);
-    expect(resultado.estadoImplementacion).toBe('NO_IMPLEMENTADO');
+    expect(resultado.codigo).toBe('R-10');
   });
 });
 
@@ -454,12 +551,12 @@ describe('IndicadoresService — orquestación', () => {
   it('indicador registrado → resultado identificado con código correcto', async () => {
     const reg = new RegistroIndicadores();
     const resultado = await makeSvc(makeScope(), makePrisma(), reg).evaluar({
-      codigoIndicador: 'R-11',
+      codigoIndicador: 'R-10',
       contexto: makeContexto(),
     });
-    expect(resultado.codigo).toBe('R-11');
-    expect(resultado.tipoContexto).toBe('PLAN');
-    expect(resultado.estadoImplementacion).toBe('NO_IMPLEMENTADO');
+    expect(resultado.codigo).toBe('R-10');
+    expect(resultado.tipoContexto).toBe('CARRERA');
+    expect(resultado.estadoImplementacion).toBe('IMPLEMENTADO');
   });
 
   it('indicador inexistente → NotFoundException', async () => {
@@ -472,15 +569,15 @@ describe('IndicadoresService — orquestación', () => {
     ).rejects.toThrow(NotFoundException);
   });
 
-  it('indicador sin implementación → NO_IMPLEMENTADO + estadoCalculo null + valor null', async () => {
+  it('indicador implementado con evaluador → estadoCalculo no null (stub vacío → NO_APLICA)', async () => {
     const reg = new RegistroIndicadores();
     const resultado = await makeSvc(makeScope(), makePrisma(), reg).evaluar({
-      codigoIndicador: 'R-11',
+      codigoIndicador: 'R-10',
       contexto: makeContexto({ carreraId: CAR_ID }),
     });
-    expect(resultado.estadoImplementacion).toBe('NO_IMPLEMENTADO');
-    expect(resultado.estadoCalculo).toBeNull();
-    expect(resultado.valor).toBeNull();
+    expect(resultado.estadoImplementacion).toBe('IMPLEMENTADO');
+    expect(resultado.estadoCalculo).toBe(EstadoCalculo.NO_APLICA);
+    expect(resultado.valor).not.toBeNull();
   });
 
   it('no se ejecuta ningún evaluador cuando el indicador es NO_IMPLEMENTADO', async () => {
@@ -488,7 +585,7 @@ describe('IndicadoresService — orquestación', () => {
     // Evaluador creado pero NO asignado al registro
     const mockEvaluador: IndicadorEvaluador<number> = { evaluar: jest.fn() };
     await makeSvc(makeScope(), makePrisma(), reg).evaluar({
-      codigoIndicador: 'R-11',
+      codigoIndicador: 'R-10',
       contexto: makeContexto(),
     });
     expect(mockEvaluador.evaluar).not.toHaveBeenCalled();
@@ -499,7 +596,7 @@ describe('IndicadoresService — orquestación', () => {
     const prisma = makePrisma();
     // DIRECTOR con carreraId directa — no debe buscar el plan
     await makeSvc(makeScope({ tieneScope: true }), prisma, reg).evaluar({
-      codigoIndicador: 'R-11',
+      codigoIndicador: 'R-10',
       contexto: makeContexto({ rolNombre: DIRECTOR, carreraId: CAR_ID }),
     });
     expect(prisma.planEstudio.findUnique).not.toHaveBeenCalled();
@@ -508,9 +605,9 @@ describe('IndicadoresService — orquestación', () => {
   it('se delega al evaluador cuando está asignado en el registro', async () => {
     const reg = new RegistroIndicadores();
     const respuestaEsperada: ResultadoIndicador<number> = {
-      codigo: 'R-11',
-      contextoId: PLAN_ID,
-      tipoContexto: 'PLAN',
+      codigo: 'R-10',
+      contextoId: CAR_ID,
+      tipoContexto: 'CARRERA',
       estadoImplementacion: 'IMPLEMENTADO',
       estadoCalculo: EstadoCalculo.CALCULADO,
       valor: 2400,
@@ -520,10 +617,13 @@ describe('IndicadoresService — orquestación', () => {
     const mockEvaluador: IndicadorEvaluador<number> = {
       evaluar: jest.fn().mockResolvedValue(respuestaEsperada),
     };
-    reg.asignarEvaluador('R-11', mockEvaluador);
 
-    const resultado = await makeSvc(makeScope(), makePrisma(), reg).evaluar({
-      codigoIndicador: 'R-11',
+    const resultado = await makeSvc(
+      makeScope(), makePrisma(), reg,
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      mockEvaluador as any,
+    ).evaluar({
+      codigoIndicador: 'R-10',
       contexto: makeContexto(),
     });
     expect(mockEvaluador.evaluar).toHaveBeenCalledTimes(1);
@@ -537,10 +637,13 @@ describe('IndicadoresService — orquestación', () => {
     const mockEvaluador: IndicadorEvaluador<unknown> = {
       evaluar: jest.fn().mockRejectedValue(new Error('Fallo de evaluación')),
     };
-    reg.asignarEvaluador('R-11', mockEvaluador);
     await expect(
-      makeSvc(makeScope(), makePrisma(), reg).evaluar({
-        codigoIndicador: 'R-11',
+      makeSvc(
+        makeScope(), makePrisma(), reg,
+        undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+        mockEvaluador as any,
+      ).evaluar({
+        codigoIndicador: 'R-10',
         contexto: makeContexto(),
       }),
     ).rejects.toThrow('Fallo de evaluación');
@@ -563,8 +666,11 @@ describe('IndicadoresService — orquestación', () => {
         fechaEvaluacion: FECHA,
       } as ResultadoIndicador<number>),
     };
-    reg.asignarEvaluador('R-03', mockEvaluador);
-    const resultado = await makeSvc(makeScope(), makePrisma(), reg).evaluar({
+    const resultado = await makeSvc(
+      makeScope(), makePrisma(), reg,
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      undefined, mockEvaluador as any,
+    ).evaluar({
       codigoIndicador: 'R-03',
       contexto: makeContexto(),
     });
@@ -582,12 +688,12 @@ describe('IndicadoresService — R-08 integración', () => {
 
   it('R-08 está marcado IMPLEMENTADO en el registro después de inicializar el servicio', () => {
     const reg = new RegistroIndicadores();
-    // Antes del cableado: NO_IMPLEMENTADO
-    expect(reg.obtener('R-08')!.estadoImplementacion).toBe('NO_IMPLEMENTADO');
+    // Post-IMPL-15B: el registro estático ya declara IMPLEMENTADO
+    expect(reg.obtener('R-08')!.estadoImplementacion).toBe('IMPLEMENTADO');
 
     makeSvc(makeScope(), makePrisma(), reg);
 
-    // Después del cableado: IMPLEMENTADO
+    // Después del cableado: sigue IMPLEMENTADO con evaluador asignado
     expect(reg.obtener('R-08')!.estadoImplementacion).toBe('IMPLEMENTADO');
     expect(reg.tieneEvaluador('R-08')).toBe(true);
   });
@@ -726,7 +832,8 @@ describe('IndicadoresService — R-02 integración', () => {
 
   it('R-02 está marcado IMPLEMENTADO en el registro después de inicializar el servicio', () => {
     const reg = new RegistroIndicadores();
-    expect(reg.obtener('R-02')!.estadoImplementacion).toBe('NO_IMPLEMENTADO');
+    // Post-IMPL-15B: el registro estático ya declara IMPLEMENTADO
+    expect(reg.obtener('R-02')!.estadoImplementacion).toBe('IMPLEMENTADO');
 
     makeSvc(makeScope(), makePrisma(), reg);
 
@@ -744,7 +851,7 @@ describe('IndicadoresService — R-02 integración', () => {
   it('indicadores no implementados siguen en NO_IMPLEMENTADO tras el cableado', () => {
     const reg = new RegistroIndicadores();
     makeSvc(makeScope(), makePrisma(), reg);
-    const noImpl = reg.listar().filter(d => !['R-02', 'R-03', 'R-06', 'R-07', 'R-08', 'R-09', 'R-12'].includes(d.codigo));
+    const noImpl = reg.listar().filter(d => !['R-02', 'R-03', 'R-04', 'R-06', 'R-07', 'R-08', 'R-09', 'R-10', 'R-11', 'R-12', 'R-13', 'R-14', 'R-15'].includes(d.codigo));
     expect(noImpl.every(d => d.estadoImplementacion === 'NO_IMPLEMENTADO')).toBe(true);
   });
 
@@ -848,7 +955,8 @@ describe('IndicadoresService — R-09 integración', () => {
 
   it('R-09 está marcado IMPLEMENTADO en el registro después de inicializar el servicio', () => {
     const reg = new RegistroIndicadores();
-    expect(reg.obtener('R-09')!.estadoImplementacion).toBe('NO_IMPLEMENTADO');
+    // Post-IMPL-15B: el registro estático ya declara IMPLEMENTADO
+    expect(reg.obtener('R-09')!.estadoImplementacion).toBe('IMPLEMENTADO');
 
     makeSvc(makeScope(), makePrisma(), reg);
 
@@ -866,7 +974,7 @@ describe('IndicadoresService — R-09 integración', () => {
   it('indicadores distintos de R-02, R-06, R-07, R-08 y R-09 siguen en NO_IMPLEMENTADO', () => {
     const reg = new RegistroIndicadores();
     makeSvc(makeScope(), makePrisma(), reg);
-    const noImpl = reg.listar().filter(d => !['R-02', 'R-03', 'R-06', 'R-07', 'R-08', 'R-09', 'R-12'].includes(d.codigo));
+    const noImpl = reg.listar().filter(d => !['R-02', 'R-03', 'R-04', 'R-06', 'R-07', 'R-08', 'R-09', 'R-10', 'R-11', 'R-12', 'R-13', 'R-14', 'R-15'].includes(d.codigo));
     expect(noImpl.every(d => d.estadoImplementacion === 'NO_IMPLEMENTADO')).toBe(true);
   });
 
@@ -969,9 +1077,9 @@ describe('IndicadoresService — R-09 integración', () => {
 
 describe('IndicadoresService — R-06 integración', () => {
 
-  it('R-06 está marcado IMPLEMENTADO en el registro después de inicializar el servicio', () => {
+  it('R-06 es IMPLEMENTADO en el registro antes y después de inicializar el servicio', () => {
     const reg = new RegistroIndicadores();
-    expect(reg.obtener('R-06')!.estadoImplementacion).toBe('NO_IMPLEMENTADO');
+    expect(reg.obtener('R-06')!.estadoImplementacion).toBe('IMPLEMENTADO');
 
     makeSvc(makeScope(), makePrisma(), reg);
 
@@ -990,13 +1098,20 @@ describe('IndicadoresService — R-06 integración', () => {
   it('indicadores distintos de R-02, R-06, R-07, R-08 y R-09 siguen en NO_IMPLEMENTADO', () => {
     const reg = new RegistroIndicadores();
     makeSvc(makeScope(), makePrisma(), reg);
-    const noImpl = reg.listar().filter(d => !['R-02', 'R-03', 'R-06', 'R-07', 'R-08', 'R-09', 'R-12'].includes(d.codigo));
+    const noImpl = reg.listar().filter(d => !['R-02', 'R-03', 'R-04', 'R-06', 'R-07', 'R-08', 'R-09', 'R-10', 'R-11', 'R-12', 'R-13', 'R-14', 'R-15'].includes(d.codigo));
     expect(noImpl.every(d => d.estadoImplementacion === 'NO_IMPLEMENTADO')).toBe(true);
   });
 
   it('evaluar R-06 con carrera sin vinculaciones APROBADAS devuelve NO_APLICA', async () => {
     const reg = new RegistroIndicadores();
-    const consultas = { obtenerVinculacionesDeCarrera: jest.fn().mockResolvedValue([]) };
+    const consultas = {
+      obtenerVinculacionesParaR06: jest.fn().mockResolvedValue({
+        vinculaciones: [],
+        facultadId: FAC_ID,
+        alcanceFacultad: true,
+        docentesMultiFacultad: new Set(),
+      }),
+    };
     const r06Real = new R06EvaluadorService(consultas as any);
     const svc = makeSvc(makeScope(), makePrisma(), reg, undefined, undefined, undefined, r06Real);
 
@@ -1012,7 +1127,7 @@ describe('IndicadoresService — R-06 integración', () => {
 
   it('DOCENTE rechazado para R-06 — ForbiddenException antes de llegar al evaluador', async () => {
     const reg = new RegistroIndicadores();
-    const consultas = { obtenerVinculacionesDeCarrera: jest.fn() };
+    const consultas = { obtenerVinculacionesParaR06: jest.fn() };
     const r06Real = new R06EvaluadorService(consultas as any);
     const svc = makeSvc(makeScope(), makePrisma(), reg, undefined, undefined, undefined, r06Real);
 
@@ -1022,12 +1137,12 @@ describe('IndicadoresService — R-06 integración', () => {
         contexto: makeContexto({ rolNombre: 'DOCENTE' }),
       }),
     ).rejects.toThrow(ForbiddenException);
-    expect(consultas.obtenerVinculacionesDeCarrera).not.toHaveBeenCalled();
+    expect(consultas.obtenerVinculacionesParaR06).not.toHaveBeenCalled();
   });
 
   it('ADMINISTRATIVO rechazado para R-06 — ForbiddenException', async () => {
     const reg = new RegistroIndicadores();
-    const consultas = { obtenerVinculacionesDeCarrera: jest.fn() };
+    const consultas = { obtenerVinculacionesParaR06: jest.fn() };
     const r06Real = new R06EvaluadorService(consultas as any);
     const svc = makeSvc(makeScope(), makePrisma(), reg, undefined, undefined, undefined, r06Real);
 
@@ -1037,12 +1152,12 @@ describe('IndicadoresService — R-06 integración', () => {
         contexto: makeContexto({ rolNombre: 'ADMINISTRATIVO' }),
       }),
     ).rejects.toThrow(ForbiddenException);
-    expect(consultas.obtenerVinculacionesDeCarrera).not.toHaveBeenCalled();
+    expect(consultas.obtenerVinculacionesParaR06).not.toHaveBeenCalled();
   });
 
   it('DIRECTOR fuera de scope rechazado para R-06 — ForbiddenException', async () => {
     const reg = new RegistroIndicadores();
-    const consultas = { obtenerVinculacionesDeCarrera: jest.fn() };
+    const consultas = { obtenerVinculacionesParaR06: jest.fn() };
     const r06Real = new R06EvaluadorService(consultas as any);
     const svc = makeSvc(makeScope({ tieneScope: false }), makePrisma(), reg, undefined, undefined, undefined, r06Real);
 
@@ -1052,7 +1167,7 @@ describe('IndicadoresService — R-06 integración', () => {
         contexto: makeContexto({ rolNombre: 'DIRECTOR_CARRERA', carreraId: 'car-ajena' }),
       }),
     ).rejects.toThrow(ForbiddenException);
-    expect(consultas.obtenerVinculacionesDeCarrera).not.toHaveBeenCalled();
+    expect(consultas.obtenerVinculacionesParaR06).not.toHaveBeenCalled();
   });
 });
 
@@ -1071,7 +1186,8 @@ describe('IndicadoresService — R-07 integración', () => {
 
   it('R-07 está marcado IMPLEMENTADO en el registro después de inicializar el servicio', () => {
     const reg = new RegistroIndicadores();
-    expect(reg.obtener('R-07')!.estadoImplementacion).toBe('NO_IMPLEMENTADO');
+    // Post-IMPL-15B: el registro estático ya declara IMPLEMENTADO
+    expect(reg.obtener('R-07')!.estadoImplementacion).toBe('IMPLEMENTADO');
 
     makeSvc(makeScope(), makePrisma(), reg);
 
@@ -1091,7 +1207,7 @@ describe('IndicadoresService — R-07 integración', () => {
   it('indicadores distintos de R-02, R-06, R-07, R-08 y R-09 siguen en NO_IMPLEMENTADO', () => {
     const reg = new RegistroIndicadores();
     makeSvc(makeScope(), makePrisma(), reg);
-    const noImpl = reg.listar().filter(d => !['R-02', 'R-03', 'R-06', 'R-07', 'R-08', 'R-09', 'R-12'].includes(d.codigo));
+    const noImpl = reg.listar().filter(d => !['R-02', 'R-03', 'R-04', 'R-06', 'R-07', 'R-08', 'R-09', 'R-10', 'R-11', 'R-12', 'R-13', 'R-14', 'R-15'].includes(d.codigo));
     expect(noImpl.every(d => d.estadoImplementacion === 'NO_IMPLEMENTADO')).toBe(true);
   });
 

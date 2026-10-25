@@ -2,10 +2,13 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ScopeService } from '../../scopes/scope.service';
 import { IP09EvaluadorService } from '../indicadores/ip09.evaluador';
-import { R06EvaluadorService } from '../indicadores/r06.evaluador';
+import { IP10EvaluadorService } from '../indicadores/ip10.evaluador';
 import { R07EvaluadorService } from '../indicadores/r07.evaluador';
+import { R10EvaluadorService } from '../indicadores/r10.evaluador';
+import { R12EvaluadorService } from '../indicadores/r12.evaluador';
+import { R15EvaluadorService } from '../indicadores/r15.evaluador';
 import { EstadoCalculo } from '../types/estado-calculo.types';
-import type { ResultadoIP01, ResultadoIP02, ResultadoIP03, ResultadoIP04, ResultadoIP08, ResultadoIP09, ResultadoIP13, TablroCarreraResponseDto } from './tablero-carrera.dto';
+import type { ResultadoIP01, ResultadoIP02, ResultadoIP03, ResultadoIP04, ResultadoIP08, ResultadoIP09, ResultadoIP10, ResultadoIP13, ResultadoR10, ResultadoR12, TablroCarreraResponseDto } from './tablero-carrera.dto';
 
 // ── Autorización ──────────────────────────────────────────────────────────────
 
@@ -76,9 +79,12 @@ export class TablroCarreraService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly scope: ScopeService,
-    private readonly r06: R06EvaluadorService,
+    private readonly r15: R15EvaluadorService,
     private readonly r07: R07EvaluadorService,
     private readonly ip09: IP09EvaluadorService,
+    private readonly ip10: IP10EvaluadorService,
+    private readonly r12: R12EvaluadorService,
+    private readonly r10: R10EvaluadorService,
   ) {}
 
   async consultarCarrera(
@@ -100,14 +106,17 @@ export class TablroCarreraService {
     if (!tieneScope) throw new ForbiddenException();
 
     const fechaEvaluacion = new Date();
-    const [ip01, ip02, ip03, ip08, ip04, ip09, ip13] = await Promise.all([
+    const [ip01, ip02, ip03, ip08, ip04, ip09, ip10, ip13, r10, r12] = await Promise.all([
       this.calcularIP01(carreraId),
       this.calcularIP02(carreraId),
       this.calcularIP03(carreraId),
       this.calcularIP08(carreraId),
       this.calcularIP04(carreraId, usuarioId, rolNombre, fechaEvaluacion),
       this.calcularIP09(carreraId),
+      this.calcularIP10(carreraId, usuarioId, rolNombre, fechaEvaluacion),
       this.calcularIP13(carreraId, usuarioId, rolNombre, fechaEvaluacion),
+      this.calcularR10(carreraId, usuarioId, rolNombre, fechaEvaluacion),
+      this.calcularR12(carreraId, usuarioId, rolNombre, fechaEvaluacion),
     ]);
 
     return {
@@ -119,11 +128,15 @@ export class TablroCarreraService {
       ip04,
       ip08,
       ip09,
+      ip10,
       ip13,
+      r10,
+      r12,
       estadoGeneralCalculo: estadoMasRestrictivo(
         ip01.estadoCalculo, ip02.estadoCalculo,
         ip03.estadoCalculo, ip04.estadoCalculo, ip08.estadoCalculo,
-        ip09.estadoCalculo, ip13.estadoCalculo,
+        ip09.estadoCalculo, ip10.estadoCalculo, ip13.estadoCalculo,
+        r10.estadoCalculo, r12.estadoCalculo,
       ),
     };
   }
@@ -211,14 +224,17 @@ export class TablroCarreraService {
   }
 
   /**
-   * IP-04: Materias por docente (FSD §7).
+   * IP-04 / R-15: Materias por docente (FSD §7, §5.3).
    *
-   * Delega en R06EvaluadorService que ya implementa el cálculo completo:
+   * Delega en R15EvaluadorService que evalúa la carrera seleccionada sin extensión
+   * cross-carrera:
    * - Universo: docentes con ≥1 vinculación APROBADA y activo=true en la carrera.
-   * - Deduplicación: distinct materiaId por docenteId (cátedra y materia equivalen).
+   * - Deduplicación: distinct materiaId por docenteId.
    * - Estadísticas: mediana (principal), promedio, máximo.
+   * - Alertas: docentes con nMaterias > p03MaxMat (limite).
    *
-   * estadoCalculo comparte universo con IP-01 (mismo filtro activo=true + APROBADA).
+   * estadoCalculo: NO_DETERMINABLE si config no existe, NO_APLICA si sin docentes,
+   * CALCULADO si evaluación completa.
    */
   private async calcularIP04(
     carreraId: string,
@@ -226,7 +242,7 @@ export class TablroCarreraService {
     rolNombre: string,
     fechaEvaluacion: Date,
   ): Promise<ResultadoIP04> {
-    const resultado = await this.r06.evaluar({ carreraId, usuarioId, rolNombre, fechaEvaluacion });
+    const resultado = await this.r15.evaluar({ carreraId, usuarioId, rolNombre, fechaEvaluacion });
     const v = resultado.valor!;
     return {
       totalDocentes: v.totalDocentes,
@@ -234,6 +250,36 @@ export class TablroCarreraService {
       promedio: v.promedio,
       maximo: v.maximo,
       distribucion: v.distribucion,
+      limite: v.limite,
+      totalEnAlerta: v.totalEnAlerta,
+      enAlerta: v.enAlerta,
+      estadoCalculo: resultado.estadoCalculo ?? EstadoCalculo.NO_DETERMINABLE,
+    };
+  }
+
+  /**
+   * R-10: Docentes con baja dedicación horaria (FSD §5.3).
+   *
+   * Delega en R10EvaluadorService: compara horas semanales de docencia conocidas
+   * contra el umbral p02BajaH (default 20h).
+   * Alertas INFORMATIVAS: no penalizan el score de IP-10.
+   */
+  private async calcularR10(
+    carreraId: string,
+    usuarioId: string,
+    rolNombre: string,
+    fechaEvaluacion: Date,
+  ): Promise<ResultadoR10> {
+    const resultado = await this.r10.evaluar({ carreraId, usuarioId, rolNombre, fechaEvaluacion });
+    const v = resultado.valor!;
+    return {
+      carreraId: v.carreraId,
+      umbral: v.umbral,
+      totalDocentes: v.totalDocentes,
+      totalEnAlerta: v.totalEnAlerta,
+      totalInciertos: v.totalInciertos,
+      enAlerta: v.enAlerta,
+      alcanceFacultad: v.alcanceFacultad,
       estadoCalculo: resultado.estadoCalculo ?? EstadoCalculo.NO_DETERMINABLE,
     };
   }
@@ -281,6 +327,48 @@ export class TablroCarreraService {
    */
   private async calcularIP09(carreraId: string): Promise<ResultadoIP09> {
     return this.ip09.evaluarParaCarrera(carreraId);
+  }
+
+  /**
+   * IP-10: Consistencia del plantel docente (FSD MOD-AUT §5).
+   * Fórmula: max(0, 100 − 25×A − 10×M).
+   *   A = R-03 ALTA + R-04 ALTA no exceptuadas por C4.
+   *   M = R-07 MEDIA (sobreasignados).
+   */
+  private async calcularIP10(
+    carreraId: string,
+    usuarioId: string,
+    rolNombre: string,
+    fechaEvaluacion: Date,
+  ): Promise<ResultadoIP10> {
+    return this.ip10.evaluarParaCarrera(carreraId, usuarioId, rolNombre, fechaEvaluacion);
+  }
+
+  /**
+   * R-12: Campos obligatorios faltantes en la ficha docente (FSD MOD-AUT §3.1).
+   *
+   * Delega en R12EvaluadorService: evalúa personales, formacionGrado y areaDesempeno
+   * para todos los docentes activos con vinculación APROBADA en la carrera.
+   */
+  private async calcularR12(
+    carreraId: string,
+    usuarioId: string,
+    rolNombre: string,
+    fechaEvaluacion: Date,
+  ): Promise<ResultadoR12> {
+    const resultado = await this.r12.evaluar({ carreraId, usuarioId, rolNombre, fechaEvaluacion });
+    const v = resultado.valor!;
+    return {
+      carreraId: v.carreraId,
+      facultadId: v.facultadId,
+      totalDocentes: v.totalDocentes,
+      totalIncompletos: v.totalIncompletos,
+      incompletos: v.incompletos,
+      totalNoDeterminables: v.totalNoDeterminables,
+      noDeterminables: v.noDeterminables,
+      alcanceFacultad: v.alcanceFacultad,
+      estadoCalculo: resultado.estadoCalculo ?? EstadoCalculo.NO_DETERMINABLE,
+    };
   }
 
   /**

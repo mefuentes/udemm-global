@@ -15,7 +15,7 @@ export class ConfigPlanService {
   ) {}
 
   /**
-   * Devuelve los umbrales horarios de un Plan de Estudio.
+   * Devuelve los umbrales horarios y la configuración de formación práctica de un Plan de Estudio.
    * Verifica scope sobre la carrera del plan.
    */
   async obtenerUmbrales(planEstudioId: string, usuarioId: string, rolNombre: string) {
@@ -28,11 +28,14 @@ export class ConfigPlanService {
       horasMinTB: plan.horasMinTB,
       horasMinTA: plan.horasMinTA,
       horasMinCTX: plan.horasMinCTX,
+      requierePPS: plan.requierePPS,
+      requierePI: plan.requierePI,
+      porcentajeMinFormacion: plan.porcentajeMinFormacion,
     };
   }
 
   /**
-   * Actualiza los umbrales horarios de un Plan de Estudio.
+   * Actualiza los umbrales horarios y la configuración de formación práctica.
    * Solo ADMINISTRADOR_SISTEMA puede llamar a este método (verificado en el controlador).
    */
   async actualizarUmbrales(
@@ -46,12 +49,15 @@ export class ConfigPlanService {
     if (!plan) throw new NotFoundException(`Plan de estudio ${planEstudioId} no encontrado`);
 
     // Solo actualiza los campos presentes en el DTO; undefined = sin cambio
-    const data: Record<string, number | null | undefined> = {};
+    const data: Record<string, number | boolean | null | undefined> = {};
     if ('horasMinTotales' in dto) data['horasMinTotales'] = dto.horasMinTotales ?? null;
     if ('horasMinCB' in dto) data['horasMinCB'] = dto.horasMinCB ?? null;
     if ('horasMinTB' in dto) data['horasMinTB'] = dto.horasMinTB ?? null;
     if ('horasMinTA' in dto) data['horasMinTA'] = dto.horasMinTA ?? null;
     if ('horasMinCTX' in dto) data['horasMinCTX'] = dto.horasMinCTX ?? null;
+    if ('requierePPS' in dto) data['requierePPS'] = dto.requierePPS ?? null;
+    if ('requierePI' in dto) data['requierePI'] = dto.requierePI ?? null;
+    if ('porcentajeMinFormacion' in dto) data['porcentajeMinFormacion'] = dto.porcentajeMinFormacion ?? null;
 
     if (Object.keys(data).length === 0) {
       return this.obtenerUmbralesSinScope(planEstudioId);
@@ -67,6 +73,9 @@ export class ConfigPlanService {
         horasMinTB: true,
         horasMinTA: true,
         horasMinCTX: true,
+        requierePPS: true,
+        requierePI: true,
+        porcentajeMinFormacion: true,
       },
     });
   }
@@ -87,6 +96,9 @@ export class ConfigPlanService {
         horasMinTB: true,
         horasMinTA: true,
         horasMinCTX: true,
+        requierePPS: true,
+        requierePI: true,
+        porcentajeMinFormacion: true,
       },
     });
     if (!plan) throw new NotFoundException(`Plan de estudio ${planEstudioId} no encontrado`);
@@ -107,6 +119,9 @@ export class ConfigPlanService {
         horasMinTB: true,
         horasMinTA: true,
         horasMinCTX: true,
+        requierePPS: true,
+        requierePI: true,
+        porcentajeMinFormacion: true,
       },
     });
   }

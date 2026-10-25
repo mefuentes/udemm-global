@@ -5,11 +5,19 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+
 import { PrismaService } from '../../prisma/prisma.service';
 import { CrearVinculacionDto } from './dto/crear-vinculacion.dto';
 import { DesvincularVinculacionDto } from './dto/desvincular-vinculacion.dto';
 import { FiltrarVinculacionesDto } from './dto/filtrar-vinculaciones.dto';
 import { RechazarVinculacionDto } from './dto/rechazar-vinculacion.dto';
+
+// Include mínimo para el endpoint de asociación de cargo institucional
+const INCLUDE_ASOCIACION = {
+  cargoDocente: {
+    include: { cargo: { select: { id: true, nombre: true } } },
+  },
+};
 
 const INCLUDE_COMPLETO = {
   facultad:            { select: { id: true, nombre: true } },
@@ -337,6 +345,27 @@ export class VinculacionesService {
       });
 
       return actualizada;
+    });
+  }
+
+  // ── Asociar cargo institucional ───────────────────────────────────────────
+
+  async asociarCargoInstitucional(vinculacionId: string, cargoDocenteId: string | null) {
+    const vc = await this.prisma.vinculacionCatedra.findUnique({ where: { id: vinculacionId } });
+    if (!vc) throw new NotFoundException('Vinculación no encontrada');
+
+    if (cargoDocenteId !== null) {
+      const cargo = await this.prisma.cargoDocente.findUnique({ where: { id: cargoDocenteId } });
+      if (!cargo) throw new NotFoundException('Cargo institucional no encontrado');
+      if (cargo.docenteId !== vc.docenteId) {
+        throw new BadRequestException('El cargo institucional no pertenece al docente de la vinculación');
+      }
+    }
+
+    return this.prisma.vinculacionCatedra.update({
+      where:   { id: vinculacionId },
+      data:    { cargoDocenteId },
+      include: INCLUDE_ASOCIACION,
     });
   }
 

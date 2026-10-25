@@ -3,8 +3,11 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { ScopeService } from '../../scopes/scope.service';
 import type {
   BloqueNormalizado,
+  CargosParaR04,
   CarreraAut,
   ConfigFacultadAut,
+  ConfigFormacionPracticaAut,
+  DocenteConCargosR04,
   DocenteFichaAut,
   DocentesParaIP09,
   DocentesParaR03,
@@ -13,6 +16,7 @@ import type {
   DocenteVigenteR03,
   EstadoSeccion,
   FacultadAut,
+  MateriaProgramaAut,
   MateriaAut,
   PlanEstudioAut,
   ProgramaAut,
@@ -403,6 +407,176 @@ export class ConsultasAcademicasService {
     if (!tieneScope) throw new ForbiddenException();
 
     return this.obtenerConfigAut(carrera.facultadId, usuarioId, rolNombre);
+  }
+
+  // ── Vinculaciones para R-06 (cross-carrera / alcance facultad) ──────────
+
+  /**
+   * Devuelve las vinculaciones necesarias para el evaluador R-06 con el alcance
+   * adecuado al rol del usuario.
+   *
+   * Roles globales (ADMIN/SECRETARIA/RECTORADO) y DECANO: devuelven TODAS las
+   * vinculaciones de la facultad (alcanceFacultad=true).
+   * DIRECTOR_CARRERA: devuelve solo la carrera solicitada (alcanceFacultad=false).
+   *   El evaluador debe producir EstadoCalculo.PARCIAL en ese caso.
+   *
+   * Seguridad:
+   * - El scope sobre carreraId se verifica vía tieneScopeCarrera antes de consultar.
+   * - Para DECANO, tieneScopeCarrera ya garantiza que su facultad coincide con la carrera.
+   */
+  async obtenerVinculacionesParaR06(
+    carreraId: string,
+    usuarioId: string,
+    rolNombre: string,
+  ): Promise<VinculacionesParaR07> {
+    this.checkRol(rolNombre);
+
+    const carrera = await this.prisma.carrera.findUnique({
+      where: { id: carreraId },
+      select: { id: true, facultadId: true },
+    });
+    if (!carrera) throw new NotFoundException(`Carrera ${carreraId} no encontrada`);
+
+    const tieneScope = await this.scope.tieneScopeCarrera(usuarioId, rolNombre, carreraId);
+    if (!tieneScope) throw new ForbiddenException();
+
+    const { facultadId } = carrera;
+
+    const ROLES_ALCANCE_FACULTAD = new Set([
+      'ADMINISTRADOR_SISTEMA',
+      'SECRETARIA_ACADEMICA',
+      'RECTORADO',
+      'DECANO',
+    ]);
+    const alcanceFacultad = ROLES_ALCANCE_FACULTAD.has(rolNombre);
+
+    const rows = await this.prisma.vinculacionCatedra.findMany({
+      where: alcanceFacultad ? { facultadId } : { carreraId },
+      select: {
+        id: true, materiaId: true, docenteId: true, catedraId: true,
+        planEstudioId: true, carreraId: true, estado: true,
+        esResponsableCatedra: true, horasSemana: true,
+        docente: {
+          select: {
+            id: true, nombre: true, apellido: true, activo: true,
+            dedicacion: true, categoriaDocente: true,
+          },
+        },
+      },
+    });
+
+    const vinculaciones: VinculacionAut[] = rows.map((v) => ({
+      id: v.id,
+      materiaId: v.materiaId,
+      docenteId: v.docenteId,
+      catedraId: v.catedraId,
+      planEstudioId: v.planEstudioId,
+      carreraId: v.carreraId,
+      estado: v.estado,
+      esResponsableCatedra: v.esResponsableCatedra,
+      horasSemana: v.horasSemana,
+      docente: {
+        id: v.docente.id,
+        nombre: v.docente.nombre,
+        apellido: v.docente.apellido,
+        activo: v.docente.activo,
+        dedicacion: v.docente.dedicacion,
+        categoriaDocente: v.docente.categoriaDocente,
+      },
+    }));
+
+    const docentesMultiFacultad = alcanceFacultad
+      ? await this.detectarDocentesMultiFacultad(
+          [...new Set(vinculaciones.map((v) => v.docenteId))],
+          facultadId,
+        )
+      : new Set<string>();
+
+    return { vinculaciones, facultadId, alcanceFacultad, docentesMultiFacultad };
+  }
+
+  // ── Vinculaciones para R-06 por facultadId (usado por tablero de facultad) ──
+
+  /**
+   * Versión del método para el tablero de facultad: entrada por facultadId.
+   * Sin verificación de scope/rol: el tablero ya autorizó al usuario con ROLES_MODAUT_FACULTAD.
+   * Siempre alcanceFacultad=true (el tablero solo es accesible por roles de alcance facultad).
+   */
+  async obtenerVinculacionesParaR06PorFacultad(
+    facultadId: string,
+  ): Promise<VinculacionesParaR07> {
+    const rows = await this.prisma.vinculacionCatedra.findMany({
+      where: { facultadId },
+      select: {
+        id: true, materiaId: true, docenteId: true, catedraId: true,
+        planEstudioId: true, carreraId: true, estado: true,
+        esResponsableCatedra: true, horasSemana: true,
+        docente: {
+          select: {
+            id: true, nombre: true, apellido: true, activo: true,
+            dedicacion: true, categoriaDocente: true,
+          },
+        },
+      },
+    });
+
+    const vinculaciones: VinculacionAut[] = rows.map((v) => ({
+      id: v.id,
+      materiaId: v.materiaId,
+      docenteId: v.docenteId,
+      catedraId: v.catedraId,
+      planEstudioId: v.planEstudioId,
+      carreraId: v.carreraId,
+      estado: v.estado,
+      esResponsableCatedra: v.esResponsableCatedra,
+      horasSemana: v.horasSemana,
+      docente: {
+        id: v.docente.id,
+        nombre: v.docente.nombre,
+        apellido: v.docente.apellido,
+        activo: v.docente.activo,
+        dedicacion: v.docente.dedicacion,
+        categoriaDocente: v.docente.categoriaDocente,
+      },
+    }));
+
+    const docentesMultiFacultad = await this.detectarDocentesMultiFacultad(
+      [...new Set(vinculaciones.map((v) => v.docenteId))],
+      facultadId,
+    );
+
+    return { vinculaciones, facultadId, alcanceFacultad: true, docentesMultiFacultad };
+  }
+
+  // ── Configuración de formación práctica para R-13 (FSD §6.3) ─────────────
+
+  /**
+   * Devuelve la configuración de formación práctica de un Plan de Estudio.
+   * Campos nullable: null = no configurado.
+   * Verifica scope sobre la carrera del plan.
+   */
+  async obtenerConfigFormacionPlan(
+    planEstudioId: string,
+    usuarioId: string,
+    rolNombre: string,
+  ): Promise<ConfigFormacionPracticaAut> {
+    this.checkRol(rolNombre);
+
+    const plan = await this.prisma.planEstudio.findUnique({
+      where: { id: planEstudioId },
+      select: { id: true, carreraId: true, requierePPS: true, requierePI: true, porcentajeMinFormacion: true },
+    });
+    if (!plan) throw new NotFoundException(`Plan de estudio ${planEstudioId} no encontrado`);
+
+    const tieneScope = await this.scope.tieneScopeCarrera(usuarioId, rolNombre, plan.carreraId);
+    if (!tieneScope) throw new ForbiddenException();
+
+    return {
+      planEstudioId: plan.id,
+      requierePPS: plan.requierePPS ?? null,
+      requierePI: plan.requierePI ?? null,
+      porcentajeMinFormacion: plan.porcentajeMinFormacion ?? null,
+    };
   }
 
   // ── Vinculaciones para R-07 (cross-carrera / cross-facultad) ─────────────
@@ -818,6 +992,83 @@ export class ConsultasAcademicasService {
     };
   }
 
+  // ── Materias con programas de asignatura (R-11, R-13, R-14) ─────────────
+
+  /**
+   * Devuelve todas las materias de un plan junto con el estado de su programa de
+   * asignatura (si existe). Usado por R-11, R-13 y R-14 para evaluar consistencia
+   * de programas, formación práctica y horas.
+   *
+   * La autorización es idéntica a obtenerMateriasDePlan.
+   * formacionPracticaJson se devuelve como string raw para que R-14 lo parsee.
+   */
+  async obtenerMateriasProgramasDePlan(
+    planEstudioId: string,
+    usuarioId: string,
+    rolNombre: string,
+  ): Promise<MateriaProgramaAut[]> {
+    this.checkRol(rolNombre);
+
+    const plan = await this.prisma.planEstudio.findUnique({
+      where: { id: planEstudioId },
+      select: { carreraId: true },
+    });
+    if (!plan) throw new NotFoundException(`Plan ${planEstudioId} no encontrado`);
+
+    const tieneScope = await this.scope.tieneScopeCarrera(usuarioId, rolNombre, plan.carreraId);
+    if (!tieneScope) throw new ForbiddenException();
+
+    const materias = await this.prisma.materia.findMany({
+      where: { planEstudioId },
+      select: {
+        id: true, codigo: true, nombre: true,
+        tipoAsignatura: true, cargaHorariaTotal: true,
+        programa: {
+          select: {
+            estadoPrograma: true, fechaAprobacion: true, anioVigencia: true,
+            estadoS1: true, estadoS2: true, estadoS3: true,
+            estadoS4: true, estadoS5: true, estadoS6: true,
+            formacionPracticaJson: true,
+          },
+        },
+      },
+      orderBy: [{ anio: 'asc' }, { cuatrimestre: 'asc' }, { nombre: 'asc' }],
+    });
+
+    return materias.map((m) => {
+      const p = m.programa;
+      const secciones = p
+        ? {
+            s1: p.estadoS1 as EstadoSeccion,
+            s2: p.estadoS2 as EstadoSeccion,
+            s3: p.estadoS3 as EstadoSeccion,
+            s4: p.estadoS4 as EstadoSeccion,
+            s5: p.estadoS5 as EstadoSeccion,
+            s6: p.estadoS6 as EstadoSeccion,
+          }
+        : null;
+      const seccionesCompletas = p
+        ? [p.estadoS1, p.estadoS2, p.estadoS3, p.estadoS4, p.estadoS5, p.estadoS6].filter(
+            (s) => s === 'COMPLETO',
+          ).length
+        : 0;
+      return {
+        materiaId: m.id,
+        materiaNombre: m.nombre,
+        materiaCodigo: m.codigo,
+        tipoAsignatura: m.tipoAsignatura,
+        cargaHorariaTotal: m.cargaHorariaTotal,
+        tienePrograma: p !== null,
+        estadoPrograma: p?.estadoPrograma ?? null,
+        secciones,
+        seccionesCompletas,
+        fechaAprobacion: p?.fechaAprobacion ?? null,
+        anioVigencia: p?.anioVigencia ?? null,
+        formacionPracticaJson: p?.formacionPracticaJson ?? null,
+      };
+    });
+  }
+
   // ── Configuraciones ───────────────────────────────────────────────────────
 
   /**
@@ -840,5 +1091,113 @@ export class ConsultasAcademicasService {
       },
     });
     return config ?? null;
+  }
+
+  // ── R-04: cargos sin actividad curricular ─────────────────────────────────
+
+  /**
+   * Devuelve los docentes del plantel del plan con sus cargos vigentes al fechaCalculo.
+   *
+   * Vigencia K-D6: fechaInicio <= fechaCalculo AND (fechaFin IS NULL OR fechaFin > fechaCalculo).
+   * Para cada cargo vigente indica si tiene actividad curricular en el plan (≥1 VC APROBADA
+   * con cargoDocenteId = ese cargo y planEstudioId = plan evaluado).
+   *
+   * Solo se incluyen docentes con al menos una VinculacionCatedra APROBADA en el plan.
+   */
+  async obtenerCargosParaR04(
+    planEstudioId: string,
+    fechaCalculo: Date,
+    usuarioId: string,
+    rolNombre: string,
+  ): Promise<CargosParaR04> {
+    this.checkRol(rolNombre);
+
+    const plan = await this.prisma.planEstudio.findUnique({
+      where: { id: planEstudioId },
+      select: { carreraId: true },
+    });
+    if (!plan) throw new NotFoundException(`Plan ${planEstudioId} no encontrado`);
+
+    const { carreraId } = plan;
+
+    const tieneScope = await this.scope.tieneScopeCarrera(usuarioId, rolNombre, carreraId);
+    if (!tieneScope) throw new ForbiddenException();
+
+    const vincsPlan = await this.prisma.vinculacionCatedra.findMany({
+      where: { planEstudioId, estado: 'APROBADA' },
+      select: { docenteId: true },
+      distinct: ['docenteId'],
+    });
+
+    const docenteIds = vincsPlan.map((v) => v.docenteId);
+
+    if (docenteIds.length === 0) {
+      return { docentes: [], planEstudioId, carreraId };
+    }
+
+    const [cargosRaw, docentesRaw] = await Promise.all([
+      this.prisma.cargoDocente.findMany({
+        where: {
+          docenteId: { in: docenteIds },
+          fechaInicio: { lte: fechaCalculo },
+          OR: [{ fechaFin: null }, { fechaFin: { gt: fechaCalculo } }],
+        },
+        select: {
+          id: true,
+          docenteId: true,
+          designacion: true,
+          fechaInicio: true,
+          fechaFin: true,
+          verificado: true,
+          cargo: { select: { nombre: true } },
+          vinculacionesCatedra: {
+            where: { estado: 'APROBADA', planEstudioId },
+            select: { id: true },
+            take: 1,
+          },
+        },
+      }),
+      this.prisma.docente.findMany({
+        where: { id: { in: docenteIds } },
+        select: {
+          id: true,
+          nombre: true,
+          apellido: true,
+          relevamientoCargosCompleto: true,
+        },
+      }),
+    ]);
+
+    const docenteMap = new Map(docentesRaw.map((d) => [d.id, d]));
+    const cargosMap = new Map<string, (typeof cargosRaw)[number][]>();
+    for (const c of cargosRaw) {
+      const arr = cargosMap.get(c.docenteId) ?? [];
+      arr.push(c);
+      cargosMap.set(c.docenteId, arr);
+    }
+
+    const docentes: DocenteConCargosR04[] = docenteIds
+      .map((id) => {
+        const d = docenteMap.get(id);
+        if (!d) return null;
+        return {
+          docenteId: id,
+          nombre: d.nombre,
+          apellido: d.apellido,
+          relevamientoCargosCompleto: d.relevamientoCargosCompleto,
+          cargosVigentes: (cargosMap.get(id) ?? []).map((c) => ({
+            cargoDocenteId: c.id,
+            cargoNombre: c.cargo.nombre,
+            designacion: c.designacion,
+            fechaInicio: c.fechaInicio,
+            fechaFin: c.fechaFin,
+            verificado: c.verificado,
+            tieneActividadEnPlan: c.vinculacionesCatedra.length > 0,
+          })),
+        };
+      })
+      .filter((d): d is DocenteConCargosR04 => d !== null);
+
+    return { docentes, planEstudioId, carreraId };
   }
 }

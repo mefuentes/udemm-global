@@ -4,14 +4,19 @@ import {
   Get,
   HttpCode,
   Param,
+  ParseIntPipe,
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Req,
+  Res,
+  StreamableFile,
   UseGuards,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -26,6 +31,12 @@ import { DesignarResponsableDto } from './dto/designar-responsable.dto';
 import { EvaluarIndicadorDto } from './dto/evaluar-indicador.dto';
 import { TablroPlanService } from './tablero/tablero-plan.service';
 import { TablroCarreraService } from './tablero/tablero-carrera.service';
+import { TablroFacultadService } from './tablero/tablero-facultad.service';
+import { AnalisisService } from './analisis/analisis.service';
+import { AlertasService } from './alertas/alertas.service';
+import { ExportacionesService } from './exportaciones/exportaciones.service';
+import { FichaDocenteService } from './ficha-docente/ficha-docente.service';
+import { ReglasCatalogoService } from './reglas/reglas-catalogo.service';
 
 const ROLES_MODAUT = [
   'ADMINISTRADOR_SISTEMA',
@@ -59,6 +70,12 @@ export class AutoevaluacionController {
     private readonly registro: RegistroIndicadores,
     private readonly tablero: TablroPlanService,
     private readonly tableroCarrera: TablroCarreraService,
+    private readonly tableroFacultad: TablroFacultadService,
+    private readonly analisis: AnalisisService,
+    private readonly alertas: AlertasService,
+    private readonly exportaciones: ExportacionesService,
+    private readonly fichaDocente: FichaDocenteService,
+    private readonly reglasCatalogo: ReglasCatalogoService,
   ) {}
 
   // ── Configuración por Facultad ──────────────────────────────────────────────
@@ -198,6 +215,280 @@ export class AutoevaluacionController {
     @Req() req: any,
   ) {
     return this.tableroCarrera.consultarCarrera(carreraId, req.user.id, req.user.rol.nombre);
+  }
+
+  // ── Tablero por facultad ────────────────────────────────────────────────────
+
+  /**
+   * Devuelve el tablero de 5 bloques para la facultad indicada:
+   * Composición, Formación, Investigación y vinculación, Dedicaciones, Carga académica.
+   *
+   * Acceso restringido a roles con visión institucional (no DIRECTOR_CARRERA).
+   * facultadId se valida como UUID v4 en el path.
+   * usuarioId y rolNombre provienen exclusivamente del token JWT.
+   */
+  @Post('tablero/facultad/:facultadId')
+  @HttpCode(200)
+  @Roles('ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA', 'RECTORADO', 'DECANO')
+  async tablroFacultad(
+    @Param('facultadId', new ParseUUIDPipe({ version: '4' })) facultadId: string,
+    @Req() req: any,
+  ) {
+    return this.tableroFacultad.consultarFacultad(facultadId, req.user.id, req.user.rol.nombre);
+  }
+
+  // ── Análisis explícito ──────────────────────────────────────────────────────
+
+  @Post('analisis/facultad/:facultadId')
+  @HttpCode(200)
+  @Roles('ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA', 'RECTORADO', 'DECANO')
+  async ejecutarAnalisisFacultad(
+    @Param('facultadId', new ParseUUIDPipe({ version: '4' })) facultadId: string,
+    @Req() req: any,
+  ) {
+    return this.analisis.ejecutarFacultad(facultadId, req.user.id, req.user.rol.nombre);
+  }
+
+  @Post('analisis/carrera/:carreraId')
+  @HttpCode(200)
+  @Roles(...ROLES_MODAUT)
+  async ejecutarAnalisisCarrera(
+    @Param('carreraId', new ParseUUIDPipe({ version: '4' })) carreraId: string,
+    @Req() req: any,
+  ) {
+    return this.analisis.ejecutarCarrera(carreraId, req.user.id, req.user.rol.nombre);
+  }
+
+  @Post('analisis/plan/:planEstudioId')
+  @HttpCode(200)
+  @Roles(...ROLES_MODAUT)
+  async ejecutarAnalisisPlan(
+    @Param('planEstudioId', new ParseUUIDPipe({ version: '4' })) planEstudioId: string,
+    @Req() req: any,
+  ) {
+    return this.analisis.ejecutarPlan(planEstudioId, req.user.id, req.user.rol.nombre);
+  }
+
+  @Get('analisis/facultad/:facultadId/historial')
+  @Roles('ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA', 'RECTORADO', 'DECANO')
+  historialAnalisisFacultad(
+    @Param('facultadId', new ParseUUIDPipe({ version: '4' })) facultadId: string,
+    @Query('pagina',    new ParseIntPipe({ optional: true })) pagina    = 1,
+    @Query('porPagina', new ParseIntPipe({ optional: true })) porPagina = 10,
+    @Req() req: any,
+  ) {
+    return this.analisis.obtenerHistorialFacultad(facultadId, req.user.rol.nombre, pagina, porPagina);
+  }
+
+  @Get('analisis/carrera/:carreraId/historial')
+  @Roles(...ROLES_MODAUT)
+  historialAnalisisCarrera(
+    @Param('carreraId', new ParseUUIDPipe({ version: '4' })) carreraId: string,
+    @Query('pagina',    new ParseIntPipe({ optional: true })) pagina    = 1,
+    @Query('porPagina', new ParseIntPipe({ optional: true })) porPagina = 10,
+    @Req() req: any,
+  ) {
+    return this.analisis.obtenerHistorialCarrera(carreraId, req.user.rol.nombre, pagina, porPagina);
+  }
+
+  @Get('analisis/plan/:planEstudioId/historial')
+  @Roles(...ROLES_MODAUT)
+  historialAnalisisPlan(
+    @Param('planEstudioId', new ParseUUIDPipe({ version: '4' })) planEstudioId: string,
+    @Query('pagina',    new ParseIntPipe({ optional: true })) pagina    = 1,
+    @Query('porPagina', new ParseIntPipe({ optional: true })) porPagina = 10,
+    @Req() req: any,
+  ) {
+    return this.analisis.obtenerHistorialPlan(planEstudioId, req.user.rol.nombre, pagina, porPagina);
+  }
+
+  @Get('analisis/ejecucion/:ejecucionId')
+  @Roles(...ROLES_MODAUT)
+  obtenerDetalleEjecucion(
+    @Param('ejecucionId', new ParseUUIDPipe({ version: '4' })) ejecucionId: string,
+    @Req() req: any,
+  ) {
+    return this.analisis.obtenerDetalle(ejecucionId, req.user.rol.nombre, req.user.id);
+  }
+
+  // ── Bandeja global de alertas ────────────────────────────────────────────────
+
+  @Get('alertas')
+  @Roles(...ROLES_MODAUT)
+  obtenerBandejaAlertas(
+    @Req() req: any,
+    @Query('ambito')    ambito?: string,
+    @Query('prioridad') prioridad?: string,
+    @Query('regla')     regla?: string,
+    @Query('pagina',    new ParseIntPipe({ optional: true })) pagina    = 1,
+    @Query('porPagina', new ParseIntPipe({ optional: true })) porPagina = 20,
+  ) {
+    return this.alertas.obtenerBandeja(
+      req.user.id,
+      req.user.rol.nombre,
+      pagina,
+      porPagina,
+      { ambito: ambito as any, prioridad: prioridad as any, regla },
+    );
+  }
+
+  // ── Exportaciones PDF / Excel ────────────────────────────────────────────────
+
+  @Get('exportar/ejecucion/:ejecucionId/pdf')
+  @Roles(...ROLES_MODAUT)
+  async exportarEjecucionPdf(
+    @Param('ejecucionId', new ParseUUIDPipe({ version: '4' })) ejecucionId: string,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { buffer, filename, mime } = await this.exportaciones.exportarPorEjecucion(
+      ejecucionId, 'pdf', req.user.rol.nombre, req.user.id,
+    );
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return new StreamableFile(buffer);
+  }
+
+  @Get('exportar/ejecucion/:ejecucionId/xlsx')
+  @Roles(...ROLES_MODAUT)
+  async exportarEjecucionXlsx(
+    @Param('ejecucionId', new ParseUUIDPipe({ version: '4' })) ejecucionId: string,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { buffer, filename, mime } = await this.exportaciones.exportarPorEjecucion(
+      ejecucionId, 'xlsx', req.user.rol.nombre, req.user.id,
+    );
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return new StreamableFile(buffer);
+  }
+
+  @Get('exportar/facultad/:facultadId/pdf')
+  @Roles(...ROLES_MODAUT)
+  async exportarFacultadPdf(
+    @Param('facultadId') facultadId: string,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { buffer, filename, mime } = await this.exportaciones.exportarPorEntidad(
+      'FACULTAD', facultadId, 'pdf', req.user.rol.nombre, req.user.id,
+    );
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return new StreamableFile(buffer);
+  }
+
+  @Get('exportar/facultad/:facultadId/xlsx')
+  @Roles(...ROLES_MODAUT)
+  async exportarFacultadXlsx(
+    @Param('facultadId') facultadId: string,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { buffer, filename, mime } = await this.exportaciones.exportarPorEntidad(
+      'FACULTAD', facultadId, 'xlsx', req.user.rol.nombre, req.user.id,
+    );
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return new StreamableFile(buffer);
+  }
+
+  @Get('exportar/carrera/:carreraId/pdf')
+  @Roles(...ROLES_MODAUT)
+  async exportarCarreraPdf(
+    @Param('carreraId') carreraId: string,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { buffer, filename, mime } = await this.exportaciones.exportarPorEntidad(
+      'CARRERA', carreraId, 'pdf', req.user.rol.nombre, req.user.id,
+    );
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return new StreamableFile(buffer);
+  }
+
+  @Get('exportar/carrera/:carreraId/xlsx')
+  @Roles(...ROLES_MODAUT)
+  async exportarCarreraXlsx(
+    @Param('carreraId') carreraId: string,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { buffer, filename, mime } = await this.exportaciones.exportarPorEntidad(
+      'CARRERA', carreraId, 'xlsx', req.user.rol.nombre, req.user.id,
+    );
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return new StreamableFile(buffer);
+  }
+
+  @Get('exportar/plan/:planEstudioId/pdf')
+  @Roles(...ROLES_MODAUT)
+  async exportarPlanPdf(
+    @Param('planEstudioId') planEstudioId: string,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { buffer, filename, mime } = await this.exportaciones.exportarPorEntidad(
+      'PLAN', planEstudioId, 'pdf', req.user.rol.nombre, req.user.id,
+    );
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return new StreamableFile(buffer);
+  }
+
+  @Get('exportar/plan/:planEstudioId/xlsx')
+  @Roles(...ROLES_MODAUT)
+  async exportarPlanXlsx(
+    @Param('planEstudioId') planEstudioId: string,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { buffer, filename, mime } = await this.exportaciones.exportarPorEntidad(
+      'PLAN', planEstudioId, 'xlsx', req.user.rol.nombre, req.user.id,
+    );
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return new StreamableFile(buffer);
+  }
+
+  // ── Ficha del docente ────────────────────────────────────────────────────────
+
+  @Get('docentes/:docenteId/ficha')
+  @Roles(...ROLES_MODAUT)
+  obtenerFichaDocente(
+    @Param('docenteId', new ParseUUIDPipe({ version: '4' })) docenteId: string,
+    @Req() req: any,
+  ) {
+    return this.fichaDocente.obtenerFicha(docenteId, req.user.id, req.user.rol.nombre);
+  }
+
+  // ── Catálogo de reglas ───────────────────────────────────────────────────────
+
+  /**
+   * Lista el catálogo completo de reglas de validación MOD-AUT con metadatos funcionales:
+   * código, nombre, descripción, tipo, severidad, alcance, grupo de análisis,
+   * estado de implementación y parámetros asociados (configurables y no configurables).
+   * No ejecuta evaluadores ni devuelve datos académicos.
+   */
+  @Get('reglas')
+  @Roles(...ROLES_MODAUT)
+  listarReglas() {
+    return this.reglasCatalogo.listarCatalogo();
+  }
+
+  /**
+   * Devuelve las Facultades accesibles al usuario con su configuración de MOD-AUT
+   * (P-01 tope semanal, P-02 baja dedicación, P-03 máximo materias).
+   * null en config indica que la Facultad aún no fue configurada.
+   * DIRECTOR_CARRERA ve las facultades de sus carreras; DECANO ve la suya.
+   */
+  @Get('reglas/config/facultades')
+  @Roles(...ROLES_MODAUT)
+  obtenerFacultadesConConfig(@Req() req: any) {
+    return this.reglasCatalogo.obtenerFacultadesConConfig(req.user.id, req.user.rol.nombre);
   }
 
   // ── Indicadores ─────────────────────────────────────────────────────────────

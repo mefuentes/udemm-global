@@ -6,7 +6,7 @@ import { useNotificaciones } from '@/lib/notificaciones-context';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 
 // ── Iconos SVG ──────────────────────────────────────────────────────────────
 
@@ -124,7 +124,12 @@ export function Sidebar() {
   const pathname = usePathname();
   const { isOpen, setIsOpen } = useSidebar();
   const { contadorNovedades } = useNotificaciones();
-  const [expandedMenu, setExpandedMenu] = useState<string | null>('docentes');
+  const [expandedMenu, setExpandedMenu] = useState<string | null>(
+    pathname.startsWith('/autoevaluacion') ? 'Autoevaluación' : 'docentes',
+  );
+  useEffect(() => {
+    if (pathname.startsWith('/autoevaluacion')) setExpandedMenu('Autoevaluación');
+  }, [pathname]);
 
   if (!usuario || pathname === '/login') return null;
 
@@ -161,7 +166,11 @@ export function Sidebar() {
     const ITEM_AUTOEVALUACION: MenuItemType = {
       label: 'Autoevaluación',
       icon: <IcAutoeval />,
-      href: '/autoevaluacion',
+      submenu: [
+        { label: 'Inicio',               href: '/autoevaluacion'         },
+        { label: 'Bandeja de alertas',   href: '/autoevaluacion/alertas' },
+        { label: 'Reglas de validación', href: '/autoevaluacion/reglas'  },
+      ],
     };
 
     if (usuario.rol?.nombre === 'DOCENTE') {

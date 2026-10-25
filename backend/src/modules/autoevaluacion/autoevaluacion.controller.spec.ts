@@ -19,6 +19,12 @@ import { RegistroIndicadores } from './indicadores/indicadores.registry';
 import type { DefinicionIndicador } from './indicadores/indicadores.registry';
 import { TablroPlanService } from './tablero/tablero-plan.service';
 import { TablroCarreraService } from './tablero/tablero-carrera.service';
+import { TablroFacultadService } from './tablero/tablero-facultad.service';
+import { AnalisisService } from './analisis/analisis.service';
+import { AlertasService } from './alertas/alertas.service';
+import { ExportacionesService } from './exportaciones/exportaciones.service';
+import { FichaDocenteService } from './ficha-docente/ficha-docente.service';
+import { ReglasCatalogoService } from './reglas/reglas-catalogo.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { EstadoCalculo } from './types/estado-calculo.types';
@@ -65,7 +71,9 @@ const defImplementado: DefinicionIndicador = {
   tipo: 'ALERTA',
   severidad: 'ALTA',
   alcance: 'PLAN',
+  grupo: 'CRUZADAS',
   estadoImplementacion: 'IMPLEMENTADO',
+  parametros: [],
   // evaluador intencional: debe ser excluido de la respuesta HTTP
   evaluador: { evaluar: jest.fn() } as any,
 };
@@ -77,8 +85,10 @@ const defNoImpl: DefinicionIndicador = {
   tipo: 'ALERTA',
   severidad: 'MEDIA',
   alcance: 'PLAN',
+  grupo: 'PLANES',
   estadoImplementacion: 'NO_IMPLEMENTADO',
   motivoPendiente: 'D-12: calcAvancePrograma pendiente de definición.',
+  parametros: [],
 };
 
 const definiciones: DefinicionIndicador[] = [defImplementado, defNoImpl];
@@ -127,6 +137,23 @@ async function crearApp(overrides: {
       { provide: RegistroIndicadores,   useValue: { listar } },
       { provide: TablroPlanService,     useValue: { consultarPlan: jest.fn() } },
       { provide: TablroCarreraService,  useValue: { consultarCarrera: jest.fn() } },
+      { provide: TablroFacultadService, useValue: { consultarFacultad: jest.fn() } },
+      { provide: AnalisisService, useValue: {
+        ejecutarFacultad: jest.fn(),
+        ejecutarCarrera: jest.fn(),
+        ejecutarPlan: jest.fn(),
+        obtenerHistorialFacultad: jest.fn(),
+        obtenerHistorialCarrera: jest.fn(),
+        obtenerHistorialPlan: jest.fn(),
+        obtenerDetalle: jest.fn(),
+      } },
+      { provide: AlertasService, useValue: { obtenerBandeja: jest.fn().mockResolvedValue({ total: 0, pagina: 1, porPagina: 20, tieneAnalisis: false, items: [] }) } },
+      { provide: ExportacionesService, useValue: { exportarPorEjecucion: jest.fn(), exportarPorEntidad: jest.fn() } },
+      { provide: FichaDocenteService, useValue: { obtenerFicha: jest.fn().mockResolvedValue({ identificacion: {}, completitud: {} }) } },
+      { provide: ReglasCatalogoService, useValue: {
+        listarCatalogo: jest.fn().mockReturnValue([]),
+        obtenerFacultadesConConfig: jest.fn().mockResolvedValue([]),
+      } },
     ],
   })
     .overrideGuard(JwtAuthGuard).useClass(MockJwtGuard)

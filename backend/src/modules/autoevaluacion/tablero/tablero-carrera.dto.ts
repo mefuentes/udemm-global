@@ -1,6 +1,37 @@
 import type { EstadoCalculo } from '../types/estado-calculo.types';
+import type { DocenteAlertaR10 } from '../indicadores/r10.evaluador';
+import type { DocenteAlertaR12, DocenteNoDeterminableR12 } from '../indicadores/r12.evaluador';
+export type { ItemFichaR12, DocenteAlertaR12, DocenteNoDeterminableR12 } from '../indicadores/r12.evaluador';
+export type { DocenteAlertaR10 } from '../indicadores/r10.evaluador';
+export type { DocenteAlertaR15, DocenteDistribucionR15 } from '../indicadores/r15.evaluador';
 
-// ── IP-04 ─────────────────────────────────────────────────────────────────────
+// ── R-12 ─────────────────────────────────────────────────────────────────────
+
+/**
+ * FSD MOD-AUT §3.1, R-12 — Campos obligatorios faltantes en la ficha docente.
+ *
+ * Universo: docentes activos con al menos una VinculacionCatedra APROBADA en la carrera.
+ * Ítems evaluados: personales (fechaNacimiento, sexo), formacionGrado (tituloGrado),
+ * areaDesempeno (areaDisciplinarId). El ítem docencia se delega a R-04.
+ *
+ * Estados:
+ *   NO_APLICA:  sin vinculaciones APROBADAS activas en el alcance.
+ *   PARCIAL:    alcanceFacultad=false (DIRECTOR_CARRERA) o docentes cross-facultad presentes.
+ *   CALCULADO:  evaluación completa sin docentes cross-facultad.
+ */
+export interface ResultadoR12 {
+  carreraId: string;
+  facultadId: string;
+  totalDocentes: number;
+  totalIncompletos: number;
+  incompletos: DocenteAlertaR12[];
+  totalNoDeterminables: number;
+  noDeterminables: DocenteNoDeterminableR12[];
+  alcanceFacultad: boolean;
+  estadoCalculo: EstadoCalculo;
+}
+
+// ── IP-04 / R-15 ──────────────────────────────────────────────────────────────
 
 export interface DocenteDistribucionIP04 {
   docenteId: string;
@@ -8,11 +39,22 @@ export interface DocenteDistribucionIP04 {
   nMaterias: number;
 }
 
+export interface DocenteAlertaIP04 {
+  docenteId: string;
+  nombre: string;
+  nMaterias: number;
+  /** nMaterias - limite */
+  exceso: number;
+}
+
 /**
- * FSD §7, IP-04 — Materias por docente.
+ * FSD §7, IP-04 / R-15 — Materias por docente (carrera seleccionada).
  *
  * Unidad de conteo: distinct materiaId por docenteId con estado APROBADA y docente.activo=true.
+ * Siempre limitado a la carrera solicitada (sin alcance cross-carrera).
  * Valor principal: mediana. Complementarios: promedio y máximo.
+ * limite: p03MaxMat; null si config no existe (estadoCalculo → NO_DETERMINABLE).
+ * enAlerta: docentes con nMaterias > limite (alertas informativas de sobreasignación local).
  * Null cuando totalDocentes = 0 (estadoCalculo → NO_APLICA).
  */
 export interface ResultadoIP04 {
@@ -21,6 +63,31 @@ export interface ResultadoIP04 {
   promedio: number | null;
   maximo: number | null;
   distribucion: DocenteDistribucionIP04[];
+  /** p03MaxMat configurado; null si config no existe. */
+  limite: number | null;
+  totalEnAlerta: number;
+  enAlerta: DocenteAlertaIP04[];
+  estadoCalculo: EstadoCalculo;
+}
+
+// ── R-10 ─────────────────────────────────────────────────────────────────────
+
+/**
+ * FSD §5.3, R-10 — Docentes con baja dedicación horaria.
+ *
+ * Umbral: p02BajaH de AutoevaluacionConfigFacultad; 20h semanales si no configurado.
+ * Alertas INFORMATIVAS: no implican infracción directa.
+ * Universo: docentes activos con vinculaciones APROBADAS en el scope.
+ * Alcance según rol: facultad completa (alcanceFacultad=true) o solo carrera (PARCIAL).
+ */
+export interface ResultadoR10 {
+  carreraId: string;
+  umbral: number;
+  totalDocentes: number;
+  totalEnAlerta: number;
+  totalInciertos: number;
+  enAlerta: DocenteAlertaR10[];
+  alcanceFacultad: boolean;
   estadoCalculo: EstadoCalculo;
 }
 
@@ -126,10 +193,32 @@ export interface ResultadoIP09 {
 }
 
 /**
+ * FSD MOD-AUT §5, IP-10 — Consistencia del plantel docente.
+ *
+ * Fórmula: max(0, 100 − 25×A − 10×M).
+ *   A = alertas ALTA penalizables: R-03 (tope horario) + R-04 (sin actividad curricular,
+ *       excluyendo docentes sin ningún cargo con actividad en el plan — excepción C4).
+ *   M = alertas MEDIA penalizables: R-07 (sobreasignados).
+ */
+export interface ResultadoIP10 {
+  carreraId: string;
+  /** max(0, 100 − 25×A − 10×M). 100 cuando estadoCalculo = NO_APLICA. */
+  puntaje: number;
+  /** Total de alertas ALTA penalizables (R-03 + R-04 no exceptuadas por C4). */
+  componenteA: number;
+  /** Total de alertas MEDIA penalizables (R-07 sobreasignados). */
+  componenteM: number;
+  alertasR03: number;
+  alertasR04Penalizables: number;
+  alertasR07: number;
+  estadoCalculo: EstadoCalculo;
+}
+
+/**
  * Respuesta del endpoint POST /autoevaluacion/tablero/carrera/:carreraId.
  *
  * estadoGeneralCalculo refleja el estado más restrictivo entre IP-01, IP-02,
- * IP-03, IP-04, IP-08, IP-09 e IP-13.
+ * IP-03, IP-04, IP-08, IP-09, IP-10, IP-13, R-10 y R-12.
  */
 export interface TablroCarreraResponseDto {
   carreraId: string;
@@ -141,6 +230,9 @@ export interface TablroCarreraResponseDto {
   ip04: ResultadoIP04;
   ip08: ResultadoIP08;
   ip09: ResultadoIP09;
+  ip10: ResultadoIP10;
   ip13: ResultadoIP13;
+  r10: ResultadoR10;
+  r12: ResultadoR12;
   estadoGeneralCalculo: EstadoCalculo;
 }

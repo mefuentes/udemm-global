@@ -1,14 +1,19 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { EstadoCalculo } from '../types/estado-calculo.types';
 import { IndicadoresService } from '../indicadores/indicadores.service';
+import type { ResultadoR02 } from '../indicadores/r02.evaluador';
 import type { ResultadoR08 } from '../indicadores/r08.evaluador';
 import type { EvaluacionDimension, ResultadoR09 } from '../indicadores/r09.evaluador';
+import type { ResultadoR11 } from '../indicadores/r11.evaluador';
+import type { ResultadoR13 } from '../indicadores/r13.evaluador';
+import type { ResultadoR14 } from '../indicadores/r14.evaluador';
 import type { DatoFaltante, ResultadoIndicador } from '../indicadores/indicadores.types';
 import type {
   EvaluacionBloqueIPL05,
   ResultadoIPL01,
   ResultadoIPL02,
   ResultadoIPL03,
+  ResultadoIPL04,
   ResultadoIPL05,
   TablroPlanResponseDto,
 } from './tablero-plan.dto';
@@ -55,19 +60,35 @@ export class TablroPlanService {
     const fechaEvaluacion = new Date();
     const contexto = { usuarioId, rolNombre, planEstudioId, fechaEvaluacion };
 
-    const [r08settled, r09settled] = await Promise.allSettled([
-      this.indicadores.evaluar({ codigoIndicador: 'R-08', contexto }),
-      this.indicadores.evaluar({ codigoIndicador: 'R-09', contexto }),
-    ]);
+    const [r02settled, r08settled, r09settled, r11settled, r13settled, r14settled] =
+      await Promise.allSettled([
+        this.indicadores.evaluar({ codigoIndicador: 'R-02', contexto }),
+        this.indicadores.evaluar({ codigoIndicador: 'R-08', contexto }),
+        this.indicadores.evaluar({ codigoIndicador: 'R-09', contexto }),
+        this.indicadores.evaluar({ codigoIndicador: 'R-11', contexto }),
+        this.indicadores.evaluar({ codigoIndicador: 'R-13', contexto }),
+        this.indicadores.evaluar({ codigoIndicador: 'R-14', contexto }),
+      ]);
 
     // Re-lanzar errores de autorización inmediatamente antes de derivar indicadores.
-    for (const settled of [r08settled, r09settled]) {
+    for (const settled of [
+      r02settled,
+      r08settled,
+      r09settled,
+      r11settled,
+      r13settled,
+      r14settled,
+    ]) {
       if (settled.status === 'rejected') {
         const err = settled.reason as Error;
         if (err instanceof ForbiddenException || err instanceof NotFoundException) throw err;
       }
     }
 
+    const r02 =
+      r02settled.status === 'fulfilled'
+        ? (r02settled.value as ResultadoIndicador<ResultadoR02>)
+        : null;
     const r08 =
       r08settled.status === 'fulfilled'
         ? (r08settled.value as ResultadoIndicador<ResultadoR08>)
@@ -76,23 +97,47 @@ export class TablroPlanService {
       r09settled.status === 'fulfilled'
         ? (r09settled.value as ResultadoIndicador<ResultadoR09>)
         : null;
+    const r11 =
+      r11settled.status === 'fulfilled'
+        ? (r11settled.value as ResultadoIndicador<ResultadoR11>)
+        : null;
+    const r13 =
+      r13settled.status === 'fulfilled'
+        ? (r13settled.value as ResultadoIndicador<ResultadoR13>)
+        : null;
+    const r14 =
+      r14settled.status === 'fulfilled'
+        ? (r14settled.value as ResultadoIndicador<ResultadoR14>)
+        : null;
 
     const datosFaltantes: DatoFaltante[] = [
+      ...(r02?.datosFaltantes ?? []),
       ...(r08?.datosFaltantes ?? []),
       ...(r09?.datosFaltantes ?? []),
+      ...(r11?.datosFaltantes ?? []),
+      ...(r13?.datosFaltantes ?? []),
+      ...(r14?.datosFaltantes ?? []),
     ];
     const advertencias: string[] = [];
 
     const ipl01 = this.derivarIPL01(r09, advertencias);
     const ipl02 = this.derivarIPL02(r09, advertencias);
     const ipl03 = this.derivarIPL03(r08);
+    const ipl04 = this.derivarIPL04(r02);
     const ipl05 = this.derivarIPL05(r09, advertencias);
+    const r11Result = this.derivarR11(r11);
+    const r13Result = this.derivarR13(r13);
+    const r14Result = this.derivarR14(r14);
 
     const estadoGeneralCalculo = estadoMasRestrictivo(
       ipl01.estadoCalculo,
       ipl02.estadoCalculo,
       ipl03.estadoCalculo,
+      ipl04.estadoCalculo,
       ipl05.estadoCalculo,
+      r11Result.estadoCalculo,
+      r13Result.estadoCalculo,
+      r14Result.estadoCalculo,
     );
 
     return {
@@ -101,7 +146,11 @@ export class TablroPlanService {
       ipl01,
       ipl02,
       ipl03,
+      ipl04,
       ipl05,
+      r11: r11Result,
+      r13: r13Result,
+      r14: r14Result,
       estadoGeneralCalculo,
       datosFaltantes,
       advertencias,
@@ -189,6 +238,76 @@ export class TablroPlanService {
       totalMaterias: r08.valor.totalMaterias,
       estadoCalculo: r08.estadoCalculo ?? EstadoCalculo.NO_DETERMINABLE,
     };
+  }
+
+  private derivarIPL04(r02: ResultadoIndicador<ResultadoR02> | null): ResultadoIPL04 {
+    if (!r02?.valor) {
+      return {
+        paresConAlerta: 0,
+        paresInciertos: 0,
+        totalMaterias: 0,
+        estadoCalculo: EstadoCalculo.NO_DETERMINABLE,
+      };
+    }
+    return {
+      paresConAlerta: r02.valor.paresConAlerta.length,
+      paresInciertos: r02.valor.paresInciertos.length,
+      totalMaterias: r02.valor.totalMaterias,
+      estadoCalculo: r02.estadoCalculo ?? EstadoCalculo.NO_DETERMINABLE,
+    };
+  }
+
+  private derivarR11(r11: ResultadoIndicador<ResultadoR11> | null): ResultadoR11 {
+    if (!r11?.valor) {
+      return {
+        planEstudioId: '',
+        totalMaterias: 0,
+        totalConPrograma: 0,
+        totalSinPrograma: 0,
+        totalInconsistencias: 0,
+        totalAlta: 0,
+        totalMedia: 0,
+        inconsistencias: [],
+        sinPrograma: [],
+        estadoCalculo: EstadoCalculo.NO_DETERMINABLE,
+      };
+    }
+    return r11.valor;
+  }
+
+  private derivarR13(r13: ResultadoIndicador<ResultadoR13> | null): ResultadoR13 {
+    if (!r13?.valor) {
+      return {
+        planEstudioId: '',
+        totalMaterias: 0,
+        porTipo: { OBLIGATORIA: 0, ELECTIVA: 0, PPS: 0, PI: 0, OTRO: 0 },
+        tienePPS: false,
+        tienePI: false,
+        horasPPS: null,
+        horasPI: null,
+        materiasPPS: [],
+        materiasPI: [],
+        configuracionPlan: { requierePPS: null, requierePI: null, porcentajeMinFormacion: null },
+        violacionesFormacion: [],
+        estadoCalculo: EstadoCalculo.NO_DETERMINABLE,
+      };
+    }
+    return r13.valor;
+  }
+
+  private derivarR14(r14: ResultadoIndicador<ResultadoR14> | null): ResultadoR14 {
+    if (!r14?.valor) {
+      return {
+        planEstudioId: '',
+        totalMaterias: 0,
+        totalEvaluadas: 0,
+        totalSinDatos: 0,
+        totalConAlerta: 0,
+        enAlerta: [],
+        estadoCalculo: EstadoCalculo.NO_DETERMINABLE,
+      };
+    }
+    return r14.valor;
   }
 
   private derivarIPL05(

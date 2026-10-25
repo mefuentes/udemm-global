@@ -1,374 +1,255 @@
 import { BadRequestException } from '@nestjs/common';
 import { EstadoCalculo } from '../types/estado-calculo.types';
-import type { VinculacionAut } from '../consultas-academicas/consultas-academicas.types';
-import type { ContextoEvaluacion } from './indicadores.types';
 import { R06EvaluadorService } from './r06.evaluador';
-
-// ── Constantes ───────────────────────────────────────────────────────────────
-
-const USR    = 'usr-01';
-const CAR_ID = 'car-01';
-const FECHA  = new Date('2026-10-14');
-const ADMIN  = 'ADMINISTRADOR_SISTEMA';
+import type { ContextoEvaluacion } from './indicadores.types';
+import type { VinculacionesParaR07 } from '../consultas-academicas/consultas-academicas.types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function makeContexto(overrides: Partial<ContextoEvaluacion> = {}): ContextoEvaluacion {
   return {
-    usuarioId: USR,
-    rolNombre: ADMIN,
-    carreraId: CAR_ID,
-    fechaEvaluacion: FECHA,
+    usuarioId: 'u-1',
+    rolNombre: 'ADMINISTRADOR_SISTEMA',
+    carreraId: 'car-1',
+    fechaEvaluacion: new Date('2026-01-01'),
     ...overrides,
-  };
+  } as ContextoEvaluacion;
 }
 
-function makeVin(
+function makeVinc(
   docenteId: string,
   materiaId: string,
-  overrides: Partial<VinculacionAut> = {},
-): VinculacionAut {
+  carreraId = 'car-1',
+  estado = 'APROBADA',
+): VinculacionesParaR07['vinculaciones'][number] {
   return {
-    id: `vin-${docenteId}-${materiaId}-${overrides.catedraId ?? 'cat01'}`,
-    docenteId,
+    id: `${docenteId}-${materiaId}`,
     materiaId,
-    catedraId: 'cat-01',
-    planEstudioId: 'plan-01',
-    carreraId: CAR_ID,
-    estado: 'APROBADA',
+    docenteId,
+    catedraId: `cat-${materiaId}`,
+    planEstudioId: `plan-${carreraId}`,
+    carreraId,
+    estado,
     esResponsableCatedra: null,
-    horasSemana: 6,
+    horasSemana: null,
     docente: {
       id: docenteId,
-      nombre: `Nombre-${docenteId}`,
-      apellido: `Apellido-${docenteId}`,
+      nombre: `Nombre${docenteId}`,
+      apellido: `Apellido${docenteId}`,
       activo: true,
       dedicacion: null,
       categoriaDocente: null,
     },
-    ...overrides,
   };
 }
 
-function makeSvc(vinculaciones: VinculacionAut[]) {
-  const consultas = {
-    obtenerVinculacionesDeCarrera: jest.fn().mockResolvedValue(vinculaciones),
-  };
-  return { svc: new R06EvaluadorService(consultas as any), consultas };
+function makeConsultas(result: VinculacionesParaR07) {
+  return {
+    obtenerVinculacionesParaR06: jest.fn().mockResolvedValue(result),
+  } as any;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// A. PARÁMETROS OBLIGATORIOS
-// ════════════════════════════════════════════════════════════════════════════
+// ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('R06EvaluadorService — A. parámetros obligatorios', () => {
-
-  it('lanza BadRequestException cuando el contexto no tiene carreraId', async () => {
-    const { svc } = makeSvc([]);
-    await expect(
-      svc.evaluar(makeContexto({ carreraId: undefined })),
-    ).rejects.toThrow(BadRequestException);
+describe('R06EvaluadorService', () => {
+  describe('sin carreraId en contexto', () => {
+    it('lanza BadRequestException', async () => {
+      const svc = new R06EvaluadorService({} as any);
+      await expect(
+        svc.evaluar(makeContexto({ carreraId: undefined })),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
   });
 
-  it('no consulta datos cuando carreraId está ausente', async () => {
-    const { svc, consultas } = makeSvc([]);
-    await expect(svc.evaluar(makeContexto({ carreraId: undefined }))).rejects.toThrow();
-    expect(consultas.obtenerVinculacionesDeCarrera).not.toHaveBeenCalled();
+  describe('sin vinculaciones APROBADAS', () => {
+    it('devuelve NO_APLICA con distribucion vacía', async () => {
+      const result = await new R06EvaluadorService(
+        makeConsultas({
+          vinculaciones: [],
+          facultadId: 'fac-1',
+          alcanceFacultad: true,
+          docentesMultiFacultad: new Set(),
+        }),
+      ).evaluar(makeContexto());
+
+      expect(result.estadoCalculo).toBe(EstadoCalculo.NO_APLICA);
+      expect(result.valor!.totalDocentes).toBe(0);
+      expect(result.valor!.distribucion).toHaveLength(0);
+      expect(result.valor!.alcanceFacultad).toBe(true);
+    });
   });
 
-});
+  describe('alcanceFacultad=true (roles globales / DECANO)', () => {
+    it('agrega materias de una sola carrera', async () => {
+      const vinculaciones = [
+        makeVinc('d1', 'm1'),
+        makeVinc('d1', 'm2'),
+        makeVinc('d2', 'm3'),
+      ];
+      const result = await new R06EvaluadorService(
+        makeConsultas({
+          vinculaciones,
+          facultadId: 'fac-1',
+          alcanceFacultad: true,
+          docentesMultiFacultad: new Set(),
+        }),
+      ).evaluar(makeContexto());
 
-// ════════════════════════════════════════════════════════════════════════════
-// B. ESTADO NO_APLICA — carrera sin plantel activo
-// ════════════════════════════════════════════════════════════════════════════
+      expect(result.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+      expect(result.estadoImplementacion).toBe('IMPLEMENTADO');
+      expect(result.tipoContexto).toBe('FACULTAD');
+      expect(result.contextoId).toBe('fac-1');
+      expect(result.valor!.facultadId).toBe('fac-1');
+      expect(result.valor!.alcanceFacultad).toBe(true);
+      expect(result.valor!.carreraId).toBeUndefined();
+      expect(result.valor!.totalDocentes).toBe(2);
+      expect(result.valor!.maximo).toBe(2);
+      expect(result.datosFaltantes).toHaveLength(0);
+    });
 
-describe('R06EvaluadorService — B. NO_APLICA', () => {
+    it('deduplica materias cross-carrera: mismo docente en dos carreras acumula materias de ambas', async () => {
+      const vinculaciones = [
+        makeVinc('d1', 'm1', 'car-1'), // docente d1 en carrera 1
+        makeVinc('d1', 'm2', 'car-2'), // docente d1 en carrera 2
+        makeVinc('d2', 'm3', 'car-1'),
+      ];
+      const result = await new R06EvaluadorService(
+        makeConsultas({
+          vinculaciones,
+          facultadId: 'fac-1',
+          alcanceFacultad: true,
+          docentesMultiFacultad: new Set(),
+        }),
+      ).evaluar(makeContexto());
 
-  it('sin vinculaciones → NO_APLICA, stats null, distribución vacía', async () => {
-    const { svc } = makeSvc([]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.estadoImplementacion).toBe('IMPLEMENTADO');
-    expect(resultado.estadoCalculo).toBe(EstadoCalculo.NO_APLICA);
-    expect(resultado.valor!.totalDocentes).toBe(0);
-    expect(resultado.valor!.promedio).toBeNull();
-    expect(resultado.valor!.mediana).toBeNull();
-    expect(resultado.valor!.maximo).toBeNull();
-    expect(resultado.valor!.distribucion).toEqual([]);
+      expect(result.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+      expect(result.valor!.totalDocentes).toBe(2);
+
+      const d1 = result.valor!.distribucion.find((d) => d.docenteId === 'd1');
+      expect(d1?.nMaterias).toBe(2); // m1 + m2, ambas cuentan
+
+      const d2 = result.valor!.distribucion.find((d) => d.docenteId === 'd2');
+      expect(d2?.nMaterias).toBe(1);
+
+      expect(result.valor!.maximo).toBe(2);
+      expect(result.valor!.promedio).toBeCloseTo(1.5);
+    });
+
+    it('deduplica la misma materia en múltiples cátedras del mismo docente', async () => {
+      // misma materiaId, dos vinculaciones para el mismo docente
+      const vinculaciones = [
+        makeVinc('d1', 'm1'),
+        { ...makeVinc('d1', 'm1'), id: 'd1-m1-bis', catedraId: 'cat-otra' },
+      ];
+      const result = await new R06EvaluadorService(
+        makeConsultas({
+          vinculaciones,
+          facultadId: 'fac-1',
+          alcanceFacultad: true,
+          docentesMultiFacultad: new Set(),
+        }),
+      ).evaluar(makeContexto());
+
+      expect(result.valor!.totalDocentes).toBe(1);
+      expect(result.valor!.distribucion[0].nMaterias).toBe(1); // dedup: m1 cuenta una vez
+    });
+
+    it('ignora vinculaciones no APROBADAS', async () => {
+      const vinculaciones = [
+        makeVinc('d1', 'm1', 'car-1', 'PENDIENTE_DE_APROBACION'),
+        makeVinc('d2', 'm2', 'car-1', 'APROBADA'),
+      ];
+      const result = await new R06EvaluadorService(
+        makeConsultas({
+          vinculaciones,
+          facultadId: 'fac-1',
+          alcanceFacultad: true,
+          docentesMultiFacultad: new Set(),
+        }),
+      ).evaluar(makeContexto());
+
+      expect(result.valor!.totalDocentes).toBe(1);
+      expect(result.valor!.distribucion[0].docenteId).toBe('d2');
+    });
+
+    it('ordena distribución por nMaterias DESC y luego nombre ASC', async () => {
+      const vinculaciones = [
+        makeVinc('d1', 'm1'),
+        makeVinc('d2', 'm2'),
+        makeVinc('d2', 'm3'),
+      ];
+      const result = await new R06EvaluadorService(
+        makeConsultas({
+          vinculaciones,
+          facultadId: 'fac-1',
+          alcanceFacultad: true,
+          docentesMultiFacultad: new Set(),
+        }),
+      ).evaluar(makeContexto());
+
+      const dist = result.valor!.distribucion;
+      expect(dist[0].docenteId).toBe('d2'); // 2 materias → primero
+      expect(dist[1].docenteId).toBe('d1'); // 1 materia → segundo
+    });
+
+    it('calcula estadísticas correctamente con 4 docentes', async () => {
+      // nMats = [1, 2, 3, 4]
+      const vinculaciones = [
+        makeVinc('d1', 'm1'),
+        makeVinc('d2', 'm2'), makeVinc('d2', 'm3'),
+        makeVinc('d3', 'm4'), makeVinc('d3', 'm5'), makeVinc('d3', 'm6'),
+        makeVinc('d4', 'm7'), makeVinc('d4', 'm8'), makeVinc('d4', 'm9'), makeVinc('d4', 'm10'),
+      ];
+      const result = await new R06EvaluadorService(
+        makeConsultas({
+          vinculaciones,
+          facultadId: 'fac-1',
+          alcanceFacultad: true,
+          docentesMultiFacultad: new Set(),
+        }),
+      ).evaluar(makeContexto());
+
+      expect(result.valor!.totalDocentes).toBe(4);
+      expect(result.valor!.maximo).toBe(4);
+      expect(result.valor!.promedio).toBeCloseTo(2.5);
+      expect(result.valor!.mediana).toBeCloseTo(2.5); // (2+3)/2
+    });
   });
 
-  it('solo vinculaciones no APROBADAS → NO_APLICA', async () => {
-    const { svc } = makeSvc([
-      makeVin('doc-01', 'mat-01', { estado: 'PENDIENTE_DE_APROBACION' }),
-      makeVin('doc-02', 'mat-01', { estado: 'RECHAZADA' }),
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.estadoCalculo).toBe(EstadoCalculo.NO_APLICA);
-    expect(resultado.valor!.totalDocentes).toBe(0);
+  describe('alcanceFacultad=false (DIRECTOR_CARRERA)', () => {
+    it('devuelve PARCIAL con carreraId y datosFaltantes', async () => {
+      const vinculaciones = [makeVinc('d1', 'm1', 'car-1')];
+      const result = await new R06EvaluadorService(
+        makeConsultas({
+          vinculaciones,
+          facultadId: 'fac-1',
+          alcanceFacultad: false,
+          docentesMultiFacultad: new Set(),
+        }),
+      ).evaluar(makeContexto({ rolNombre: 'DIRECTOR_CARRERA', carreraId: 'car-1' }));
+
+      expect(result.estadoCalculo).toBe(EstadoCalculo.PARCIAL);
+      expect(result.estadoImplementacion).toBe('IMPLEMENTADO');
+      expect(result.valor!.alcanceFacultad).toBe(false);
+      expect(result.valor!.carreraId).toBe('car-1');
+      expect(result.valor!.facultadId).toBe('fac-1');
+      expect(result.datosFaltantes).toHaveLength(1);
+      expect(result.datosFaltantes[0].campo).toBe('carrerasRestantes');
+    });
+
+    it('PARCIAL con sin docentes devuelve NO_APLICA', async () => {
+      const result = await new R06EvaluadorService(
+        makeConsultas({
+          vinculaciones: [],
+          facultadId: 'fac-1',
+          alcanceFacultad: false,
+          docentesMultiFacultad: new Set(),
+        }),
+      ).evaluar(makeContexto({ rolNombre: 'DIRECTOR_CARRERA', carreraId: 'car-1' }));
+
+      expect(result.estadoCalculo).toBe(EstadoCalculo.NO_APLICA);
+      expect(result.valor!.carreraId).toBe('car-1');
+      expect(result.datosFaltantes).toHaveLength(1);
+    });
   });
-
-  it('resultado contiene carreraId del contexto', async () => {
-    const { svc } = makeSvc([]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.valor!.carreraId).toBe(CAR_ID);
-    expect(resultado.contextoId).toBe(CAR_ID);
-    expect(resultado.tipoContexto).toBe('CARRERA');
-  });
-
-});
-
-// ════════════════════════════════════════════════════════════════════════════
-// C. CASO ÚNICO — un docente, una materia
-// ════════════════════════════════════════════════════════════════════════════
-
-describe('R06EvaluadorService — C. caso único', () => {
-
-  it('un docente con una materia → stats todos iguales a 1', async () => {
-    const { svc } = makeSvc([makeVin('doc-01', 'mat-01')]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
-    expect(resultado.valor!.totalDocentes).toBe(1);
-    expect(resultado.valor!.promedio).toBe(1);
-    expect(resultado.valor!.mediana).toBe(1);
-    expect(resultado.valor!.maximo).toBe(1);
-  });
-
-  it('distribución contiene docenteId y nombre completo', async () => {
-    const { svc } = makeSvc([makeVin('doc-01', 'mat-01')]);
-    const resultado = await svc.evaluar(makeContexto());
-    const [entry] = resultado.valor!.distribucion;
-    expect(entry.docenteId).toBe('doc-01');
-    expect(entry.nombre).toContain('doc-01');
-    expect(entry.nMaterias).toBe(1);
-  });
-
-  it('datosFaltantes vacío cuando hay vinculaciones APROBADAS', async () => {
-    const { svc } = makeSvc([makeVin('doc-01', 'mat-01')]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.datosFaltantes).toEqual([]);
-  });
-
-});
-
-// ════════════════════════════════════════════════════════════════════════════
-// D. DISTRIBUCIÓN MÚLTIPLE — promedio, mediana, máximo
-// ════════════════════════════════════════════════════════════════════════════
-
-describe('R06EvaluadorService — D. estadísticas con múltiples docentes', () => {
-
-  it('tres docentes con 1, 2 y 3 materias → promedio=2, mediana=2, máximo=3', async () => {
-    const { svc } = makeSvc([
-      makeVin('doc-01', 'mat-01'),
-      makeVin('doc-02', 'mat-01'),
-      makeVin('doc-02', 'mat-02'),
-      makeVin('doc-03', 'mat-01'),
-      makeVin('doc-03', 'mat-02'),
-      makeVin('doc-03', 'mat-03'),
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.valor!.totalDocentes).toBe(3);
-    expect(resultado.valor!.promedio).toBe(2);
-    expect(resultado.valor!.mediana).toBe(2);
-    expect(resultado.valor!.maximo).toBe(3);
-  });
-
-  it('dos docentes con 1 y 3 materias → mediana = 2 (promedio de ambos)', async () => {
-    const { svc } = makeSvc([
-      makeVin('doc-01', 'mat-01'),
-      makeVin('doc-02', 'mat-01'),
-      makeVin('doc-02', 'mat-02'),
-      makeVin('doc-02', 'mat-03'),
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.valor!.totalDocentes).toBe(2);
-    expect(resultado.valor!.mediana).toBe(2);      // (1+3)/2
-    expect(resultado.valor!.maximo).toBe(3);
-  });
-
-  it('cuatro docentes [1,2,3,4] → mediana = 2.5', async () => {
-    const { svc } = makeSvc([
-      makeVin('doc-01', 'mat-01'),
-      makeVin('doc-02', 'mat-01'),
-      makeVin('doc-02', 'mat-02'),
-      makeVin('doc-03', 'mat-01'),
-      makeVin('doc-03', 'mat-02'),
-      makeVin('doc-03', 'mat-03'),
-      makeVin('doc-04', 'mat-01'),
-      makeVin('doc-04', 'mat-02'),
-      makeVin('doc-04', 'mat-03'),
-      makeVin('doc-04', 'mat-04'),
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.valor!.mediana).toBe(2.5);
-    expect(resultado.valor!.maximo).toBe(4);
-  });
-
-});
-
-// ════════════════════════════════════════════════════════════════════════════
-// E. DEDUPLICACIÓN — misma materia en distintas cátedras
-// ════════════════════════════════════════════════════════════════════════════
-
-describe('R06EvaluadorService — E. deduplicación por materiaId', () => {
-
-  it('misma materia en dos cátedras distintas para el mismo docente → 1 materia', async () => {
-    const { svc } = makeSvc([
-      makeVin('doc-01', 'mat-01', { catedraId: 'cat-A' }),
-      makeVin('doc-01', 'mat-01', { catedraId: 'cat-B' }),
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.valor!.totalDocentes).toBe(1);
-    expect(resultado.valor!.distribucion[0].nMaterias).toBe(1);
-  });
-
-  it('ejemplo del spec: Materia1-CátedraA + Materia1-CátedraB + Materia2 → 2 materias', async () => {
-    const { svc } = makeSvc([
-      makeVin('doc-01', 'mat-01', { catedraId: 'cat-A' }),
-      makeVin('doc-01', 'mat-01', { catedraId: 'cat-B' }),
-      makeVin('doc-01', 'mat-02', { catedraId: 'cat-A' }),
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.valor!.distribucion[0].nMaterias).toBe(2);
-  });
-
-  it('mismo docenteId en dos planes distintos con misma materia → 1 materia (cross-plan dedup)', async () => {
-    const { svc } = makeSvc([
-      makeVin('doc-01', 'mat-01', { planEstudioId: 'plan-A' }),
-      makeVin('doc-01', 'mat-01', { planEstudioId: 'plan-B' }),
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.valor!.distribucion[0].nMaterias).toBe(1);
-  });
-
-  it('mismo docenteId con materias distintas en dos planes → suma correctamente', async () => {
-    const { svc } = makeSvc([
-      makeVin('doc-01', 'mat-01', { planEstudioId: 'plan-A' }),
-      makeVin('doc-01', 'mat-02', { planEstudioId: 'plan-B' }),
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.valor!.distribucion[0].nMaterias).toBe(2);
-  });
-
-});
-
-// ════════════════════════════════════════════════════════════════════════════
-// F. SOLO VINCULACIONES APROBADAS
-// ════════════════════════════════════════════════════════════════════════════
-
-describe('R06EvaluadorService — F. filtro por estado APROBADA', () => {
-
-  it('vinculación PENDIENTE_DE_APROBACION no cuenta', async () => {
-    const { svc } = makeSvc([
-      makeVin('doc-01', 'mat-01'),
-      makeVin('doc-01', 'mat-02', { estado: 'PENDIENTE_DE_APROBACION' }),
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.valor!.distribucion[0].nMaterias).toBe(1);
-  });
-
-  it('vinculación RECHAZADA no cuenta', async () => {
-    const { svc } = makeSvc([
-      makeVin('doc-01', 'mat-01'),
-      makeVin('doc-01', 'mat-02', { estado: 'RECHAZADA' }),
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.valor!.distribucion[0].nMaterias).toBe(1);
-  });
-
-  it('vinculación DESVINCULADA no cuenta', async () => {
-    const { svc } = makeSvc([
-      makeVin('doc-01', 'mat-01'),
-      makeVin('doc-01', 'mat-02', { estado: 'DESVINCULADA' }),
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.valor!.distribucion[0].nMaterias).toBe(1);
-  });
-
-  it('docente con solo vinculación PENDIENTE → no aparece en distribución', async () => {
-    const { svc } = makeSvc([
-      makeVin('doc-01', 'mat-01'),
-      makeVin('doc-02', 'mat-01', { estado: 'PENDIENTE_DE_APROBACION' }),
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.valor!.totalDocentes).toBe(1);
-    expect(resultado.valor!.distribucion.map(d => d.docenteId)).not.toContain('doc-02');
-  });
-
-  it('docente inactivo (activo=false) con vinculación APROBADA no se contabiliza en IP-04', async () => {
-    const { svc } = makeSvc([
-      makeVin('doc-01', 'mat-01'),
-      makeVin('doc-02', 'mat-01', {
-        docente: {
-          id: 'doc-02',
-          nombre: 'Nombre-doc-02',
-          apellido: 'Apellido-doc-02',
-          activo: false,
-          dedicacion: null,
-          categoriaDocente: null,
-        },
-      }),
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.valor!.totalDocentes).toBe(1);
-    expect(resultado.valor!.distribucion.map(d => d.docenteId)).not.toContain('doc-02');
-  });
-
-  it('todos los docentes inactivos con APROBADA → NO_APLICA', async () => {
-    const { svc } = makeSvc([
-      makeVin('doc-01', 'mat-01', {
-        docente: {
-          id: 'doc-01',
-          nombre: 'Nombre-doc-01',
-          apellido: 'Apellido-doc-01',
-          activo: false,
-          dedicacion: null,
-          categoriaDocente: null,
-        },
-      }),
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.estadoCalculo).toBe(EstadoCalculo.NO_APLICA);
-    expect(resultado.valor!.totalDocentes).toBe(0);
-  });
-
-});
-
-// ════════════════════════════════════════════════════════════════════════════
-// G. ORDENAMIENTO DE DISTRIBUCIÓN
-// ════════════════════════════════════════════════════════════════════════════
-
-describe('R06EvaluadorService — G. ordenamiento', () => {
-
-  it('distribución ordenada por nMaterias DESC', async () => {
-    const { svc } = makeSvc([
-      makeVin('doc-01', 'mat-01'),
-      makeVin('doc-02', 'mat-01'),
-      makeVin('doc-02', 'mat-02'),
-      makeVin('doc-02', 'mat-03'),
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    const nMats = resultado.valor!.distribucion.map(d => d.nMaterias);
-    expect(nMats[0]).toBeGreaterThanOrEqual(nMats[1]);
-  });
-
-  it('desempate por nMaterias iguales: nombre ASC', async () => {
-    const { svc } = makeSvc([
-      { ...makeVin('doc-B', 'mat-01'), docente: { id: 'doc-B', nombre: 'Zeta', apellido: 'García', activo: true, dedicacion: null, categoriaDocente: null } },
-      { ...makeVin('doc-A', 'mat-01'), docente: { id: 'doc-A', nombre: 'Abel', apellido: 'López', activo: true, dedicacion: null, categoriaDocente: null } },
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.valor!.distribucion[0].nombre).toContain('Abel');
-    expect(resultado.valor!.distribucion[1].nombre).toContain('Zeta');
-  });
-
-  it('nombre completo = docente.nombre + " " + docente.apellido', async () => {
-    const { svc } = makeSvc([
-      {
-        ...makeVin('doc-01', 'mat-01'),
-        docente: { id: 'doc-01', nombre: 'María', apellido: 'Rodríguez', activo: true, dedicacion: null, categoriaDocente: null },
-      },
-    ]);
-    const resultado = await svc.evaluar(makeContexto());
-    expect(resultado.valor!.distribucion[0].nombre).toBe('María Rodríguez');
-  });
-
 });

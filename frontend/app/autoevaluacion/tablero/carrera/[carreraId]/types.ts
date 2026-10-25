@@ -70,6 +70,65 @@ export interface ResultadoIP09 {
   estadoCalculo: EstadoCalculo;
 }
 
+/** FSD MOD-AUT §5, IP-10 — Consistencia del plantel docente. */
+export interface ResultadoIP10 {
+  carreraId: string;
+  /** max(0, 100 − 25×A − 10×M). */
+  puntaje: number;
+  componenteA: number;
+  componenteM: number;
+  alertasR03: number;
+  alertasR04Penalizables: number;
+  alertasR07: number;
+  estadoCalculo: EstadoCalculo;
+}
+
+/** FSD §5.3, R-10 — Docentes con baja dedicación horaria. */
+export interface DocenteAlertaR10 {
+  docenteId: string;
+  nombre: string;
+  horasConocidas: number;
+  umbral: number;
+}
+
+export interface ResultadoR10 {
+  carreraId: string;
+  umbral: number;
+  totalDocentes: number;
+  totalEnAlerta: number;
+  totalInciertos: number;
+  enAlerta: DocenteAlertaR10[];
+  alcanceFacultad: boolean;
+  estadoCalculo: EstadoCalculo;
+}
+
+/** FSD MOD-AUT §3.1, R-12 — Campos obligatorios faltantes en la ficha docente. */
+export type ItemFichaR12 = 'personales' | 'formacionGrado' | 'areaDesempeno';
+
+export interface DocenteAlertaR12 {
+  docenteId: string;
+  nombre: string;
+  faltantes: ItemFichaR12[];
+}
+
+export interface DocenteNoDeterminableR12 {
+  docenteId: string;
+  nombre: string;
+  causa: 'CROSS_FACULTAD';
+}
+
+export interface ResultadoR12 {
+  carreraId: string;
+  facultadId: string;
+  totalDocentes: number;
+  totalIncompletos: number;
+  incompletos: DocenteAlertaR12[];
+  totalNoDeterminables: number;
+  noDeterminables: DocenteNoDeterminableR12[];
+  alcanceFacultad: boolean;
+  estadoCalculo: EstadoCalculo;
+}
+
 export interface TablroCarreraResponse {
   carreraId: string;
   /** ISO 8601 */
@@ -80,6 +139,9 @@ export interface TablroCarreraResponse {
   ip04: ResultadoIP04;
   ip08: ResultadoIP08;
   ip09: ResultadoIP09;
+  ip10: ResultadoIP10;
   ip13: ResultadoIP13;
+  r10: ResultadoR10;
+  r12: ResultadoR12;
   estadoGeneralCalculo: EstadoCalculo;
 }

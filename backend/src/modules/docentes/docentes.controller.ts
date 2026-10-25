@@ -13,9 +13,13 @@ import {
   ValidationPipe
 } from '@nestjs/common';
 import { DocentesService } from './docentes.service';
+import { CargosDocenteService } from './cargos-docente.service';
 import { CrearDocenteDto } from './dto/crear-docente.dto';
 import { ActualizarDocenteDto } from './dto/actualizar-docente.dto';
 import { BuscarDocentesDto } from './dto/buscar-docentes.dto';
+import { CrearCargoDocenteDto } from './dto/crear-cargo-docente.dto';
+import { ActualizarCargoDocenteDto } from './dto/actualizar-cargo-docente.dto';
+import { ActualizarRelevamientoCargosDto } from './dto/actualizar-relevamiento-cargos.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -24,7 +28,10 @@ import { Roles } from '../../common/decorators/roles.decorator';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class DocentesController {
-  constructor(private readonly docentesService: DocentesService) {}
+  constructor(
+    private readonly docentesService: DocentesService,
+    private readonly cargosDocenteService: CargosDocenteService,
+  ) {}
 
   @Post()
   @Roles('ADMINISTRADOR_SISTEMA', 'DECANO', 'RECTORADO', 'DIRECTOR_CARRERA', 'SECRETARIA_ACADEMICA', 'ADMINISTRATIVO')
@@ -54,6 +61,65 @@ export class DocentesController {
   async actualizarMiFicha(@Req() req: any, @Body() actualizarDocenteDto: ActualizarDocenteDto) {
     const usuarioId = req.user?.id;
     return this.docentesService.actualizarDocentePorUsuarioId(usuarioId, actualizarDocenteDto);
+  }
+
+  @Get('mi-ficha/cargos-institucionales')
+  @Roles('DOCENTE')
+  async obtenerMisCargos(
+    @Req() req: any,
+    @Query('vigencia') vigencia?: string,
+  ) {
+    return this.cargosDocenteService.obtenerCargosPropio(
+      req.user.id,
+      vigencia as any,
+    );
+  }
+
+  @Get(':id/cargos-institucionales')
+  @Roles('ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA', 'RECTORADO', 'DECANO', 'DIRECTOR_CARRERA')
+  async obtenerCargosDocente(
+    @Param('id') id: string,
+    @Query('vigencia') vigencia: string,
+    @Req() req: any,
+  ) {
+    return this.cargosDocenteService.obtenerCargos(
+      id,
+      vigencia as any,
+      req.user.id,
+      req.user.rol.nombre,
+    );
+  }
+
+  @Post(':id/cargos-institucionales')
+  @Roles('ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA')
+  async crearCargoDocente(
+    @Param('id') id: string,
+    @Body() dto: CrearCargoDocenteDto,
+    @Req() req: any,
+  ) {
+    return this.cargosDocenteService.crearCargo(id, dto, req.user.id);
+  }
+
+  @Patch(':id/cargos-institucionales/:cargoDocenteId')
+  @Roles('ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA')
+  async actualizarCargoDocente(
+    @Param('id') id: string,
+    @Param('cargoDocenteId') cargoDocenteId: string,
+    @Body() dto: ActualizarCargoDocenteDto,
+  ) {
+    return this.cargosDocenteService.actualizarCargo(id, cargoDocenteId, dto);
+  }
+
+  @Patch(':id/relevamiento-cargos')
+  @Roles('ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA')
+  async actualizarRelevamiento(
+    @Param('id') id: string,
+    @Body() dto: ActualizarRelevamientoCargosDto,
+  ) {
+    return this.cargosDocenteService.actualizarRelevamiento(
+      id,
+      dto.relevamientoCargosCompleto,
+    );
   }
 
   @Get(':id')

@@ -5,7 +5,17 @@ import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch, mensajeErrorHttp } from '@/lib/api';
-import type { EvaluacionBloqueIPL05, EstadoCalculo, TablroPlanResponse } from './types';
+import type {
+  EvaluacionBloqueIPL05,
+  EstadoCalculo,
+  MateriaAlertaR14,
+  ResultadoIPL04,
+  ResultadoR11,
+  ResultadoR13,
+  ResultadoR14,
+  TablroPlanResponse,
+} from './types';
+import type { HistorialAnalisis, ItemHistorial, MetadataEjecucion } from '../../analisis/analisis.types';
 
 // ── Constantes ──────────────────────────────────────────────────────────────
 
@@ -83,6 +93,272 @@ function EtiquetaIndicador({ codigo, titulo }: { codigo: string; titulo: string 
   );
 }
 
+// ── IPL-04: doble responsable de cátedra ────────────────────────────────────
+
+function TarjetaIPL04({ ipl04 }: { ipl04: ResultadoIPL04 }) {
+  const ec = ipl04.estadoCalculo;
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10">IPL-04</span>
+        <span className="text-xs font-semibold text-slate-700">Pares materia/cátedra con múltiples responsables</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <Metrica label="Total materias" valor={ipl04.totalMaterias} />
+        <Metrica label="Pares con alerta" valor={ipl04.paresConAlerta} destaca={ipl04.paresConAlerta > 0} />
+        <Metrica label="Pares inciertos" valor={ipl04.paresInciertos} />
+      </div>
+      {ipl04.paresConAlerta === 0 && ipl04.paresInciertos === 0 && ec === 'CALCULADO' && (
+        <p className="mt-2 text-xs text-emerald-700 flex items-center gap-1.5">
+          <span className="text-emerald-500">✓</span> Sin pares con múltiples responsables confirmados.
+        </p>
+      )}
+      {ipl04.paresInciertos > 0 && (
+        <div className="mt-2 p-2 rounded-lg bg-amber-50 border border-amber-200">
+          <p className="text-[11px] text-amber-700">
+            {ipl04.paresInciertos} par{ipl04.paresInciertos !== 1 ? 'es' : ''} con <span className="font-mono">esResponsableCatedra</span> sin clasificar.
+          </p>
+        </div>
+      )}
+      <div className="flex justify-end mt-2">
+        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${
+          ec === 'CALCULADO' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+          ec === 'PARCIAL' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+          ec === 'NO_DETERMINABLE' ? 'bg-slate-100 text-slate-600 border-slate-200' :
+          'bg-sky-50 text-sky-700 border-sky-200'
+        }`}>{ec.replace(/_/g, ' ')}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── R-11: inconsistencias en programas ──────────────────────────────────────
+
+function TarjetaR11({ r11 }: { r11: ResultadoR11 }) {
+  const ec = r11.estadoCalculo;
+  if (ec === 'NO_APLICA') {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10">R-11</span>
+          <span className="text-xs font-semibold text-slate-700">Inconsistencias en programas de asignatura</span>
+        </div>
+        <p className="text-xs text-sky-700 bg-sky-50 border border-sky-200 rounded-lg p-3">Sin materias con programa. No aplica la evaluación.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10">R-11</span>
+        <span className="text-xs font-semibold text-slate-700">Inconsistencias en programas de asignatura</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <Metrica label="Total materias" valor={r11.totalMaterias} />
+        <Metrica label="Con programa" valor={r11.totalConPrograma} />
+        <Metrica label="Sin programa" valor={r11.totalSinPrograma} destaca={r11.totalSinPrograma > 0} />
+        <Metrica label="Inconsistencias" valor={r11.totalInconsistencias} destaca={r11.totalInconsistencias > 0} />
+      </div>
+      {r11.totalInconsistencias > 0 && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Metrica label="Prioridad ALTA" valor={r11.totalAlta} destaca={r11.totalAlta > 0} />
+          <Metrica label="Prioridad MEDIA" valor={r11.totalMedia} />
+        </div>
+      )}
+      {r11.inconsistencias.length > 0 && (
+        <details className="mt-3 group">
+          <summary className="cursor-pointer text-[11px] font-semibold text-slate-500 hover:text-slate-700 select-none list-none flex items-center gap-1.5">
+            <span className="inline-block transition-transform group-open:rotate-90">▶</span>
+            Detalle de inconsistencias ({r11.inconsistencias.length})
+          </summary>
+          <div className="mt-2 overflow-x-auto rounded-lg border border-slate-100">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="text-left px-3 py-1.5 font-semibold text-slate-500">Materia</th>
+                  <th className="text-right px-3 py-1.5 font-semibold text-slate-500">Completas</th>
+                  <th className="text-right px-3 py-1.5 font-semibold text-slate-500">Pendientes</th>
+                  <th className="text-center px-3 py-1.5 font-semibold text-slate-500">Prioridad</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r11.inconsistencias.map((inc, i) => (
+                  <tr key={inc.materiaId} className={i % 2 === 0 ? '' : 'bg-slate-50/60'}>
+                    <td className="px-3 py-1.5 text-slate-700">{inc.materiaNombre}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{inc.seccionesCompletas}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{inc.seccionesPendientes}</td>
+                    <td className="px-3 py-1.5 text-center">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${inc.prioridad === 'ALTA' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {inc.prioridad}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+      {r11.totalInconsistencias === 0 && r11.totalConPrograma > 0 && ec === 'CALCULADO' && (
+        <p className="mt-2 text-xs text-emerald-700 flex items-center gap-1.5">
+          <span className="text-emerald-500">✓</span> Sin inconsistencias detectadas en los programas.
+        </p>
+      )}
+      <div className="flex justify-end mt-2">
+        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${
+          ec === 'CALCULADO' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+          ec === 'PARCIAL' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+          ec === 'NO_DETERMINABLE' ? 'bg-slate-100 text-slate-600 border-slate-200' :
+          'bg-sky-50 text-sky-700 border-sky-200'
+        }`}>{ec.replace(/_/g, ' ')}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── R-13: distribución por tipo de asignatura ────────────────────────────────
+
+function TarjetaR13({ r13 }: { r13: ResultadoR13 }) {
+  const ec = r13.estadoCalculo;
+  if (ec === 'NO_APLICA') {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10">R-13</span>
+          <span className="text-xs font-semibold text-slate-700">Distribución por tipo de asignatura</span>
+        </div>
+        <p className="text-xs text-sky-700 bg-sky-50 border border-sky-200 rounded-lg p-3">Sin materias en el plan. No aplica la evaluación.</p>
+      </div>
+    );
+  }
+  const tipoEntradas = Object.entries(r13.porTipo).filter(([, v]) => v > 0);
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10">R-13</span>
+        <span className="text-xs font-semibold text-slate-700">Distribución por tipo de asignatura</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <Metrica label="Total materias" valor={r13.totalMaterias} />
+        {tipoEntradas.map(([tipo, cant]) => (
+          <Metrica key={tipo} label={tipo} valor={cant} destaca={tipo === 'PPS' || tipo === 'PI'} />
+        ))}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="rounded-lg px-3 py-2 border border-slate-200 bg-slate-50">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-0.5">PPS</p>
+          <p className="text-sm font-bold text-slate-700">{r13.tienePPS ? `${r13.horasPPS ?? '—'} h` : 'Ausente'}</p>
+        </div>
+        <div className="rounded-lg px-3 py-2 border border-slate-200 bg-slate-50">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-0.5">PI</p>
+          <p className="text-sm font-bold text-slate-700">{r13.tienePI ? `${r13.horasPI ?? '—'} h` : 'Ausente'}</p>
+        </div>
+      </div>
+      {!r13.tienePPS && !r13.tienePI && (
+        <div className="mt-2 p-2 rounded-lg bg-amber-50 border border-amber-200">
+          <p className="text-[11px] text-amber-700">El plan no tiene materias de tipo PPS ni PI.</p>
+        </div>
+      )}
+      {ec === 'PARCIAL' && (
+        <div className="mt-2 p-2 rounded-lg bg-amber-50 border border-amber-200">
+          <p className="text-[11px] text-amber-700">Hay materias PPS o PI sin carga horaria registrada — horas parciales.</p>
+        </div>
+      )}
+      <div className="flex justify-end mt-2">
+        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${
+          ec === 'CALCULADO' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+          ec === 'PARCIAL' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+          ec === 'NO_DETERMINABLE' ? 'bg-slate-100 text-slate-600 border-slate-200' :
+          'bg-sky-50 text-sky-700 border-sky-200'
+        }`}>{ec.replace(/_/g, ' ')}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── R-14: horas formación práctica vs carga total ────────────────────────────
+
+function FilaAlertaR14({ a }: { a: MateriaAlertaR14 }) {
+  return (
+    <tr className="hover:bg-slate-50/60">
+      <td className="px-3 py-1.5 text-xs text-slate-700">{a.materiaNombre}</td>
+      <td className="px-3 py-1.5 text-right tabular-nums text-xs text-slate-600">{a.horasFormacionPractica} h</td>
+      <td className="px-3 py-1.5 text-right tabular-nums text-xs text-slate-600">{a.horasTotal} h</td>
+      <td className="px-3 py-1.5 text-right tabular-nums text-xs text-red-600 font-semibold">+{a.exceso} h</td>
+    </tr>
+  );
+}
+
+function TarjetaR14({ r14 }: { r14: ResultadoR14 }) {
+  const ec = r14.estadoCalculo;
+  if (ec === 'NO_APLICA') {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10">R-14</span>
+          <span className="text-xs font-semibold text-slate-700">Horas formación práctica vs carga total</span>
+        </div>
+        <p className="text-xs text-sky-700 bg-sky-50 border border-sky-200 rounded-lg p-3">Sin materias en el plan. No aplica la evaluación.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10">R-14</span>
+        <span className="text-xs font-semibold text-slate-700">Horas formación práctica vs carga total</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <Metrica label="Total materias" valor={r14.totalMaterias} />
+        <Metrica label="Evaluadas" valor={r14.totalEvaluadas} />
+        <Metrica label="Con alerta" valor={r14.totalConAlerta} destaca={r14.totalConAlerta > 0} />
+        <Metrica label="Sin datos" valor={r14.totalSinDatos} />
+      </div>
+      {r14.totalConAlerta === 0 && ec === 'CALCULADO' && (
+        <p className="mt-2 text-xs text-emerald-700 flex items-center gap-1.5">
+          <span className="text-emerald-500">✓</span> Sin materias con horas de formación práctica que superen la carga total.
+        </p>
+      )}
+      {ec === 'NO_DETERMINABLE' && (
+        <div className="mt-2 p-2 rounded-lg bg-slate-50 border border-slate-200">
+          <p className="text-[11px] text-slate-600">Datos de formación práctica no determinables (JSON inválido en alguna materia).</p>
+        </div>
+      )}
+      {r14.enAlerta.length > 0 && (
+        <details className="mt-3 group">
+          <summary className="cursor-pointer text-[11px] font-semibold text-slate-500 hover:text-slate-700 select-none list-none flex items-center gap-1.5">
+            <span className="inline-block transition-transform group-open:rotate-90">▶</span>
+            Materias con exceso de horas ({r14.enAlerta.length})
+          </summary>
+          <div className="mt-2 overflow-x-auto rounded-lg border border-slate-100">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="text-left px-3 py-1.5 font-semibold text-slate-500">Materia</th>
+                  <th className="text-right px-3 py-1.5 font-semibold text-slate-500">Formación</th>
+                  <th className="text-right px-3 py-1.5 font-semibold text-slate-500">Total</th>
+                  <th className="text-right px-3 py-1.5 font-semibold text-red-500">Exceso</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r14.enAlerta.map(a => <FilaAlertaR14 key={a.materiaId} a={a} />)}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+      <div className="flex justify-end mt-2">
+        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${
+          ec === 'CALCULADO' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+          ec === 'PARCIAL' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+          ec === 'NO_DETERMINABLE' ? 'bg-slate-100 text-slate-600 border-slate-200' :
+          'bg-sky-50 text-sky-700 border-sky-200'
+        }`}>{ec.replace(/_/g, ' ')}</span>
+      </div>
+    </div>
+  );
+}
+
 // ── IPL-05: fila de bloque ───────────────────────────────────────────────────
 
 function FilaBloque({ b }: { b: EvaluacionBloqueIPL05 }) {
@@ -140,6 +416,67 @@ function TableroPlanInner() {
   const [cargando, setCargando] = useState(true);
   const [error,    setError]    = useState<string | null>(null);
   const [dato,     setDato]     = useState<TablroPlanResponse | null>(null);
+
+  const [corriendo,      setCorriendo]      = useState(false);
+  const [errorAnalisis,  setErrorAnalisis]  = useState<string | null>(null);
+  const [ultimaEjecucion, setUltimaEjecucion] = useState<MetadataEjecucion | null>(null);
+  const [historial,       setHistorial]       = useState<HistorialAnalisis | null>(null);
+  const [cargandoHist,    setCargandoHist]    = useState(false);
+  const [paginaHistorial, setPaginaHistorial] = useState(1);
+  const [exportando,     setExportando]     = useState<string | null>(null);
+  const [errorExport,    setErrorExport]    = useState<string | null>(null);
+
+  async function exportar(formato: 'pdf' | 'xlsx', ejecucionId?: string) {
+    const key = ejecucionId ? `${ejecucionId}-${formato}` : formato;
+    setExportando(key);
+    setErrorExport(null);
+    try {
+      const url = ejecucionId
+        ? `/autoevaluacion/exportar/ejecucion/${ejecucionId}/${formato}`
+        : `/autoevaluacion/exportar/plan/${planId}/${formato}`;
+      const res = await apiFetch(url);
+      if (!res.ok) { setErrorExport('Error al generar la exportación'); return; }
+      const blob = await res.blob();
+      const cd   = res.headers.get('Content-Disposition') ?? '';
+      const name = cd.match(/filename="([^"]+)"/)?.[1] ?? `exportacion.${formato}`;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch { setErrorExport('Error de red al exportar'); }
+    finally { setExportando(null); }
+  }
+
+  async function correrAnalisis() {
+    setCorriendo(true);
+    setErrorAnalisis(null);
+    try {
+      const res  = await apiFetch(`/autoevaluacion/analisis/plan/${planId}`, { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error al ejecutar análisis'));
+      setUltimaEjecucion((data as { metadata: MetadataEjecucion }).metadata);
+      // recargar historial tras ejecución exitosa
+      cargarHistorial().catch(() => {});
+    } catch (e) {
+      setErrorAnalisis((e as Error).message);
+    } finally {
+      setCorriendo(false);
+    }
+  }
+
+  async function cargarHistorial() {
+    setCargandoHist(true);
+    try {
+      const res  = await apiFetch(`/autoevaluacion/analisis/plan/${planId}/historial?pagina=${paginaHistorial}&porPagina=10`);
+      const data = await res.json().catch(() => null);
+      if (res.ok) setHistorial(data as HistorialAnalisis);
+    } finally {
+      setCargandoHist(false);
+    }
+  }
+
+  useEffect(() => { if (planId) cargarHistorial(); }, [planId, paginaHistorial]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function cargar() {
     setCargando(true);
@@ -341,6 +678,9 @@ function TableroPlanInner() {
             </div>
           </div>
 
+          {/* IPL-04 — Pares materia/cátedra con múltiples responsables */}
+          <TarjetaIPL04 ipl04={dato.ipl04} />
+
           {/* IPL-05 — Horas por tipo de bloque */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
             <EtiquetaIndicador codigo="IPL-05" titulo="Horas por tipo de bloque" />
@@ -374,6 +714,11 @@ function TableroPlanInner() {
               </>
             )}
           </div>
+
+          {/* R-11, R-13, R-14 */}
+          <TarjetaR11 r11={dato.r11} />
+          <TarjetaR13 r13={dato.r13} />
+          <TarjetaR14 r14={dato.r14} />
 
           {/* Advertencias */}
           {dato.advertencias.length > 0 && (
@@ -414,6 +759,113 @@ function TableroPlanInner() {
 
         </div>
       )}
+
+      {/* ── Panel: Correr análisis ─────────────────────────────────────── */}
+      <div className="mt-6 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <div className="flex items-center justify-between gap-4 mb-3">
+          <div>
+            <p className="text-xs font-bold text-slate-700">Análisis explícito del plan</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Ejecuta y guarda una evaluación completa. Los resultados quedan disponibles en el historial.
+            </p>
+          </div>
+          <button
+            onClick={correrAnalisis}
+            disabled={corriendo || !dato}
+            className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold bg-[#0f4c81] text-white hover:bg-[#0f4c81]/90 active:bg-[#0f4c81]/80 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {corriendo ? <IcSpinner sm /> : null}
+            {corriendo ? 'Ejecutando...' : 'Correr análisis'}
+          </button>
+        </div>
+
+        {errorAnalisis && (
+          <div className="p-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 mb-3">
+            {errorAnalisis}
+          </div>
+        )}
+
+        {ultimaEjecucion && (
+          <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs space-y-1 mb-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-emerald-600 font-bold text-[11px]">✓ Guardado</span>
+              <EstadoBadge ec={ultimaEjecucion.estadoCalculo} />
+              <span className="text-[10px] font-mono text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                {ultimaEjecucion.ejecucionId.slice(0, 8)}…
+              </span>
+            </div>
+            <p className="text-slate-500">{formatFecha(ultimaEjecucion.fechaEjecucion)}</p>
+          </div>
+        )}
+
+        {/* Exportar plan */}
+        <div className="border-t border-slate-100 pt-3 mb-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">Exportar última ejecución</p>
+          {errorExport && <p className="text-[11px] text-red-600 mb-2">{errorExport}</p>}
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => exportar('pdf')} disabled={!!exportando} className="flex items-center gap-1 text-[11px] font-semibold text-white bg-[#0f4c81] hover:bg-[#0f4c81]/90 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+              {exportando === 'pdf' ? <IcSpinner sm /> : null} PDF
+            </button>
+            <button onClick={() => exportar('xlsx')} disabled={!!exportando} className="flex items-center gap-1 text-[11px] font-semibold text-[#0f4c81] bg-white border border-[#0f4c81]/30 hover:bg-[#0f4c81]/5 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+              {exportando === 'xlsx' ? <IcSpinner sm /> : null} Excel
+            </button>
+          </div>
+        </div>
+
+        {/* Historial */}
+        <div className="border-t border-slate-100 pt-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Historial de ejecuciones</p>
+            {cargandoHist && <IcSpinner sm />}
+          </div>
+          {historial && historial.items.length === 0 && !cargandoHist && (
+            <p className="text-[11px] text-slate-400 italic">Sin ejecuciones registradas para este plan.</p>
+          )}
+          {historial && historial.items.length > 0 && (
+            <div className="space-y-1.5">
+              {historial.items.map((item: ItemHistorial) => (
+                <div key={item.ejecucionId} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 border border-slate-100 text-xs flex-wrap">
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${item.estadoEjecucion === 'COMPLETADO' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                    {item.estadoEjecucion}
+                  </span>
+                  {item.estadoCalculo && <EstadoBadge ec={item.estadoCalculo} />}
+                  <span className="text-slate-500 text-[11px]">{formatFecha(item.fechaInicio)}</span>
+                  <span className="font-mono text-[10px] text-slate-300">{item.ejecucionId.slice(0, 8)}…</span>
+                  {item.errores && <span className="text-red-500 text-[10px]">{item.errores}</span>}
+                  {item.estadoEjecucion === 'COMPLETADO' && (
+                    <div className="ml-auto flex gap-1">
+                      <button onClick={() => exportar('pdf', item.ejecucionId)} disabled={!!exportando} className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40">PDF</button>
+                      <button onClick={() => exportar('xlsx', item.ejecucionId)} disabled={!!exportando} className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40">XLS</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {historial.total > historial.porPagina && (
+                <div className="flex items-center justify-between mt-1">
+                  <button
+                    onClick={() => setPaginaHistorial((p) => Math.max(1, p - 1))}
+                    disabled={paginaHistorial <= 1 || cargandoHist}
+                    className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    ← Anterior
+                  </button>
+                  <span className="text-[10px] text-slate-400">
+                    {historial.porPagina * (paginaHistorial - 1) + 1}–{Math.min(historial.porPagina * paginaHistorial, historial.total)} de {historial.total}
+                  </span>
+                  <button
+                    onClick={() => setPaginaHistorial((p) => p + 1)}
+                    disabled={paginaHistorial * historial.porPagina >= historial.total || cargandoHist}
+                    className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Siguiente →
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
     </div>
   );
 }

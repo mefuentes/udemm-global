@@ -28,6 +28,7 @@ model Facultad {
   vinculaciones        VinculacionCatedra[]
   usuariosAsociados    UsuarioFacultad[]
   autoevaluacionConfig AutoevaluacionConfigFacultad?
+  ejecucionesAnalisis  AnalisisEjecucion[]
 }
 
 model Carrera {
@@ -68,6 +69,10 @@ model PlanEstudio {
   horasMinTB            Int?
   horasMinTA            Int?
   horasMinCTX           Int?
+  // MOD-AUT R-13: configuración de formación práctica (FSD §6.3). NULL = no configurado (≠ false = no requerido).
+  requierePPS            Boolean?
+  requierePI             Boolean?
+  porcentajeMinFormacion Int?
   materias              Materia[]
   carrera               Carrera              @relation(fields: [carreraId], references: [id])
   vinculaciones         VinculacionCatedra[]
@@ -231,30 +236,32 @@ model RolPermiso {
 }
 
 model Usuario {
-  id                         String               @id @default(uuid())
-  nombre                     String
-  apellido                   String
-  correoElectronico          String               @unique
-  contrasenaHash             String
-  activo                     Boolean              @default(true)
-  fechaCreacion              DateTime             @default(now())
-  fechaActualizacion         DateTime             @updatedAt
-  rolId                      String
-  docente                    Docente?
-  historialMaterias          HistorialMateria[]
-  historialProgramas         HistorialPrograma[]
-  sesiones                   Sesion[]
-  tokensRecuperacion         TokenRecuperacion[]
-  tokensRefresh              TokenRefresh[]
-  rol                        Rol                  @relation(fields: [rolId], references: [id])
-  vinculacionesAprobadas          VinculacionCatedra[] @relation("VinculacionAprobador")
-  vinculacionesDesvinculadas      VinculacionCatedra[] @relation("VinculacionDesvinculador")
-  vinculacionesSolicitadas        VinculacionCatedra[] @relation("VinculacionSolicitante")
-  carrerasAsociadas               UsuarioCarrera[]
-  facultadesAsociadas             UsuarioFacultad[]
-  solicitudesProgramasAprobadas   SolicitudAprobacionPrograma[] @relation("SolicitudProgramaAprobador")
-  mensajesCorrecion               MensajeCorrecionPrograma[]
-  notificaciones                  Notificacion[]
+  id                            String                        @id @default(uuid())
+  nombre                        String
+  apellido                      String
+  correoElectronico             String                        @unique
+  contrasenaHash                String
+  activo                        Boolean                       @default(true)
+  fechaCreacion                 DateTime                      @default(now())
+  fechaActualizacion            DateTime                      @updatedAt
+  rolId                         String
+  docente                       Docente?
+  historialMaterias             HistorialMateria[]
+  historialProgramas            HistorialPrograma[]
+  sesiones                      Sesion[]
+  tokensRecuperacion            TokenRecuperacion[]
+  tokensRefresh                 TokenRefresh[]
+  rol                           Rol                           @relation(fields: [rolId], references: [id])
+  vinculacionesAprobadas        VinculacionCatedra[]          @relation("VinculacionAprobador")
+  vinculacionesDesvinculadas    VinculacionCatedra[]          @relation("VinculacionDesvinculador")
+  vinculacionesSolicitadas      VinculacionCatedra[]          @relation("VinculacionSolicitante")
+  cargosDocentesCreados         CargoDocente[]                @relation("CargoDocenteCreador")
+  carrerasAsociadas             UsuarioCarrera[]
+  facultadesAsociadas           UsuarioFacultad[]
+  solicitudesProgramasAprobadas SolicitudAprobacionPrograma[] @relation("SolicitudProgramaAprobador")
+  mensajesCorrecion             MensajeCorrecionPrograma[]
+  notificaciones                Notificacion[]
+  ejecucionesAnalisis           AnalisisEjecucion[]
 }
 
 model Sesion {
@@ -301,12 +308,13 @@ model Catedra {
 }
 
 model Cargo {
-  id                 String               @id @default(uuid())
-  nombre             String               @unique
-  activo             Boolean              @default(true)
-  fechaCreacion      DateTime             @default(now())
-  fechaActualizacion DateTime             @updatedAt
-  vinculaciones      VinculacionCatedra[]
+  id                    String               @id @default(uuid())
+  nombre                String               @unique
+  activo                Boolean              @default(true)
+  fechaCreacion         DateTime             @default(now())
+  fechaActualizacion    DateTime             @updatedAt
+  vinculaciones         VinculacionCatedra[]
+  cargosInstitucionales CargoDocente[]
 }
 
 model Designacion {
@@ -364,6 +372,11 @@ model Docente {
   actividadesProfesionales                     String?
   antecedentesAcademicos                       String?
   activo                                       Boolean              @default(true)
+  // MOD-AUT D2: flag de relevamiento de cargos institucionales para R-04.
+  // false = el relevamiento de CargoDocente aún no fue completado por secretaría.
+  // true  = secretaría confirmó que los cargos en CargoDocente son exhaustivos.
+  // Permite distinguir "sin cargos cargados" (C) de "confirmado sin cargos" (D).
+  relevamientoCargosCompleto                   Boolean              @default(false)
   fechaCreacion                                DateTime             @default(now())
   fechaActualizacion                           DateTime             @updatedAt
   usuarioId                                    String?              @unique
@@ -445,10 +458,46 @@ model Docente {
   usuario                                      Usuario?             @relation(fields: [usuarioId], references: [id])
   notificaciones                               Notificacion[]
   vinculaciones                                VinculacionCatedra[]
+  cargosInstitucionales                        CargoDocente[]
+}
+
+// ── MOD-AUT D2: Cargos institucionales docentes (R-04) ───────────────────────
+// Representa una designación institucional concreta de un docente en UDEMM.
+// Fuente de verdad para R-04 (Cargo sin actividad curricular).
+// Solo cargos UDEMM — no incluye cargos en otras instituciones (K-D1).
+// La vigencia se deriva de las fechas: vigente = (fechaFin IS NULL OR fechaFin > fechaCalculo).
+// INVARIANTE 1: fechaFin IS NULL OR fechaFin > fechaInicio
+//   → Enforced por CHECK constraint en la migración SQL (no expresable en Prisma).
+// INVARIANTE 2: cuando VinculacionCatedra.cargoDocenteId apunta a un CargoDocente,
+//   ese CargoDocente.docenteId debe coincidir con VinculacionCatedra.docenteId.
+//   → Enforced por trigger PostgreSQL en la migración SQL (no expresable como FK simple).
+model CargoDocente {
+  id                 String    @id @default(uuid())
+  docenteId          String
+  cargoId            String
+  designacion        String?
+  fechaInicio        DateTime
+  fechaFin           DateTime?
+  verificado         Boolean   @default(false)
+  fuente             String    @default("SECRETARIA")
+  // 'SECRETARIA' = ingresado por secretaría/decano (valor normal)
+  // 'IMPORTADO'  = importado desde fuente externa con validación previa
+  observaciones      String?
+  creadoPorId        String?
+  fechaCreacion      DateTime  @default(now())
+  fechaActualizacion DateTime  @updatedAt
+
+  docente              Docente              @relation(fields: [docenteId], references: [id], onDelete: Restrict)
+  cargo                Cargo                @relation(fields: [cargoId], references: [id], onDelete: Restrict)
+  creadoPor            Usuario?             @relation("CargoDocenteCreador", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  vinculacionesCatedra VinculacionCatedra[]
+
+  @@index([docenteId])
+  @@index([docenteId, fechaFin])
 }
 
 model VinculacionCatedra {
-  id                          String      @id @default(uuid())
+  id                          String        @id @default(uuid())
   facultadId                  String
   carreraId                   String
   planEstudioId               String
@@ -458,11 +507,11 @@ model VinculacionCatedra {
   cargoId                     String
   modalidadId                 String
   designacionId               String
-  estado                      String      @default("PENDIENTE_DE_APROBACION")
+  estado                      String        @default("PENDIENTE_DE_APROBACION")
   observaciones               String?
   usuarioSolicitanteId        String
-  fechaCreacion               DateTime    @default(now())
-  fechaActualizacion          DateTime    @updatedAt
+  fechaCreacion               DateTime      @default(now())
+  fechaActualizacion          DateTime      @updatedAt
   aprobadorId                 String?
   fechaAprobacion             DateTime?
   motivoRechazo               String?
@@ -476,21 +525,29 @@ model VinculacionCatedra {
   // La unicidad de (materiaId, catedraId) con esResponsableCatedra=true se garantiza
   // mediante un índice parcial en la migración SQL (no expresable en Prisma con @unique condicional).
   esResponsableCatedra        Boolean?
-  aprobador                   Usuario?    @relation("VinculacionAprobador", fields: [aprobadorId], references: [id])
-  cargo                       Cargo       @relation(fields: [cargoId], references: [id])
-  carrera                     Carrera     @relation(fields: [carreraId], references: [id])
-  catedra                     Catedra     @relation(fields: [catedraId], references: [id])
-  designacion                 Designacion @relation(fields: [designacionId], references: [id])
-  desvinculador               Usuario?    @relation("VinculacionDesvinculador", fields: [desvinculadorId], references: [id])
-  docente                     Docente     @relation(fields: [docenteId], references: [id])
-  facultad                    Facultad    @relation(fields: [facultadId], references: [id])
-  materia                     Materia     @relation(fields: [materiaId], references: [id])
-  modalidad                   Modalidad   @relation(fields: [modalidadId], references: [id])
-  planEstudio                 PlanEstudio @relation(fields: [planEstudioId], references: [id])
-  usuarioSolicitante          Usuario     @relation("VinculacionSolicitante", fields: [usuarioSolicitanteId], references: [id])
+  // MOD-AUT D2: asociación con cargo institucional para R-04.
+  // Nullable — los registros históricos no tienen cargo institucional asociado.
+  // INVARIANTE: cuando no es null, cargoDocente.docenteId debe coincidir con docenteId.
+  //   → Enforced por trigger PostgreSQL en la migración SQL (ver INVARIANTE 2 en CargoDocente).
+  // onDelete: SetNull — si el CargoDocente se elimina, la vinculación se conserva sin asociación.
+  cargoDocenteId              String?
+  aprobador                   Usuario?      @relation("VinculacionAprobador", fields: [aprobadorId], references: [id])
+  cargo                       Cargo         @relation(fields: [cargoId], references: [id])
+  cargoDocente                CargoDocente? @relation(fields: [cargoDocenteId], references: [id], onDelete: SetNull)
+  carrera                     Carrera       @relation(fields: [carreraId], references: [id])
+  catedra                     Catedra       @relation(fields: [catedraId], references: [id])
+  designacion                 Designacion   @relation(fields: [designacionId], references: [id])
+  desvinculador               Usuario?      @relation("VinculacionDesvinculador", fields: [desvinculadorId], references: [id])
+  docente                     Docente       @relation(fields: [docenteId], references: [id])
+  facultad                    Facultad      @relation(fields: [facultadId], references: [id])
+  materia                     Materia       @relation(fields: [materiaId], references: [id])
+  modalidad                   Modalidad     @relation(fields: [modalidadId], references: [id])
+  planEstudio                 PlanEstudio   @relation(fields: [planEstudioId], references: [id])
+  usuarioSolicitante          Usuario       @relation("VinculacionSolicitante", fields: [usuarioSolicitanteId], references: [id])
 
   @@index([planEstudioId, esResponsableCatedra])
   @@index([materiaId, catedraId])
+  @@index([cargoDocenteId])
 }
 
 model TipoPosgrado {
@@ -691,4 +748,26 @@ model AutoevaluacionConfigFacultad {
   facultad   Facultad @relation(fields: [facultadId], references: [id])
 
   @@map("autoevaluacion_config_facultad")
+}
+
+model AnalisisEjecucion {
+  id                String    @id @default(uuid())
+  ambito            String    // 'FACULTAD' | 'CARRERA' | 'PLAN'
+  entidadId         String    // facultadId | carreraId | planEstudioId según ambito
+  facultadId        String    // siempre la facultad de contexto, para scope de acceso
+  usuarioId         String
+  versionFormato    String    @default("1")
+  fechaInicio       DateTime  @default(now())
+  fechaFin          DateTime?
+  estado            String    // 'COMPLETADO' | 'ERROR'
+  snapshot          Json?
+  errores           String?
+  fechaCreacion     DateTime  @default(now())
+  fechaActualizacion DateTime @updatedAt
+  usuario           Usuario   @relation(fields: [usuarioId], references: [id])
+  facultad          Facultad  @relation(fields: [facultadId], references: [id])
+
+  @@index([ambito, entidadId, fechaInicio(sort: Desc)])
+  @@index([facultadId, fechaInicio(sort: Desc)])
+  @@map("autoevaluacion_ejecucion")
 }

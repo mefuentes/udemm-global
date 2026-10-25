@@ -15,9 +15,12 @@ interface ConfigPlan {
   horasMinTB: number | null;
   horasMinTA: number | null;
   horasMinCTX: number | null;
+  requierePPS: boolean | null;
+  requierePI: boolean | null;
+  porcentajeMinFormacion: number | null;
 }
 
-type CampoUmbral = keyof Omit<ConfigPlan, 'planEstudioId'>;
+type CampoUmbral = 'horasMinTotales' | 'horasMinCB' | 'horasMinTB' | 'horasMinTA' | 'horasMinCTX';
 
 // ── Metadatos de los cinco parámetros ────────────────────────────────────────
 
@@ -32,7 +35,7 @@ const PARAMETROS: Array<{ campo: CampoUmbral; codigo: string; nombre: string; de
     campo: 'horasMinCB',
     codigo: 'P-11',
     nombre: 'Horas mínimas — Ciencias Básicas (CB)',
-    descripcion: 'Umbral del bloque CB. null = no configurado → R-09 no evalúa este bloque.',
+    descripcion: 'Umbral del bloque CB. null = no configurado → R-09 no evaluará ese bloque.',
   },
   {
     campo: 'horasMinTB',
@@ -103,6 +106,14 @@ function ConfigPlanInner() {
   const [exito,     setExito]     = useState(false);
   const [errorGuardar, setErrorGuardar] = useState<string | null>(null);
 
+  // R-13: '' = null, 'true'/'false' para booleanos, string numérico para porcentaje
+  const [formR13, setFormR13] = useState<{ requierePPS: string; requierePI: string; porcentajeMinFormacion: string }>({
+    requierePPS: '', requierePI: '', porcentajeMinFormacion: '',
+  });
+  const snapshotR13Ref = useRef<{ requierePPS: string; requierePI: string; porcentajeMinFormacion: string }>({
+    requierePPS: '', requierePI: '', porcentajeMinFormacion: '',
+  });
+
   // ── Carga ────────────────────────────────────────────────────────────────
 
   async function cargar() {
@@ -125,6 +136,13 @@ function ConfigPlanInner() {
       };
       setForm(valores);
       snapshotRef.current = { ...valores };
+      const r13Valores = {
+        requierePPS: cfg.requierePPS !== null ? String(cfg.requierePPS) : '',
+        requierePI:  cfg.requierePI  !== null ? String(cfg.requierePI)  : '',
+        porcentajeMinFormacion: cfg.porcentajeMinFormacion !== null ? String(cfg.porcentajeMinFormacion) : '',
+      };
+      setFormR13(r13Valores);
+      snapshotR13Ref.current = { ...r13Valores };
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -150,13 +168,22 @@ function ConfigPlanInner() {
     if (e) { erroresCampo[p.campo] = e; hayErrores = true; }
   }
 
+  const errPorcentaje = (() => {
+    const v = formR13.porcentajeMinFormacion;
+    if (v === '') return null;
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 0 || n > 100) return 'Debe ser un entero entre 0 y 100 o vacío';
+    return null;
+  })();
+  if (errPorcentaje) hayErrores = true;
+
   // ── Guardar ──────────────────────────────────────────────────────────────
 
   async function guardar() {
     if (!esAdmin || guardando || hayErrores) return;
 
     // Construir payload con solo los campos modificados
-    const payload: Record<string, number | null> = {};
+    const payload: Record<string, number | boolean | null> = {};
     let sinCambios = true;
 
     for (const p of PARAMETROS) {
@@ -166,6 +193,19 @@ function ConfigPlanInner() {
 
       sinCambios = false;
       payload[p.campo] = valorActual === '' ? null : Number(valorActual);
+    }
+
+    // R-13 booleanos: '' → null, 'true'/'false' → boolean
+    for (const campo of ['requierePPS', 'requierePI'] as const) {
+      if (formR13[campo] === snapshotR13Ref.current[campo]) continue;
+      sinCambios = false;
+      payload[campo] = formR13[campo] === '' ? null : formR13[campo] === 'true';
+    }
+    // R-13 porcentaje
+    if (formR13.porcentajeMinFormacion !== snapshotR13Ref.current.porcentajeMinFormacion) {
+      sinCambios = false;
+      payload.porcentajeMinFormacion =
+        formR13.porcentajeMinFormacion === '' ? null : Number(formR13.porcentajeMinFormacion);
     }
 
     if (sinCambios) {
@@ -186,8 +226,6 @@ function ConfigPlanInner() {
       if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error al guardar la configuración'));
 
       // Actualizar snapshot con los nuevos valores confirmados
-      snapshotRef.current = { ...form };
-      // Reflejar la respuesta del servidor si cambia algún valor
       const cfg = data as ConfigPlan;
       const nuevosValores: Record<CampoUmbral, string> = {
         horasMinTotales: cfg.horasMinTotales !== null ? String(cfg.horasMinTotales) : '',
@@ -198,6 +236,13 @@ function ConfigPlanInner() {
       };
       setForm(nuevosValores);
       snapshotRef.current = { ...nuevosValores };
+      const nuevosR13 = {
+        requierePPS: cfg.requierePPS !== null ? String(cfg.requierePPS) : '',
+        requierePI:  cfg.requierePI  !== null ? String(cfg.requierePI)  : '',
+        porcentajeMinFormacion: cfg.porcentajeMinFormacion !== null ? String(cfg.porcentajeMinFormacion) : '',
+      };
+      setFormR13(nuevosR13);
+      snapshotR13Ref.current = { ...nuevosR13 };
       setConfig(cfg);
       setExito(true);
     } catch (e) {
@@ -212,6 +257,11 @@ function ConfigPlanInner() {
   const tableroHref = `/autoevaluacion/tablero/${planId}${planLabel || carreraLabel
     ? `?plan=${encodeURIComponent(planLabel)}&carrera=${encodeURIComponent(carreraLabel)}`
     : ''}`;
+
+  // Indicadores de modificación para R-13
+  const r13PPSmod = esAdmin && formR13.requierePPS !== snapshotR13Ref.current.requierePPS;
+  const r13PImod  = esAdmin && formR13.requierePI  !== snapshotR13Ref.current.requierePI;
+  const r13Pctmod = esAdmin && formR13.porcentajeMinFormacion !== snapshotR13Ref.current.porcentajeMinFormacion;
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -288,13 +338,13 @@ function ConfigPlanInner() {
         </div>
       )}
 
-      {/* Formulario / vista de umbrales */}
+      {/* Formulario / vista de umbrales — P-10 a P-14 */}
       {config && !error && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
 
           {/* Cabecera de la tarjeta */}
           <div className="px-5 py-4 border-b border-slate-100 bg-[#0f4c81]/3">
-            <p className="text-xs font-semibold text-[#0f4c81]">Parámetros P-10 a P-14</p>
+            <p className="text-xs font-semibold text-[#0f4c81]">Parámetros P-10 a P-14 — Horas mínimas</p>
             <p className="text-[11px] text-slate-500 mt-0.5">
               Cada plan tiene su propio juego de cinco valores.
               Dejar vacío un campo equivale a «sin umbral configurado»:
@@ -390,7 +440,202 @@ function ConfigPlanInner() {
                 disabled={guardando || hayErrores}
                 className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-lg bg-[#0f4c81] text-white hover:bg-[#0a3d6e] active:bg-[#082f55] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
               >
-                {guardando ? <><IcSpinner sm />Guardando...</> : 'Guardar umbrales'}
+                {guardando ? <><IcSpinner sm />Guardando...</> : 'Guardar cambios'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Configuración R-13 — Formación práctica */}
+      {config && !error && (
+        <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+
+          <div className="px-5 py-4 border-b border-slate-100 bg-amber-500/5">
+            <p className="text-xs font-semibold text-amber-700">Parámetros R-13 — Formación práctica</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Define los requisitos de práctica profesional (PPS) y proyecto integrador (PI),
+              y el umbral mínimo de horas de formación práctica del plan.
+              «Sin configurar» equivale a «no evaluado» para esa condición.
+            </p>
+          </div>
+
+          <div className="divide-y divide-slate-50">
+
+            {/* requierePPS */}
+            <div className="px-5 py-4 flex items-start gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[11px] font-bold font-mono bg-amber-500/8 text-amber-700 px-2 py-0.5 rounded border border-amber-200/60">
+                    R-13
+                  </span>
+                  {r13PPSmod && (
+                    <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                      modificado
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs font-semibold text-slate-700 leading-snug">Requiere Práctica Profesional Supervisada (PPS)</p>
+                <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                  Si el plan exige al menos una materia de tipo PPS para graduarse.
+                  Sin configurar → R-13 no evalúa esta condición.
+                </p>
+              </div>
+              <div className="flex-shrink-0 w-36">
+                {esAdmin ? (
+                  <select
+                    value={formR13.requierePPS}
+                    onChange={e => {
+                      setExito(false);
+                      setErrorGuardar(null);
+                      setFormR13(prev => ({ ...prev, requierePPS: e.target.value }));
+                    }}
+                    className={`w-full text-xs border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] ${
+                      r13PPSmod ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'
+                    }`}
+                  >
+                    <option value="">Sin configurar</option>
+                    <option value="true">Sí, requiere PPS</option>
+                    <option value="false">No requiere PPS</option>
+                  </select>
+                ) : (
+                  <p className="text-sm font-semibold text-right text-slate-700">
+                    {config.requierePPS === null
+                      ? <span className="text-slate-400 font-normal text-xs">Sin configurar</span>
+                      : config.requierePPS ? 'Sí' : 'No'}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* requierePI */}
+            <div className="px-5 py-4 flex items-start gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[11px] font-bold font-mono bg-amber-500/8 text-amber-700 px-2 py-0.5 rounded border border-amber-200/60">
+                    R-13
+                  </span>
+                  {r13PImod && (
+                    <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                      modificado
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs font-semibold text-slate-700 leading-snug">Requiere Proyecto Integrador (PI)</p>
+                <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                  Si el plan exige al menos una materia de tipo PI para graduarse.
+                  Sin configurar → R-13 no evalúa esta condición.
+                </p>
+              </div>
+              <div className="flex-shrink-0 w-36">
+                {esAdmin ? (
+                  <select
+                    value={formR13.requierePI}
+                    onChange={e => {
+                      setExito(false);
+                      setErrorGuardar(null);
+                      setFormR13(prev => ({ ...prev, requierePI: e.target.value }));
+                    }}
+                    className={`w-full text-xs border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] ${
+                      r13PImod ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'
+                    }`}
+                  >
+                    <option value="">Sin configurar</option>
+                    <option value="true">Sí, requiere PI</option>
+                    <option value="false">No requiere PI</option>
+                  </select>
+                ) : (
+                  <p className="text-sm font-semibold text-right text-slate-700">
+                    {config.requierePI === null
+                      ? <span className="text-slate-400 font-normal text-xs">Sin configurar</span>
+                      : config.requierePI ? 'Sí' : 'No'}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* porcentajeMinFormacion */}
+            <div className="px-5 py-4 flex items-start gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[11px] font-bold font-mono bg-amber-500/8 text-amber-700 px-2 py-0.5 rounded border border-amber-200/60">
+                    R-13
+                  </span>
+                  {r13Pctmod && (
+                    <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                      modificado
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs font-semibold text-slate-700 leading-snug">Porcentaje mínimo de formación práctica</p>
+                <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                  Umbral de horas PPS+PI como porcentaje del total del plan (0–100).
+                  Sin configurar → R-13 no evalúa el porcentaje.
+                </p>
+                {errPorcentaje && (
+                  <p className="text-[11px] text-red-600 mt-1">{errPorcentaje}</p>
+                )}
+              </div>
+              <div className="flex-shrink-0 w-36">
+                {esAdmin ? (
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={formR13.porcentajeMinFormacion}
+                      onChange={e => {
+                        setExito(false);
+                        setErrorGuardar(null);
+                        setFormR13(prev => ({ ...prev, porcentajeMinFormacion: e.target.value }));
+                      }}
+                      placeholder="Sin umbral"
+                      className={`w-full text-xs border rounded-lg px-3 py-2 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] ${
+                        errPorcentaje
+                          ? 'border-red-300 bg-red-50'
+                          : r13Pctmod
+                          ? 'border-amber-300 bg-amber-50'
+                          : 'border-slate-200 bg-white'
+                      }`}
+                    />
+                    {formR13.porcentajeMinFormacion !== '' && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none select-none" style={{ marginRight: '1.75rem' }}>
+                        %
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm font-semibold tabular-nums text-right text-slate-700">
+                    {config.porcentajeMinFormacion !== null
+                      ? `${config.porcentajeMinFormacion} %`
+                      : <span className="text-slate-400 font-normal text-xs">Sin configurar</span>}
+                  </p>
+                )}
+              </div>
+            </div>
+
+          </div>
+
+          {esAdmin && (
+            <div className="px-5 py-4 bg-slate-50/60 border-t border-slate-100 flex items-center justify-between gap-3">
+              <div className="min-h-[1.5rem]">
+                {exito && !errorGuardar && (
+                  <p className="text-xs text-emerald-700 flex items-center gap-1.5">
+                    <span className="text-emerald-500">✓</span>
+                    Configuración guardada correctamente.
+                  </p>
+                )}
+                {errorGuardar && (
+                  <p className="text-xs text-red-700">{errorGuardar}</p>
+                )}
+              </div>
+              <button
+                onClick={guardar}
+                disabled={guardando || hayErrores}
+                className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-lg bg-[#0f4c81] text-white hover:bg-[#0a3d6e] active:bg-[#082f55] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+              >
+                {guardando ? <><IcSpinner sm />Guardando...</> : 'Guardar cambios'}
               </button>
             </div>
           )}

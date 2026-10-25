@@ -16,7 +16,10 @@ const CONTEXTO_POR_INDICADOR: Record<string, 'carreraId' | 'planEstudioId'> = {
   'R-07': 'carreraId',
   'R-08': 'planEstudioId',
   'R-09': 'planEstudioId',
+  'R-11': 'planEstudioId',
   'R-12': 'carreraId',
+  'R-13': 'planEstudioId',
+  'R-14': 'planEstudioId',
 };
 
 // ── API helper ─────────────────────────────────────────────────────────────────
@@ -37,7 +40,7 @@ interface IndicadorMeta {
   tipo: string;
   severidad: string;
   alcance: string;
-  estadoImplementacion: 'IMPLEMENTADO' | 'NO_IMPLEMENTADO';
+  estadoImplementacion: 'IMPLEMENTADO' | 'PARCIAL' | 'NO_IMPLEMENTADO';
   motivoPendiente?: string;
 }
 
@@ -50,7 +53,7 @@ interface ResultadoEvaluacion {
   codigo: string;
   contextoId: string;
   tipoContexto: string;
-  estadoImplementacion: 'IMPLEMENTADO' | 'NO_IMPLEMENTADO';
+  estadoImplementacion: 'IMPLEMENTADO' | 'PARCIAL' | 'NO_IMPLEMENTADO';
   estadoCalculo: 'CALCULADO' | 'PARCIAL' | 'NO_DETERMINABLE' | 'NO_APLICA' | null;
   valor: unknown;
   unidad?: string;
@@ -381,6 +384,19 @@ export default function AutoevaluacionPage() {
           </div>
         </div>
 
+        {/* Bandeja de alertas */}
+        <div className="mt-3 pt-3 border-t border-slate-100">
+          <Link
+            href="/autoevaluacion/alertas"
+            className="flex items-center gap-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 px-2.5 py-1.5 rounded-lg transition-colors w-fit border border-red-100"
+          >
+            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            Ver bandeja global de alertas →
+          </Link>
+        </div>
+
         {/* Contexto activo */}
         {(carreraLabel || planLabel) && (
           <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
@@ -401,6 +417,14 @@ export default function AutoevaluacionPage() {
                 className="flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[#0f4c81]/10 text-[#0f4c81] border border-[#0f4c81]/20 hover:bg-[#0f4c81]/15 transition-colors"
               >
                 Ver tablero de carrera →
+              </Link>
+            )}
+            {carreraSeleccionada?.facultadId && (
+              <Link
+                href={`/autoevaluacion/tablero/facultad/${carreraSeleccionada.facultadId}`}
+                className="flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition-colors"
+              >
+                Ver tablero de facultad →
               </Link>
             )}
             {rol === 'ADMINISTRADOR_SISTEMA' && carreraSeleccionada?.facultadId && (
@@ -568,7 +592,7 @@ export default function AutoevaluacionPage() {
 
 function PanelResultado({ resultado }: { resultado: ResultadoEvaluacion }) {
   const { estadoCalculo, estadoImplementacion } = resultado;
-  const esImplementado = estadoImplementacion === 'IMPLEMENTADO';
+  const esImplementado = estadoImplementacion !== 'NO_IMPLEMENTADO';
   const [verJson, setVerJson] = useState(false);
 
   return (
