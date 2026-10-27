@@ -453,12 +453,23 @@ model Docente {
   premiosDistinciones                          String?
   areaDisciplinarId                            String?
   subareaId                                    String?
+  // D-05: categoría CONEAU de dedicación (CIERRE-03 Fase B). Null = NO_DETERMINADA.
+  // Requiere migración antes de activar consultas. Ver docs/autoevaluacion/PLAN-MIGRACION-CIERRE03-B.md
+  tipoDedicacionConeauId                       String?
+  // D-06: nivel de posgrado para conteo CONEAU (CIERRE-03 Fase B). Null = no clasificado.
+  // No reemplaza ni modifica tituloPosgrado (texto libre).
+  tipoPosgradoId                               String?
   areaDisciplinarRel                           AreaDisciplinar?     @relation(fields: [areaDisciplinarId], references: [id])
   subareaRel                                   Subarea?             @relation(fields: [subareaId], references: [id])
+  tipoDedicacionConeau                         TipoDedicacionConeau? @relation(fields: [tipoDedicacionConeauId], references: [id])
+  tipoPosgrado                                 TipoPosgrado?        @relation(fields: [tipoPosgradoId], references: [id])
   usuario                                      Usuario?             @relation(fields: [usuarioId], references: [id])
   notificaciones                               Notificacion[]
   vinculaciones                                VinculacionCatedra[]
   cargosInstitucionales                        CargoDocente[]
+
+  @@index([tipoDedicacionConeauId])
+  @@index([tipoPosgradoId])
 }
 
 // ── MOD-AUT D2: Cargos institucionales docentes (R-04) ───────────────────────
@@ -551,11 +562,27 @@ model VinculacionCatedra {
 }
 
 model TipoPosgrado {
-  id                 String   @id @default(uuid())
-  nombre             String   @unique
-  activo             Boolean  @default(true)
-  fechaCreacion      DateTime @default(now())
-  fechaActualizacion DateTime @updatedAt
+  id                 String    @id @default(uuid())
+  nombre             String    @unique
+  activo             Boolean   @default(true)
+  fechaCreacion      DateTime  @default(now())
+  fechaActualizacion DateTime  @updatedAt
+  docentes           Docente[]
+}
+
+// ── D-05: Catálogo controlado de dedicación CONEAU (CIERRE-03 Fase B) ─────────
+// Representa las tres categorías formales CONEAU de dedicación docente.
+// El catálogo se gestiona vía tablas-maestras. Seed inicial: EXCLUSIVA, SEMIEXCLUSIVA, SIMPLE.
+// Docente.tipoDedicacionConeauId = null → categoría NO_DETERMINADA (ausencia de dato reconocido).
+// La columna 'codigo' es el identificador estable que el código del sistema debe referenciar.
+model TipoDedicacionConeau {
+  id                 String    @id @default(uuid())
+  nombre             String    @unique  // "Exclusiva", "Semiexclusiva", "Simple"
+  codigo             String    @unique  // "EXCLUSIVA", "SEMIEXCLUSIVA", "SIMPLE"
+  activo             Boolean   @default(true)
+  fechaCreacion      DateTime  @default(now())
+  fechaActualizacion DateTime  @updatedAt
+  docentes           Docente[]
 }
 
 model TipoNormativa {
