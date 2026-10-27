@@ -5,16 +5,29 @@ import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetch, mensajeErrorHttp } from '@/lib/api';
 import type {
+  AlertasDocente,
+  CondicionesPlantellResponse,
+  DedicacionConeauItem,
+  DedicacionTipoItem,
+  DistribucionSemaforosCarrera,
+  PosgradoTipoItem,
+  DocenteAccionRequerida,
   DocenteAlertaR10,
   DocenteAlertaR12,
   EstadoCalculo,
+  FilaDocenteListado,
+  ListadoDocentesCarreraResponse,
+  ResultadoAccionRequerida,
   ResultadoIP04,
   ResultadoIP09,
   ResultadoIP10,
   ResultadoIP13,
   ResultadoR10,
   ResultadoR12,
+  SemaforoDocente,
+  SubindicadorAR,
   TablroCarreraResponse,
+  TotalesListadoDocentes,
 } from './types';
 import type { HistorialAnalisis, ItemHistorial, MetadataEjecucion } from '../../../analisis/analisis.types';
 
@@ -80,6 +93,180 @@ function Metrica({ label, valor, destaca = false }: {
     <div className={`rounded-lg px-3 py-2 border text-center ${destaca ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
       <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-0.5 leading-tight">{label}</p>
       <p className={`text-sm font-bold tabular-nums ${destaca ? 'text-red-700' : 'text-slate-700'}`}>{valor}</p>
+    </div>
+  );
+}
+
+// ── Acción requerida ─────────────────────────────────────────────────────────
+
+const ICONOS_AR: Record<string, JSX.Element> = {
+  alta: (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+    </svg>
+  ),
+  sobre: (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
+    </svg>
+  ),
+  cargo: (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 0 0 .75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 0 0-3.413-.387m4.5 8.006-3.75 3.75m0 0-3.75-3.75M19.5 12h-15" />
+    </svg>
+  ),
+  horas: (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+  ),
+};
+
+function ListaDocentesAR({
+  docentes, carreraId,
+}: { docentes: DocenteAccionRequerida[]; carreraId: string }) {
+  const [expandido, setExpandido] = useState(false);
+  const visibles = expandido ? docentes : docentes.slice(0, 3);
+  const resto = docentes.length - 3;
+
+  return (
+    <div className="mt-2 space-y-1">
+      {visibles.map(d => (
+        <Link
+          key={d.docenteId}
+          href={`/autoevaluacion/ficha-docente/${d.docenteId}`}
+          className="flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-[#0f4c81] transition-colors group"
+        >
+          <span className="w-1 h-1 rounded-full bg-slate-300 group-hover:bg-[#0f4c81] flex-shrink-0" />
+          <span className="truncate">{d.nombre}</span>
+          {d.incierto && (
+            <span className="ml-auto flex-shrink-0 text-[9px] text-slate-400 italic whitespace-nowrap">
+              datos incompletos
+            </span>
+          )}
+        </Link>
+      ))}
+      {!expandido && resto > 0 && (
+        <button
+          onClick={() => setExpandido(true)}
+          className="text-[11px] text-[#0f4c81] hover:underline pl-2.5"
+        >
+          +{resto} más
+        </button>
+      )}
+    </div>
+  );
+}
+
+function TarjetaAR({
+  icono, titulo, subindicador, carreraId, colorAlta = false, desglose,
+}: {
+  icono: JSX.Element;
+  titulo: string;
+  subindicador: SubindicadorAR;
+  carreraId: string;
+  colorAlta?: boolean;
+  desglose?: { confirmados: number; inciertos: number };
+}) {
+  const sinCasos = subindicador.total === 0;
+  return (
+    <div className={`rounded-xl border shadow-sm p-4 ${sinCasos ? 'bg-white border-slate-200' : colorAlta ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
+      <div className="flex items-center gap-2 mb-2">
+        <span className={sinCasos ? 'text-slate-400' : colorAlta ? 'text-red-600' : 'text-amber-600'}>
+          {icono}
+        </span>
+        <span className={`text-[11px] font-semibold ${sinCasos ? 'text-slate-500' : colorAlta ? 'text-red-700' : 'text-amber-700'}`}>
+          {titulo}
+        </span>
+      </div>
+      {sinCasos ? (
+        <div className="flex items-center gap-1.5 text-xs text-slate-400 italic">
+          <svg className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+          Sin casos
+        </div>
+      ) : (
+        <>
+          <p className={`text-2xl font-bold tabular-nums ${colorAlta ? 'text-red-700' : 'text-amber-700'}`}>
+            {subindicador.total}
+          </p>
+          <p className={`text-[10px] mb-1 ${colorAlta ? 'text-red-500' : 'text-amber-500'}`}>
+            {subindicador.total === 1 ? 'docente' : 'docentes'}
+          </p>
+          <ListaDocentesAR docentes={subindicador.docentes} carreraId={carreraId} />
+          {desglose && desglose.inciertos > 0 && (
+            <div className="mt-1.5 text-[10px] text-slate-400 flex flex-wrap gap-x-1.5">
+              {desglose.confirmados > 0 && (
+                <span>{desglose.confirmados} confirmados ·</span>
+              )}
+              <span className="italic">{desglose.inciertos} datos incompletos</span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function PanelAccionRequerida({
+  ar, carreraId,
+}: { ar: ResultadoAccionRequerida; carreraId: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-[11px] font-bold font-mono bg-red-50 text-red-700 px-2 py-0.5 rounded border border-red-200">
+          AR
+        </span>
+        <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+          Acción requerida — ¿qué hay que resolver?
+        </span>
+        <span className="ml-auto">
+          <EstadoBadge ec={ar.estadoCalculo} />
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <TarjetaAR
+          icono={ICONOS_AR.alta}
+          titulo="Con alertas altas"
+          subindicador={ar.conAlertasAltas}
+          carreraId={carreraId}
+          colorAlta
+        />
+        <TarjetaAR
+          icono={ICONOS_AR.sobre}
+          titulo="Sobre-asignados"
+          subindicador={ar.sobreasignados}
+          carreraId={carreraId}
+          colorAlta
+        />
+        <TarjetaAR
+          icono={ICONOS_AR.cargo}
+          titulo="Sin actividad curricular"
+          subindicador={ar.sinActividadCurricular}
+          carreraId={carreraId}
+        />
+        <TarjetaAR
+          icono={ICONOS_AR.horas}
+          titulo={`Dedicación < ${ar.bajaDedicacion.umbral} h`}
+          subindicador={ar.bajaDedicacion}
+          carreraId={carreraId}
+          desglose={{ confirmados: ar.bajaDedicacion.confirmados, inciertos: ar.bajaDedicacion.inciertos }}
+        />
+      </div>
+
+      {ar.estadoCalculo === 'PARCIAL' && (
+        <p className="mt-3 text-[10px] text-amber-600 italic">
+          PARCIAL: la evaluación cubre solo la carrera solicitada (alcance limitado para IP-13 o R-10).
+          Los totales pueden estar subestimados.
+        </p>
+      )}
+      {ar.estadoCalculo === 'NO_DETERMINABLE' && (
+        <p className="mt-3 text-[10px] text-slate-500 italic">
+          NO DETERMINABLE: falta configuración MOD-AUT (P-01 o P-02). Algunos indicadores no pudieron calcularse.
+        </p>
+      )}
     </div>
   );
 }
@@ -399,7 +586,7 @@ function TarjetaIP09({ ip09 }: { ip09: ResultadoIP09 }) {
                   className="h-full rounded-full transition-all"
                   style={{
                     width: `${pct}%`,
-                    backgroundColor: pct >= 75 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444',
+                    backgroundColor: pct >= 90 ? '#10b981' : pct >= 60 ? '#f59e0b' : '#ef4444',
                   }}
                 />
               </div>
@@ -533,6 +720,559 @@ function TarjetaIP13({ ip13 }: { ip13: ResultadoIP13 }) {
   );
 }
 
+// ── Condiciones del plantel — CONEAU (B-03) ───────────────────────────────────
+
+function PanelCondicionesPlantell({ cp }: { cp: CondicionesPlantellResponse }) {
+  if (cp.estadoCalculo === 'NO_APLICA') {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10">CP</span>
+          <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">Condiciones del plantel</span>
+        </div>
+        <p className="text-xs text-slate-400 italic">Sin docentes activos con asignación aprobada.</p>
+      </div>
+    );
+  }
+
+  const pct = (n: number) => cp.totalDocentes > 0 ? Math.round((n / cp.totalDocentes) * 100) : 0;
+
+  const indicadores: { label: string; valor: number; pctVal: number }[] = [
+    { label: 'Con posgrado',            valor: cp.conPosgrado,            pctVal: pct(cp.conPosgrado) },
+    { label: 'Con investigación',       valor: cp.conInvestigacion,       pctVal: pct(cp.conInvestigacion) },
+    { label: 'Con designación regular', valor: cp.conDesignacionRegular,  pctVal: pct(cp.conDesignacionRegular) },
+    { label: 'Con designación interina',valor: cp.conDesignacionInterina ?? 0, pctVal: pct(cp.conDesignacionInterina ?? 0) },
+  ];
+
+  const ratioPA = cp.relacionPA
+    ? cp.relacionPA.auxiliares > 0
+      ? `${(cp.relacionPA.profesores / cp.relacionPA.auxiliares).toFixed(1)} : 1`
+      : 'Sin auxiliares'
+    : null;
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10">CP</span>
+        <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+          Condiciones del plantel — CONEAU
+        </span>
+        <span className="ml-auto">
+          <EstadoBadge ec={cp.estadoCalculo} />
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Indicadores booleanos */}
+        <div className="space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
+            Formación y actividad ({cp.totalDocentes} docentes)
+          </p>
+          {indicadores.map(ind => (
+            <div key={ind.label}>
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[11px] text-slate-600">{ind.label}</span>
+                <span className="text-[11px] font-bold text-slate-700 tabular-nums">
+                  {ind.valor} <span className="font-normal text-slate-400">({ind.pctVal}%)</span>
+                </span>
+              </div>
+              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-[#0f4c81]/60"
+                  style={{ width: `${ind.pctVal}%` }}
+                />
+              </div>
+            </div>
+          ))}
+
+          {/* Relación P/A (FSD §9.2) */}
+          {ratioPA !== null && (
+            <div className="pt-1 border-t border-slate-100 mt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-slate-600">Relación profesores/auxiliares</span>
+                <span className="text-[11px] font-bold text-slate-700 tabular-nums">
+                  {ratioPA}
+                </span>
+              </div>
+              {cp.relacionPA && (
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {cp.relacionPA.profesores} prof. · {cp.relacionPA.auxiliares} aux.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Distribución por categoría de designación */}
+        {cp.dedicacionPorTipo.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
+              Categoría de designación
+            </p>
+            <p className="text-[10px] text-amber-600 mb-2">
+              Dedicación horaria pendiente de fuente validada
+            </p>
+            <div className="space-y-1.5">
+              {cp.dedicacionPorTipo.map((item: DedicacionTipoItem) => (
+                <div key={item.tipo} className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-600 flex-1 truncate">{item.tipo}</span>
+                  <span className="text-[11px] font-bold text-slate-700 tabular-nums whitespace-nowrap">
+                    {item.docentes}
+                  </span>
+                  <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-slate-400"
+                      style={{ width: `${cp.totalDocentes > 0 ? Math.round((item.docentes / cp.totalDocentes) * 100) : 0}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Distribución CONEAU de dedicación */}
+        {cp.dedicacionConeau && cp.dedicacionConeau.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
+              Dedicación CONEAU
+            </p>
+            <div className="space-y-1.5">
+              {cp.dedicacionConeau.map((item: DedicacionConeauItem) => (
+                <div key={item.categoria} className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-600 flex-1 truncate">
+                    {item.categoria === 'NO_DETERMINADA' ? 'No determinada' : item.categoria.charAt(0) + item.categoria.slice(1).toLowerCase()}
+                  </span>
+                  <span className="text-[11px] font-bold text-slate-700 tabular-nums whitespace-nowrap">
+                    {item.docentes}
+                  </span>
+                  <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-indigo-400"
+                      style={{ width: `${cp.totalDocentes > 0 ? Math.round((item.docentes / cp.totalDocentes) * 100) : 0}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* D-06: Distribución por nivel de posgrado CONEAU */}
+        {cp.distribucionPosgrado && cp.distribucionPosgrado.length > 0 ? (
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
+              Nivel de posgrado CONEAU
+            </p>
+            <div className="space-y-1.5">
+              {cp.distribucionPosgrado.map((item: PosgradoTipoItem) => (
+                <div key={item.tipo} className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-600 flex-1 truncate">
+                    {item.tipo.charAt(0) + item.tipo.slice(1).toLowerCase()}
+                  </span>
+                  <span className="text-[11px] font-bold text-slate-700 tabular-nums whitespace-nowrap">
+                    {item.docentes}
+                  </span>
+                  <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-violet-400"
+                      style={{ width: `${cp.totalDocentes > 0 ? Math.round((item.docentes / cp.totalDocentes) * 100) : 0}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : cp.distribucionPosgrado !== undefined && (
+          <p className="text-[11px] text-slate-400 italic">
+            Nivel de posgrado: sin docentes clasificados aún
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Distribución de semáforos del plantel (B-04) ─────────────────────────────
+
+function PanelDistribucionSemaforos({ dist }: { dist: DistribucionSemaforosCarrera }) {
+  if (dist.total === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10">DS</span>
+          <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">Distribución de semáforos</span>
+        </div>
+        <p className="text-xs text-sky-700 bg-sky-50 border border-sky-200 rounded-lg p-3">
+          Sin docentes clasificados — el plantel está vacío.
+        </p>
+      </div>
+    );
+  }
+  const pctV = Math.round((dist.verde    / dist.total) * 100);
+  const pctA = Math.round((dist.amarillo / dist.total) * 100);
+  const pctR = Math.round((dist.rojo     / dist.total) * 100);
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10">DS</span>
+        <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">Distribución de semáforos del plantel</span>
+        <span className="ml-auto text-[10px] text-slate-400">{dist.total} docente{dist.total !== 1 ? 's' : ''}</span>
+      </div>
+
+      {/* Barra proporcional */}
+      <div className="flex h-4 rounded-full overflow-hidden mb-4 border border-slate-100">
+        {dist.verde    > 0 && <div style={{ width: `${pctV}%` }} className="bg-emerald-500 flex-shrink-0" title={`VERDE: ${dist.verde}`} />}
+        {dist.amarillo > 0 && <div style={{ width: `${pctA}%` }} className="bg-amber-400 flex-shrink-0"   title={`AMARILLO: ${dist.amarillo}`} />}
+        {dist.rojo     > 0 && <div style={{ width: `${pctR}%` }} className="bg-red-500 flex-shrink-0"     title={`ROJO: ${dist.rojo}`} />}
+      </div>
+
+      {/* Tarjetas de conteo */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-center">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-600 mb-1">VERDE</p>
+          <p className="text-2xl font-black tabular-nums text-emerald-700">{dist.verde}</p>
+          <p className="text-[9px] text-emerald-500 mt-0.5">{pctV}%</p>
+        </div>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-center">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-amber-600 mb-1">AMARILLO</p>
+          <p className="text-2xl font-black tabular-nums text-amber-700">{dist.amarillo}</p>
+          <p className="text-[9px] text-amber-500 mt-0.5">{pctA}%</p>
+        </div>
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-center">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-red-600 mb-1">ROJO</p>
+          <p className="text-2xl font-black tabular-nums text-red-700">{dist.rojo}</p>
+          <p className="text-[9px] text-red-500 mt-0.5">{pctR}%</p>
+        </div>
+      </div>
+
+      <p className="mt-3 text-[10px] text-slate-400">
+        Semáforo por docente: min(completitud_i, consistencia_i).
+        <span className="font-semibold text-emerald-600"> VERDE ≥90</span>
+        <span className="mx-1">·</span>
+        <span className="font-semibold text-amber-600">AMARILLO 60–89</span>
+        <span className="mx-1">·</span>
+        <span className="font-semibold text-red-600">ROJO &lt;60</span>
+      </p>
+    </div>
+  );
+}
+
+// ── Semáforo del plantel (porcentaje VERDE) ───────────────────────────────────
+
+function semaforoPlantoCls(pctVerde: number): string {
+  if (pctVerde >= 90) return 'text-emerald-700';
+  if (pctVerde >= 60) return 'text-amber-700';
+  return 'text-red-700';
+}
+
+// ── Listado de docentes (IMPL-18B, FSD §9.3) ─────────────────────────────────
+
+type FiltroListado = 'todos' | 'conAlertas' | 'sobreasignados' | 'bajaDedicacion' | 'fichaIncompleta';
+
+const FILTRO_LABELS: Record<FiltroListado, string> = {
+  todos:           'Todos',
+  conAlertas:      'Con alertas',
+  sobreasignados:  'Sobre-asignados',
+  bajaDedicacion:  'Dedicación < P-02',
+  fichaIncompleta: 'Ficha incompleta',
+};
+
+function semaforoCls(s: SemaforoDocente): string {
+  if (s === 'VERDE')    return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+  if (s === 'AMARILLO') return 'bg-amber-100 text-amber-700 border-amber-200';
+  return 'bg-red-100 text-red-700 border-red-200';
+}
+
+function BadgeSemaforo({ s }: { s: SemaforoDocente }) {
+  return (
+    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${semaforoCls(s)}`}>
+      {s}
+    </span>
+  );
+}
+
+function BadgeAlerta({ label, tipo }: { label: string; tipo: 'alta' | 'media' | 'info' }) {
+  const cls =
+    tipo === 'alta'  ? 'bg-red-50 text-red-600 border-red-200' :
+    tipo === 'media' ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                       'bg-slate-50 text-slate-500 border-slate-200';
+  return (
+    <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+function alertasBadges(al: AlertasDocente) {
+  const badges: JSX.Element[] = [];
+  if (al.altaTope)                   badges.push(<BadgeAlerta key="tope"  label="Tope"        tipo="alta"  />);
+  if (al.altaSinActividad)           badges.push(<BadgeAlerta key="sinac" label="Sin actividad" tipo="alta"  />);
+  if (al.mediaSobreasignado)         badges.push(<BadgeAlerta key="sobre" label="Sobreasig."    tipo="media" />);
+  if (al.informativaBajaDedicacion)  badges.push(<BadgeAlerta key="baja"  label="Baja ded."     tipo="info"  />);
+  if (al.bajaDedicacionIncierta)     badges.push(<BadgeAlerta key="inc"   label="Baja (inc.)"   tipo="info"  />);
+  if (al.fichaIncompleta)            badges.push(<BadgeAlerta key="ficha" label="Ficha inc."     tipo="info"  />);
+  return badges;
+}
+
+function filtrarDocentes(docentes: FilaDocenteListado[], filtro: FiltroListado): FilaDocenteListado[] {
+  switch (filtro) {
+    case 'conAlertas':
+      return docentes.filter(d => d.alertas.altaTope || d.alertas.altaSinActividad || d.alertas.mediaSobreasignado);
+    case 'sobreasignados':
+      return docentes.filter(d => d.alertas.mediaSobreasignado);
+    case 'bajaDedicacion':
+      return docentes.filter(d => d.alertas.informativaBajaDedicacion || d.alertas.bajaDedicacionIncierta);
+    case 'fichaIncompleta':
+      return docentes.filter(d => d.alertas.fichaIncompleta);
+    default:
+      return docentes;
+  }
+}
+
+function contadorFiltro(totales: TotalesListadoDocentes, filtro: FiltroListado): number {
+  switch (filtro) {
+    case 'todos':           return totales.total;
+    case 'conAlertas':      return totales.conAlertas;
+    case 'sobreasignados':  return totales.sobreasignados;
+    case 'bajaDedicacion':  return totales.bajaDedicacion;
+    case 'fichaIncompleta': return totales.fichaIncompleta;
+  }
+}
+
+type SortKey = 'nombre' | 'nMaterias' | 'horas' | 'ficha' | 'semaforo';
+
+const SEMAFORO_PESO: Record<SemaforoDocente, number> = { ROJO: 0, AMARILLO: 1, VERDE: 2 };
+
+function sortDocentes(docentes: FilaDocenteListado[], key: SortKey, asc: boolean): FilaDocenteListado[] {
+  const copy = [...docentes];
+  copy.sort((a, b) => {
+    let cmp = 0;
+    switch (key) {
+      case 'nombre':   cmp = a.nombre.localeCompare(b.nombre); break;
+      case 'nMaterias': cmp = a.nMaterias - b.nMaterias; break;
+      case 'horas':    cmp = a.horasCarreraConocidas - b.horasCarreraConocidas; break;
+      case 'ficha':    cmp = a.fichaScore - b.fichaScore; break;
+      case 'semaforo': cmp = SEMAFORO_PESO[a.semaforo] - SEMAFORO_PESO[b.semaforo]; break;
+    }
+    return asc ? cmp : -cmp;
+  });
+  return copy;
+}
+
+function PanelListadoDocentes({
+  listado, cargando, error, onRetry,
+}: {
+  listado: ListadoDocentesCarreraResponse | null;
+  cargando: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  const [filtro, setFiltro] = useState<FiltroListado>('todos');
+  const [sortKey, setSortKey] = useState<SortKey>('nombre');
+  const [sortAsc, setSortAsc] = useState(true);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortAsc(v => !v);
+    else { setSortKey(key); setSortAsc(true); }
+  }
+
+  const docentesFiltrados = listado
+    ? sortDocentes(filtrarDocentes(listado.docentes, filtro), sortKey, sortAsc)
+    : [];
+
+  const SortIcon = ({ k }: { k: SortKey }) => {
+    if (sortKey !== k) return <span className="text-slate-300 ml-0.5">↕</span>;
+    return <span className="text-[#0f4c81] ml-0.5">{sortAsc ? '↑' : '↓'}</span>;
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10">
+          LD
+        </span>
+        <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+          Docentes de la carrera — detalle
+        </span>
+        {listado && (
+          <span className="ml-auto">
+            <EstadoBadge ec={listado.estadoCalculo} />
+          </span>
+        )}
+      </div>
+
+      {/* Loading */}
+      {cargando && !listado && (
+        <div className="flex items-center justify-center gap-2 py-8 text-slate-400">
+          <IcSpinner />
+          <span className="text-sm">Cargando listado...</span>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && !cargando && (
+        <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-red-50 border border-red-200">
+          <span className="text-xs text-red-700">{error}</span>
+          <button onClick={onRetry} className="text-xs text-[#0f4c81] hover:underline flex-shrink-0">Reintentar</button>
+        </div>
+      )}
+
+      {/* Sin datos */}
+      {listado && listado.estadoCalculo === 'NO_APLICA' && (
+        <div className="p-3 rounded-lg bg-sky-50 border border-sky-200">
+          <p className="text-xs text-sky-700">Sin docentes activos con asignaciones aprobadas. No aplica el listado.</p>
+        </div>
+      )}
+
+      {/* Contenido */}
+      {listado && listado.estadoCalculo !== 'NO_APLICA' && (
+        <>
+          {/* Tabs de filtro */}
+          <div className="flex flex-wrap gap-1.5 mb-4 overflow-x-auto pb-1">
+            {(Object.keys(FILTRO_LABELS) as FiltroListado[]).map(f => {
+              const cnt = contadorFiltro(listado.totales, f);
+              const active = filtro === f;
+              return (
+                <button
+                  key={f}
+                  onClick={() => setFiltro(f)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors whitespace-nowrap flex-shrink-0 ${
+                    active
+                      ? 'bg-[#0f4c81] text-white border-[#0f4c81]'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {FILTRO_LABELS[f]}
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                    active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {cnt}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Tabla */}
+          {docentesFiltrados.length === 0 ? (
+            <div className="py-8 text-center text-xs text-slate-400 italic">
+              No hay docentes en este filtro.
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-slate-100">
+              <table className="w-full text-xs min-w-[540px]">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th
+                      className="text-left px-3 py-2 font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 whitespace-nowrap"
+                      onClick={() => toggleSort('nombre')}
+                    >
+                      Docente <SortIcon k="nombre" />
+                    </th>
+                    <th
+                      className="text-right px-3 py-2 font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 whitespace-nowrap"
+                      onClick={() => toggleSort('nMaterias')}
+                    >
+                      Materias <SortIcon k="nMaterias" />
+                    </th>
+                    <th
+                      className="text-right px-3 py-2 font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 whitespace-nowrap"
+                      onClick={() => toggleSort('horas')}
+                    >
+                      Dedicación <SortIcon k="horas" />
+                    </th>
+                    <th
+                      className="text-right px-3 py-2 font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 whitespace-nowrap"
+                      onClick={() => toggleSort('ficha')}
+                    >
+                      Ficha <SortIcon k="ficha" />
+                    </th>
+                    <th
+                      className="text-center px-3 py-2 font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 whitespace-nowrap"
+                      onClick={() => toggleSort('semaforo')}
+                    >
+                      Estado <SortIcon k="semaforo" />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {docentesFiltrados.map((d, i) => (
+                    <tr key={d.docenteId} className={`border-b border-slate-50 hover:bg-slate-50/60 ${i % 2 === 1 ? 'bg-slate-50/30' : ''}`}>
+                      {/* Docente */}
+                      <td className="px-3 py-2 min-w-0">
+                        <div className="flex flex-col gap-1 min-w-0">
+                          <Link
+                            href={`/autoevaluacion/ficha-docente/${d.docenteId}`}
+                            className="font-medium text-slate-700 hover:text-[#0f4c81] hover:underline truncate"
+                          >
+                            {d.nombre}
+                          </Link>
+                          {/* Materias en tooltip-style list on hover — shown as expand on mobile */}
+                          <div className="flex flex-wrap gap-1">
+                            {alertasBadges(d.alertas)}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Materias */}
+                      <td className="px-3 py-2 text-right align-top">
+                        <details className="text-right group">
+                          <summary className="cursor-pointer list-none font-semibold tabular-nums text-slate-700 hover:text-[#0f4c81] select-none">
+                            {d.nMaterias}
+                          </summary>
+                          <div className="text-left mt-1 space-y-0.5 max-w-[200px] ml-auto">
+                            {d.materias.map(m => (
+                              <p key={m.materiaId} className="text-[10px] text-slate-500 leading-tight">{m.nombre}</p>
+                            ))}
+                          </div>
+                        </details>
+                      </td>
+
+                      {/* Dedicación */}
+                      <td className="px-3 py-2 text-right align-top whitespace-nowrap">
+                        <span className="font-mono tabular-nums text-slate-700">{d.horasCarreraConocidas} h</span>
+                        {d.tieneHorasIncompletas && (
+                          <span className="ml-1 text-[9px] text-amber-500 italic">inc.</span>
+                        )}
+                      </td>
+
+                      {/* Ficha N/4 */}
+                      <td className="px-3 py-2 text-right align-top whitespace-nowrap">
+                        <span className={`font-semibold tabular-nums ${d.fichaScore < 4 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                          {d.fichaScore}
+                        </span>
+                        <span className="text-slate-400">/4</span>
+                      </td>
+
+                      {/* Estado / semáforo */}
+                      <td className="px-3 py-2 text-center align-top">
+                        <BadgeSemaforo s={d.semaforo} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Leyenda semáforo */}
+          <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-slate-400">
+            <span className="font-semibold">Semáforo =</span>
+            <span>min(completitud_i, consistencia_i)</span>
+            <span className="text-slate-300">·</span>
+            <span className="text-emerald-600 font-semibold">VERDE ≥90</span>
+            <span className="text-slate-300">·</span>
+            <span className="text-amber-600 font-semibold">AMARILLO 60–89</span>
+            <span className="text-slate-300">·</span>
+            <span className="text-red-600 font-semibold">ROJO &lt;60</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Componente interno (necesita Suspense por useSearchParams) ────────────────
 
 function TablroCarreraInner() {
@@ -544,6 +1284,10 @@ function TablroCarreraInner() {
   const [cargando, setCargando] = useState(true);
   const [error,    setError]    = useState<string | null>(null);
   const [dato,     setDato]     = useState<TablroCarreraResponse | null>(null);
+
+  const [cargandoListado, setCargandoListado] = useState(false);
+  const [errorListado,    setErrorListado]    = useState<string | null>(null);
+  const [listado,         setListado]         = useState<ListadoDocentesCarreraResponse | null>(null);
 
   const [corriendo,       setCorriendo]       = useState(false);
   const [errorAnalisis,   setErrorAnalisis]   = useState<string | null>(null);
@@ -605,6 +1349,21 @@ function TablroCarreraInner() {
 
   useEffect(() => { if (carreraId) cargarHistorial(); }, [carreraId, paginaHistorial]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function cargarListado() {
+    setCargandoListado(true);
+    setErrorListado(null);
+    try {
+      const res  = await apiFetch(`/autoevaluacion/tablero/carrera/${carreraId}/listado`, { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error al cargar el listado de docentes'));
+      setListado(data as ListadoDocentesCarreraResponse);
+    } catch (e) {
+      setErrorListado((e as Error).message);
+    } finally {
+      setCargandoListado(false);
+    }
+  }
+
   async function cargar() {
     setCargando(true);
     setError(null);
@@ -618,6 +1377,8 @@ function TablroCarreraInner() {
     } finally {
       setCargando(false);
     }
+    // Load listado in parallel after the main call
+    cargarListado().catch(() => {});
   }
 
   useEffect(() => { cargar(); }, [carreraId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -632,6 +1393,7 @@ function TablroCarreraInner() {
   const ip13 = dato?.ip13;
   const r10  = dato?.r10;
   const r12  = dato?.r12;
+  const ar   = dato?.accionRequerida;
 
   // IP-03: derivar sin cobertura y porcentaje solo cuando hay datos reales
   const sinCobertura = ip03 && ip03.total > 0 ? ip03.total - ip03.cubiertas : null;
@@ -705,6 +1467,27 @@ function TablroCarreraInner() {
       {/* Indicadores */}
       {dato && ip01 && ip02 && ip03 && ip04 && ip08 && ip09 && ip10 && ip13 && r10 && r12 && (
         <div className="space-y-4">
+
+          {/* AR — Acción requerida */}
+          {ar && <PanelAccionRequerida ar={ar} carreraId={carreraId} />}
+
+          {/* CP — Condiciones del plantel CONEAU (B-03) */}
+          {dato.condicionesPlantell && (
+            <PanelCondicionesPlantell cp={dato.condicionesPlantell} />
+          )}
+
+          {/* DS — Distribución de semáforos del plantel (B-04) */}
+          {listado?.distribucionSemaforos && (
+            <PanelDistribucionSemaforos dist={listado.distribucionSemaforos} />
+          )}
+
+          {/* LD — Listado detallado de docentes */}
+          <PanelListadoDocentes
+            listado={listado}
+            cargando={cargandoListado}
+            error={errorListado}
+            onRetry={cargarListado}
+          />
 
           {/* IP-01 + IP-02 — Plantel vigente (fila compacta) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

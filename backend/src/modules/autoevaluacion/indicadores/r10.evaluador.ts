@@ -1,11 +1,13 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConsultasAcademicasService } from '../consultas-academicas/consultas-academicas.service';
 import { EstadoCalculo } from '../types/estado-calculo.types';
+import { parsearHorasGestion } from './r03.evaluador';
 import type {
   ContextoEvaluacion,
   IndicadorEvaluador,
   ResultadoIndicador,
 } from './indicadores.types';
+import type { DocentesParaR10 } from '../consultas-academicas/consultas-academicas.types';
 
 // ── Constante ─────────────────────────────────────────────────────────────────
 
@@ -14,26 +16,52 @@ const UMBRAL_DEFAULT = 20;
 
 // ── Tipos de resultado ────────────────────────────────────────────────────────
 
+/**
+ * Desglose de componentes horarios para R-10 (FSD §6: dedicación total).
+ * Dedicación total = docencia + gestión + investigación + vinculación.
+ *
+ * NOTA: desempeño no académico (desempenoActualJson) NO forma parte de esta fórmula;
+ * pertenece a R-03 (carga para el tope). Ver FSD §6 distinción entre R-03 y R-10.
+ */
+export interface ComponentesHorasR10 {
+  horasDocencia: number;
+  horasGestion: number;
+  horasInvestigacion: number;
+  horasVinculacion: number;
+  /** true = tiempoDedicacionGestionSemanal tiene valor pero no es numérico parseable,
+   *  O funcionGestion declarada pero tiempoDedicacionGestionSemanal vacía (FSD §3). */
+  gestionIndeterminada: boolean;
+  /** true = tiempoInvestigacion no numérico, o proyecto declarado sin horas (FSD §3). */
+  investigacionIndeterminada: boolean;
+  /** true = tiempoExtension no numérico, o actividad declarada sin horas (FSD §3). */
+  vinculacionIndeterminada: boolean;
+}
+
 export interface DocenteAlertaR10 {
   docenteId: string;
   nombre: string;
-  /** Suma de Materia.cargaHorariaSemanal de vinculaciones APROBADAS en el scope. */
+  /**
+   * Total de horas determinadas: docencia + gestión + investigación + vinculación.
+   * Puede estar subestimado cuando incierto=true.
+   */
   horasConocidas: number;
   umbral: number;
   /**
-   * true cuando el docente tiene materias sin cargaHorariaSemanal O asignaciones
-   * en otras facultades: el total real de horas podría superar horasConocidas.
+   * true cuando el total real podría superar horasConocidas:
+   * materias sin cargaHorariaSemanal, asignaciones cross-facultad,
+   * o algún componente indeterminado (valor no numérico o actividad declarada sin horas).
    */
   incierto: boolean;
+  componentes: ComponentesHorasR10;
 }
 
 /**
  * Valor del indicador R-10 para una carrera.
  *
- * - umbral: p02BajaH configurado o 20 por defecto.
- * - totalEnAlerta: docentes con horasConocidas < umbral e incierto=false (alerta confirmada).
+ * - umbral: p02BajaH configurado o 20h por defecto.
+ * - totalEnAlerta: docentes con horasConocidas < umbral e incierto=false (confirmados).
  * - totalInciertos: docentes con horasConocidas < umbral e incierto=true (posible alerta).
- * - enAlerta: lista combinada de confirmados e inciertos, ordenada por horasConocidas ASC.
+ * - enAlerta: lista combinada ordenada por horasConocidas ASC.
  */
 export interface ResultadoR10 {
   carreraId: string;
@@ -49,25 +77,18 @@ export interface ResultadoR10 {
 // ── Evaluador ─────────────────────────────────────────────────────────────────
 
 /**
- * Evaluador de R-10: Docentes con baja dedicación horaria.
+ * Evaluador de R-10: Docentes con baja dedicación horaria total (FSD §6).
  *
+ * Fórmula: dedicación total = docencia + gestión + investigación + vinculación.
  * Umbral: p02BajaH de AutoevaluacionConfigFacultad; 20h semanales si no configurado.
- * Alertas INFORMATIVAS: no implican infracción directa ni penalización en el score.
  *
- * Fuente de horas: Materia.cargaHorariaSemanal sumado por vinculación APROBADA en scope
- * (misma fuente que R-03, vía obtenerDocentesParaR03 que ya agrega por docenteId).
+ * Reglas de indeterminación (FSD §3 — no asumir 0h):
+ *   - Campo de horas no numérico → indeterminado.
+ *   - Actividad declarada (funcionGestion / tituloProyectoInvestigacion /
+ *     rolActividadExtension) pero campo de horas vacío → indeterminado.
+ *   - Actividad no declarada y campo de horas vacío → 0h (opcional ausente).
  *
- * Si una materia no tiene cargaHorariaSemanal, la alerta se marca incierto=true
- * (el total real podría superar las horas conocidas).
- *
- * Alcance (vía obtenerDocentesParaR03):
- *   Roles globales y DECANO: toda la facultad (alcanceFacultad=true).
- *   DIRECTOR_CARRERA: solo la carrera solicitada (alcanceFacultad=false → PARCIAL).
- *
- * Estado de cálculo:
- *   NO_APLICA:  sin docentes activos con vinculaciones APROBADAS en el scope.
- *   CALCULADO:  alcanceFacultad=true y todas las materias tienen cargaHorariaSemanal.
- *   PARCIAL:    alcanceFacultad=false O alguna materia/docente sin horas completas.
+ * Fuente: obtenerDocentesParaR10 (agrega por docenteId, incluye campos investigación/vinculación).
  */
 @Injectable()
 export class R10EvaluadorService implements IndicadorEvaluador<ResultadoR10> {
@@ -81,7 +102,7 @@ export class R10EvaluadorService implements IndicadorEvaluador<ResultadoR10> {
     }
 
     const [datos, config] = await Promise.all([
-      this.consultas.obtenerDocentesParaR03(
+      this.consultas.obtenerDocentesParaR10(
         contexto.carreraId,
         contexto.usuarioId,
         contexto.rolNombre,
@@ -94,7 +115,7 @@ export class R10EvaluadorService implements IndicadorEvaluador<ResultadoR10> {
     ]);
 
     const umbral = config?.p02BajaH ?? UMBRAL_DEFAULT;
-    const { docentes, alcanceFacultad, docentesMultiFacultad } = datos;
+    const { docentes, alcanceFacultad, docentesMultiFacultad } = datos as DocentesParaR10;
 
     if (docentes.length === 0) {
       return {
@@ -124,17 +145,52 @@ export class R10EvaluadorService implements IndicadorEvaluador<ResultadoR10> {
     for (const d of docentes) {
       if (d.tieneMateriaSinHoras) hayDatosIncompletos = true;
 
-      // Docentes con asignaciones cross-facultad tienen horas fuera del scope visible
       const esCrossFacultad = docentesMultiFacultad.has(d.docenteId);
 
-      if (d.horasDocenciaConocidas < umbral) {
-        const incierto = d.tieneMateriaSinHoras || esCrossFacultad;
+      const g = parsearHorasGestion(
+        d.tiempoDedicacionGestionSemanal,
+        d.fechaFinGestion,
+        contexto.fechaEvaluacion,
+        !!(d.funcionGestion?.trim()),
+      );
+      const inv = parsearHorasGestion(
+        d.tiempoInvestigacion,
+        d.fechaFinProyectoInvestigacion,
+        contexto.fechaEvaluacion,
+        !!(d.tituloProyectoInvestigacion?.trim()),
+      );
+      const vin = parsearHorasGestion(
+        d.tiempoExtension,
+        d.finEstadoActividadExtension,
+        contexto.fechaEvaluacion,
+        !!(d.rolActividadExtension?.trim()),
+      );
+
+      const tieneComponentesIndeterminados =
+        g.indeterminado || inv.indeterminado || vin.indeterminado;
+      if (tieneComponentesIndeterminados) hayDatosIncompletos = true;
+
+      const horasConocidas =
+        d.horasDocenciaConocidas + g.horas + inv.horas + vin.horas;
+
+      if (horasConocidas < umbral) {
+        const incierto =
+          d.tieneMateriaSinHoras || esCrossFacultad || tieneComponentesIndeterminados;
         enAlerta.push({
           docenteId: d.docenteId,
           nombre: `${d.nombre} ${d.apellido}`.trim(),
-          horasConocidas: d.horasDocenciaConocidas,
+          horasConocidas,
           umbral,
           incierto,
+          componentes: {
+            horasDocencia: d.horasDocenciaConocidas,
+            horasGestion: g.horas,
+            horasInvestigacion: inv.horas,
+            horasVinculacion: vin.horas,
+            gestionIndeterminada: g.indeterminado,
+            investigacionIndeterminada: inv.indeterminado,
+            vinculacionIndeterminada: vin.indeterminado,
+          },
         });
       }
     }
@@ -152,10 +208,12 @@ export class R10EvaluadorService implements IndicadorEvaluador<ResultadoR10> {
       hayDatosIncompletos
         ? [
             {
-              campo: 'cargaHorariaSemanal',
-              entidad: 'Materia',
+              campo:
+                'cargaHorariaSemanal / tiempoDedicacionGestionSemanal / tiempoInvestigacion / tiempoExtension',
+              entidad: 'Materia / Docente',
               descripcion:
-                'Algunas materias no tienen cargaHorariaSemanal; las horas conocidas pueden estar subestimadas.',
+                'Algunas horas no son determinables: materias sin cargaHorariaSemanal, ' +
+                'gestión/investigación/vinculación con valores no numéricos o actividades declaradas sin horas.',
             },
           ]
         : [];

@@ -81,16 +81,16 @@ describe('ReglasCatalogoService', () => {
   });
 
   describe('G3 - severidades', () => {
-    it('R-02, R-03, R-04, R-07, R-08, R-09 son ALTA', () => {
+    it('R-02, R-03, R-04, R-08, R-09 son ALTA', () => {
       const cat = service.listarCatalogo();
-      for (const c of ['R-02','R-03','R-04','R-07','R-08','R-09']) {
+      for (const c of ['R-02','R-03','R-04','R-08','R-09']) {
         expect(cat.find((r) => r.codigo === c)?.severidad).toBe('ALTA');
       }
     });
 
-    it('R-11, R-12, R-13, R-14, R-15 son MEDIA', () => {
+    it('R-07, R-11, R-12, R-13, R-14, R-15 son MEDIA', () => {
       const cat = service.listarCatalogo();
-      for (const c of ['R-11','R-12','R-13','R-14','R-15']) {
+      for (const c of ['R-07','R-11','R-12','R-13','R-14','R-15']) {
         expect(cat.find((r) => r.codigo === c)?.severidad).toBe('MEDIA');
       }
     });
@@ -253,13 +253,19 @@ describe('ReglasCatalogoService', () => {
 
     it('motivoPendiente solo aparece cuando esta definido', () => {
       const cat = service.listarCatalogo();
-      // Post-IMPL-15B: ningún indicador tiene motivoPendiente
+      // Post-CIERRE-01: R-10 y R-03 tienen motivoPendiente (ambos PARCIAL)
+      const conMotivo = new Set(['R-10', 'R-03']);
       for (const r of cat) {
-        expect(r.motivoPendiente).toBeUndefined();
+        if (conMotivo.has(r.codigo)) {
+          expect(r.motivoPendiente).toBeDefined();
+        } else {
+          expect(r.motivoPendiente).toBeUndefined();
+        }
       }
-      // R-03 nunca lo tuvo
+      // Verificar que R-03 efectivamente tiene motivoPendiente como PARCIAL
       const r03 = cat.find((r) => r.codigo === 'R-03')!;
-      expect('motivoPendiente' in r03).toBe(false);
+      expect(r03.estadoImplementacion).toBe('PARCIAL');
+      expect(r03.motivoPendiente).toBeDefined();
     });
   });
 
@@ -271,13 +277,20 @@ describe('ReglasCatalogoService', () => {
       expect(r13.motivoPendiente).toBeUndefined();
     });
 
-    it('R-10, R-14, R-15 tienen estadoImplementacion IMPLEMENTADO sin motivoPendiente', () => {
+    it('R-14, R-15 tienen estadoImplementacion IMPLEMENTADO sin motivoPendiente', () => {
       const cat = service.listarCatalogo();
-      for (const c of ['R-10', 'R-14', 'R-15']) {
+      for (const c of ['R-14', 'R-15']) {
         const r = cat.find((r) => r.codigo === c)!;
         expect(r.estadoImplementacion).toBe('IMPLEMENTADO');
-        expect('motivoPendiente' in r).toBe(false);
+        expect(r.motivoPendiente).toBeUndefined();
       }
+    });
+
+    it('R-10 tiene estadoImplementacion PARCIAL con motivoPendiente (post-IMPL-19B.1)', () => {
+      const cat = service.listarCatalogo();
+      const r10 = cat.find((r) => r.codigo === 'R-10')!;
+      expect(r10.estadoImplementacion).toBe('PARCIAL');
+      expect(r10.motivoPendiente).toBeDefined();
     });
   });
 });

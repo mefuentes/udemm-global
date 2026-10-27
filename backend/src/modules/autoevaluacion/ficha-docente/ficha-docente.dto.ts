@@ -1,5 +1,16 @@
 import type { AlertaBandeja } from '../alertas/alertas.dto';
 
+/**
+ * Referencia a un ítem de catálogo (TipoDedicacionConeau o TipoPosgrado).
+ * PREPARATORIO (CIERRE-03 Fase B) — requiere migración antes de que el servicio
+ * pueda popularlo desde la base de datos.
+ */
+export interface CatalogItemRef {
+  id: string;
+  nombre: string;
+  codigo?: string;
+}
+
 export interface CargoParsed {
   id: string;
   cargoNombre: string;
@@ -50,6 +61,18 @@ export interface FichaDocenteDto {
     tituloGrado: string | null;
     tituloPosgrado: string | null;
     relevamientoCargosCompleto: boolean;
+    /**
+     * PREPARATORIO D-05: categoría CONEAU de dedicación del catálogo controlado.
+     * Null cuando tipoDedicacionConeauId = null (NO_DETERMINADA) o antes de migración.
+     * No reemplaza el campo de texto libre `dedicacion`.
+     */
+    tipoDedicacionConeau?: CatalogItemRef | null;
+    /**
+     * PREPARATORIO D-06: tipo de posgrado declarado para CONEAU.
+     * Null cuando tipoPosgradoId = null (no clasificado) o antes de migración.
+     * No reemplaza el campo de texto libre `tituloPosgrado`.
+     */
+    tipoPosgrado?: CatalogItemRef | null;
   };
   formacionAcademica: {
     tituloGrado: string | null;

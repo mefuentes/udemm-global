@@ -15,8 +15,9 @@ async function apiCall(path: string) {
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
-type Ambito      = 'FACULTAD' | 'CARRERA' | 'PLAN';
-type Prioridad   = 'ALTA' | 'MEDIA' | 'INFORMATIVA';
+type Ambito        = 'FACULTAD' | 'CARRERA' | 'PLAN';
+type GrupoAmbito   = 'DOCENTES' | 'PLANES' | 'CRUZADAS';
+type Prioridad     = 'ALTA' | 'MEDIA' | 'INFORMATIVA';
 type EstadoCalculo = 'CALCULADO' | 'PARCIAL' | 'NO_DETERMINABLE' | 'NO_APLICA' | null;
 
 interface AlertaBandeja {
@@ -24,6 +25,8 @@ interface AlertaBandeja {
   ambito:         Ambito;
   entidadId:      string;
   facultadId:     string;
+  /** Presente cuando ambito='CARRERA' (B-06). */
+  carreraId?:     string;
   regla:          string;
   prioridad:      Prioridad;
   descripcion:    string;
@@ -92,7 +95,7 @@ export default function AlertasPage() {
   const [cargando,   setCargando]   = useState(true);
   const [error,      setError]      = useState<string | null>(null);
 
-  const [filtroAmbito,    setFiltroAmbito]    = useState('');
+  const [filtroGrupo,     setFiltroGrupo]     = useState('');
   const [filtroPrioridad, setFiltroPrioridad] = useState('');
   const [filtroRegla,     setFiltroRegla]     = useState('');
   const [pagina,          setPagina]          = useState(1);
@@ -101,9 +104,9 @@ export default function AlertasPage() {
 
   function buildUrl() {
     const params = new URLSearchParams();
-    if (filtroAmbito)    params.set('ambito',    filtroAmbito);
-    if (filtroPrioridad) params.set('prioridad', filtroPrioridad);
-    if (filtroRegla)     params.set('regla',     filtroRegla.trim());
+    if (filtroGrupo)     params.set('grupoAmbito', filtroGrupo);
+    if (filtroPrioridad) params.set('prioridad',   filtroPrioridad);
+    if (filtroRegla)     params.set('regla',        filtroRegla.trim());
     params.set('pagina',    String(pagina));
     params.set('porPagina', String(POR_PAGINA));
     return `/autoevaluacion/alertas?${params}`;
@@ -122,16 +125,16 @@ export default function AlertasPage() {
     }
   }
 
-  useEffect(() => { cargar(); }, [filtroAmbito, filtroPrioridad, filtroRegla, pagina]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { cargar(); }, [filtroGrupo, filtroPrioridad, filtroRegla, pagina]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function resetFiltros() {
-    setFiltroAmbito('');
+    setFiltroGrupo('');
     setFiltroPrioridad('');
     setFiltroRegla('');
     setPagina(1);
   }
 
-  const hayFiltros = filtroAmbito || filtroPrioridad || filtroRegla;
+  const hayFiltros = filtroGrupo || filtroPrioridad || filtroRegla;
   const totalPags  = datos ? Math.ceil(datos.total / POR_PAGINA) : 0;
 
   return (
@@ -172,16 +175,16 @@ export default function AlertasPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 
           <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Ámbito</label>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Grupo</label>
             <select
-              value={filtroAmbito}
-              onChange={e => { setPagina(1); setFiltroAmbito(e.target.value); }}
+              value={filtroGrupo}
+              onChange={e => { setPagina(1); setFiltroGrupo(e.target.value as GrupoAmbito | ''); }}
               className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]"
             >
-              <option value="">Todos los ámbitos</option>
-              <option value="FACULTAD">Facultad</option>
-              <option value="CARRERA">Carrera</option>
-              <option value="PLAN">Plan de estudio</option>
+              <option value="">Todos los grupos</option>
+              <option value="DOCENTES">Docentes</option>
+              <option value="PLANES">Planes de estudio</option>
+              <option value="CRUZADAS">Cruzadas</option>
             </select>
           </div>
 
@@ -321,12 +324,21 @@ export default function AlertasPage() {
                     </td>
 
                     <td className="px-4 py-3">
-                      <Link
-                        href={`/autoevaluacion/analisis/${alerta.ejecucionId}`}
-                        className="flex items-center gap-1 text-[11px] font-semibold text-[#0f4c81] hover:bg-[#0f4c81]/8 px-2 py-1.5 rounded transition-colors whitespace-nowrap"
-                      >
-                        Ver análisis →
-                      </Link>
+                      {alerta.carreraId ? (
+                        <Link
+                          href={`/autoevaluacion/tablero/carrera/${alerta.carreraId}`}
+                          className="flex items-center gap-1 text-[11px] font-semibold text-[#0f4c81] hover:bg-[#0f4c81]/8 px-2 py-1.5 rounded transition-colors whitespace-nowrap"
+                        >
+                          Ver carrera →
+                        </Link>
+                      ) : (
+                        <Link
+                          href={`/autoevaluacion/analisis/${alerta.ejecucionId}`}
+                          className="flex items-center gap-1 text-[11px] font-semibold text-[#0f4c81] hover:bg-[#0f4c81]/8 px-2 py-1.5 rounded transition-colors whitespace-nowrap"
+                        >
+                          Ver análisis →
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}

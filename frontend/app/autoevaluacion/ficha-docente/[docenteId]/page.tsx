@@ -66,6 +66,10 @@ interface FichaDocenteDto {
     tituloGrado: string | null;
     tituloPosgrado: string | null;
     relevamientoCargosCompleto: boolean;
+    /** D-05: categoría CONEAU de dedicación. Null = NO_DETERMINADA o antes de migración. */
+    tipoDedicacionConeau?: { id: string; nombre: string; codigo?: string } | null;
+    /** D-06: nivel máximo de posgrado CONEAU. Null = no clasificado o antes de migración. */
+    tipoPosgrado?: { id: string; nombre: string } | null;
   };
   formacionAcademica: {
     tituloGrado: string | null;
@@ -133,8 +137,8 @@ function CampoLabel({ label, valor }: { label: string; valor: string | null | bo
 }
 
 function BadgeCompletitud({ pct }: { pct: number }) {
-  const color = pct >= 75 ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-    : pct >= 50             ? 'text-amber-700 bg-amber-50 border-amber-200'
+  const color = pct >= 90 ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+    : pct >= 60             ? 'text-amber-700 bg-amber-50 border-amber-200'
     : 'text-red-700 bg-red-50 border-red-200';
   return (
     <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${color}`}>
@@ -231,9 +235,19 @@ export default function FichaDocentePage() {
         <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-3">
           <CampoLabel label="Correo electrónico" valor={id.correoElectronico} />
           <CampoLabel label="Dedicación" valor={id.dedicacion} />
+          {id.tipoDedicacionConeau && (
+            <CampoLabel label="Dedicación CONEAU" valor={id.tipoDedicacionConeau.nombre} />
+          )}
           <CampoLabel label="Categoría docente" valor={id.categoriaDocente} />
           <CampoLabel label="Título de grado" valor={id.tituloGrado} />
-          <CampoLabel label="Título de posgrado" valor={id.tituloPosgrado} />
+          <div className="flex gap-1 flex-col">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Nivel de posgrado</span>
+            {id.tipoPosgrado ? (
+              <span className="text-sm text-slate-800 font-medium">{id.tipoPosgrado.nombre.charAt(0) + id.tipoPosgrado.nombre.slice(1).toLowerCase()}</span>
+            ) : (
+              <span className="text-sm text-slate-400 italic">No clasificado</span>
+            )}
+          </div>
           <CampoLabel label="Relevamiento de cargos completo" valor={id.relevamientoCargosCompleto} />
         </div>
       </section>

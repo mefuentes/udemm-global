@@ -204,14 +204,14 @@ describe('AlertasService — alertas de ejecuciones persistidas', () => {
     expect(a!.prioridad).toBe('ALTA');
   });
 
-  it('extrae alerta ALTA R-07 de snapshot facultad (sobreasignados)', async () => {
+  it('extrae alerta MEDIA R-07 de snapshot facultad (sobreasignados)', async () => {
     const snap = makeSnapFacultad({ cargaAcademica: { totalSobreasignados: 1 } });
     const ej   = { ...EJECUCION_FACULTAD, snapshot: snap };
     const svc  = makeService(makePrisma([ej]), makeScopeService());
     const res  = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA');
     const a = res.items.find(x => x.regla === 'R-07');
     expect(a).toBeDefined();
-    expect(a!.prioridad).toBe('ALTA');
+    expect(a!.prioridad).toBe('MEDIA');
   });
 
   it('extrae alerta MEDIA R-12 de snapshot facultad (sin título de grado)', async () => {
@@ -412,5 +412,186 @@ describe('AlertasService — regresión analisis/historial', () => {
     await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA');
     // Snapshot unchanged after query
     expect((ej.snapshot as Record<string, unknown>)['ip13']).toEqual({ totalSobreasignados: 1 });
+  });
+});
+
+// ── Filtros grupoAmbito (B-05) ────────────────────────────────────────────────
+
+describe('AlertasService — filtro grupoAmbito (B-05)', () => {
+  /**
+   * Snaps con alertas en los tres grupos más alertas que no pertenecen a ninguno,
+   * para verificar que el filtro es selectivo y no mezcla grupos.
+   */
+  function makeSnapsConTodo() {
+    const snapC = makeSnapCarrera({
+      ip10: { alertasR03: 1 },      // R-03  → DOCENTES
+      ip13: { totalSobreasignados: 1 }, // IP-13 → DOCENTES
+      r12:  { totalIncompletos: 1 }, // R-12  → DOCENTES
+      r10:  { totalEnAlerta: 1 },    // R-10  → DOCENTES
+      ip03: { total: 5, cubiertas: 3 }, // IP-03 → PLANES
+    });
+    const snapP = makeSnapPlan({
+      ipl01: { cumple: false, horasTotal: 2000, horasMinimas: 2400 }, // IPL-01 → PLANES
+      ipl02: { bloquesCumplen: 1, bloquesConUmbral: 2 },              // IPL-02 → PLANES
+      ipl03: { sinResponsable: 1 },  // IPL-03 → CRUZADAS
+      ipl04: { paresConAlerta: 1 },  // IPL-04 → CRUZADAS
+    });
+    const snapF = makeSnapFacultad({
+      cargaAcademica: { totalSobreasignados: 1 }, // R-07 → DOCENTES
+    });
+    return {
+      ejC: { ...EJECUCION_CARRERA, snapshot: snapC },
+      ejP: { ...EJECUCION_PLAN,    snapshot: snapP },
+      ejF: { ...EJECUCION_FACULTAD, snapshot: snapF },
+    };
+  }
+
+  it('grupoAmbito=DOCENTES retorna solo R-03, R-07, R-10, R-12, IP-13', async () => {
+    const { ejC, ejP, ejF } = makeSnapsConTodo();
+    const svc = makeService(makePrisma([ejC, ejP, ejF]), makeScopeService());
+    const res = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA', 1, 100, { grupoAmbito: 'DOCENTES' });
+    const reglas = res.items.map(a => a.regla);
+    expect(reglas.every(r => ['R-03', 'R-07', 'R-10', 'R-12', 'IP-13'].includes(r))).toBe(true);
+    expect(res.total).toBeGreaterThan(0);
+  });
+
+  it('grupoAmbito=DOCENTES incluye IP-13 (sobreasignación por carrera)', async () => {
+    const snap = makeSnapCarrera({ ip13: { totalSobreasignados: 2 } });
+    const ej   = { ...EJECUCION_CARRERA, snapshot: snap };
+    const svc  = makeService(makePrisma([ej]), makeScopeService());
+    const res  = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA', 1, 20, { grupoAmbito: 'DOCENTES' });
+    expect(res.items.find(a => a.regla === 'IP-13')).toBeDefined();
+  });
+
+  it('grupoAmbito=DOCENTES no incluye IPL-03 ni IPL-04 (son CRUZADAS)', async () => {
+    const snap = makeSnapPlan({ ipl03: { sinResponsable: 2 }, ipl04: { paresConAlerta: 1 } });
+    const ej   = { ...EJECUCION_PLAN, snapshot: snap };
+    const svc  = makeService(makePrisma([ej]), makeScopeService());
+    const res  = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA', 1, 20, { grupoAmbito: 'DOCENTES' });
+    expect(res.items.find(a => a.regla === 'IPL-03')).toBeUndefined();
+    expect(res.items.find(a => a.regla === 'IPL-04')).toBeUndefined();
+  });
+
+  it('grupoAmbito=PLANES retorna solo IPL-01, IPL-02, IP-03', async () => {
+    const { ejC, ejP, ejF } = makeSnapsConTodo();
+    const svc = makeService(makePrisma([ejC, ejP, ejF]), makeScopeService());
+    const res = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA', 1, 100, { grupoAmbito: 'PLANES' });
+    const reglas = res.items.map(a => a.regla);
+    expect(reglas.every(r => ['IPL-01', 'IPL-02', 'IP-03'].includes(r))).toBe(true);
+    expect(res.total).toBeGreaterThan(0);
+  });
+
+  it('grupoAmbito=PLANES no incluye IPL-03 ni IPL-04', async () => {
+    const snap = makeSnapPlan({ ipl03: { sinResponsable: 2 }, ipl04: { paresConAlerta: 1 } });
+    const ej   = { ...EJECUCION_PLAN, snapshot: snap };
+    const svc  = makeService(makePrisma([ej]), makeScopeService());
+    const res  = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA', 1, 20, { grupoAmbito: 'PLANES' });
+    expect(res.items.find(a => a.regla === 'IPL-03')).toBeUndefined();
+    expect(res.items.find(a => a.regla === 'IPL-04')).toBeUndefined();
+  });
+
+  it('grupoAmbito=CRUZADAS retorna solo IPL-03 e IPL-04', async () => {
+    const { ejC, ejP, ejF } = makeSnapsConTodo();
+    const svc = makeService(makePrisma([ejC, ejP, ejF]), makeScopeService());
+    const res = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA', 1, 100, { grupoAmbito: 'CRUZADAS' });
+    const reglas = res.items.map(a => a.regla);
+    expect(reglas.every(r => ['IPL-03', 'IPL-04'].includes(r))).toBe(true);
+    expect(res.total).toBeGreaterThan(0);
+  });
+
+  it('grupoAmbito=CRUZADAS incluye IPL-03 (derivado de R-08)', async () => {
+    const snap = makeSnapPlan({ ipl03: { sinResponsable: 3 } });
+    const ej   = { ...EJECUCION_PLAN, snapshot: snap };
+    const svc  = makeService(makePrisma([ej]), makeScopeService());
+    const res  = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA', 1, 20, { grupoAmbito: 'CRUZADAS' });
+    expect(res.items.find(a => a.regla === 'IPL-03')).toBeDefined();
+  });
+
+  it('grupoAmbito=CRUZADAS incluye IPL-04 (derivado de R-02)', async () => {
+    const snap = makeSnapPlan({ ipl04: { paresConAlerta: 2 } });
+    const ej   = { ...EJECUCION_PLAN, snapshot: snap };
+    const svc  = makeService(makePrisma([ej]), makeScopeService());
+    const res  = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA', 1, 20, { grupoAmbito: 'CRUZADAS' });
+    expect(res.items.find(a => a.regla === 'IPL-04')).toBeDefined();
+  });
+
+  it('grupoAmbito=CRUZADAS no incluye IP-13 (es DOCENTES)', async () => {
+    const snap = makeSnapCarrera({ ip13: { totalSobreasignados: 2 } });
+    const ej   = { ...EJECUCION_CARRERA, snapshot: snap };
+    const svc  = makeService(makePrisma([ej]), makeScopeService());
+    const res  = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA', 1, 20, { grupoAmbito: 'CRUZADAS' });
+    expect(res.items.find(a => a.regla === 'IP-13')).toBeUndefined();
+  });
+
+  it('grupoAmbito ausente retorna alertas de todos los grupos', async () => {
+    const { ejC, ejP, ejF } = makeSnapsConTodo();
+    const svc = makeService(makePrisma([ejC, ejP, ejF]), makeScopeService());
+    const res = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA', 1, 100);
+    const reglas = new Set(res.items.map(a => a.regla));
+    expect(reglas.has('R-03')).toBe(true);
+    expect(reglas.has('IPL-01')).toBe(true);
+    expect(reglas.has('IPL-03')).toBe(true);
+  });
+
+  it('grupoAmbito=PLANES sin alertas de plan retorna vacío', async () => {
+    const snap = makeSnapCarrera({ ip10: { alertasR03: 2 } });
+    const ej   = { ...EJECUCION_CARRERA, snapshot: snap };
+    const svc  = makeService(makePrisma([ej]), makeScopeService());
+    const res  = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA', 1, 20, { grupoAmbito: 'PLANES' });
+    expect(res.total).toBe(0);
+  });
+
+  it('grupoAmbito combinado con filtro prioridad=ALTA', async () => {
+    const snap = makeSnapCarrera({
+      ip10: { alertasR03: 1 }, // R-03 ALTA → DOCENTES
+      r12:  { totalIncompletos: 1 }, // R-12 MEDIA → DOCENTES
+    });
+    const ej  = { ...EJECUCION_CARRERA, snapshot: snap };
+    const svc = makeService(makePrisma([ej]), makeScopeService());
+    const res = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA', 1, 20, {
+      grupoAmbito: 'DOCENTES',
+      prioridad: 'ALTA',
+    });
+    expect(res.items.every(a => a.prioridad === 'ALTA')).toBe(true);
+    expect(res.items.every(a => ['R-03', 'R-07', 'R-10', 'R-12', 'IP-13'].includes(a.regla))).toBe(true);
+  });
+});
+
+// ── Navegación B-06 ───────────────────────────────────────────────────────────
+
+describe('AlertasService — navegación B-06', () => {
+  it('alertas de ámbito CARRERA incluyen carreraId igual a entidadId', async () => {
+    const snap = makeSnapCarrera({ ip10: { alertasR03: 1 } });
+    const ej   = { ...EJECUCION_CARRERA, entidadId: 'carrera-nav-1', snapshot: snap };
+    const svc  = makeService(makePrisma([ej]), makeScopeService());
+    const res  = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA');
+    const alerta = res.items.find(a => a.regla === 'R-03');
+    expect(alerta?.carreraId).toBe('carrera-nav-1');
+  });
+
+  it('alertas de ámbito PLAN no incluyen carreraId', async () => {
+    const snap = makeSnapPlan({ ipl01: { cumple: false, horasTotal: 2000, horasMinimas: 2400 } });
+    const ej   = { ...EJECUCION_PLAN, snapshot: snap };
+    const svc  = makeService(makePrisma([ej]), makeScopeService());
+    const res  = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA');
+    const alerta = res.items.find(a => a.regla === 'IPL-01');
+    expect(alerta?.carreraId).toBeUndefined();
+  });
+
+  it('alertas de ámbito FACULTAD no incluyen carreraId', async () => {
+    const snap = makeSnapFacultad({ cargaAcademica: { totalSobreasignados: 1 } });
+    const ej   = { ...EJECUCION_FACULTAD, snapshot: snap };
+    const svc  = makeService(makePrisma([ej]), makeScopeService());
+    const res  = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA');
+    const alerta = res.items.find(a => a.regla === 'R-07');
+    expect(alerta?.carreraId).toBeUndefined();
+  });
+
+  it('las alertas de carrera no tienen docenteId (alertas son agregadas)', async () => {
+    const snap = makeSnapCarrera({ ip10: { alertasR03: 3 }, ip13: { totalSobreasignados: 2 } });
+    const ej   = { ...EJECUCION_CARRERA, snapshot: snap };
+    const svc  = makeService(makePrisma([ej]), makeScopeService());
+    const res  = await svc.obtenerBandeja('u1', 'ADMINISTRADOR_SISTEMA');
+    expect(res.items.every((a: any) => a.docenteId === undefined)).toBe(true);
   });
 });

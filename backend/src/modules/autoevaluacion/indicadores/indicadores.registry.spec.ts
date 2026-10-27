@@ -85,15 +85,25 @@ describe('RegistroIndicadores — estado efectivo post-asignación', () => {
     }
   });
 
-  it('todos los indicadores están IMPLEMENTADO tras asignación', () => {
+  it('todos los indicadores están IMPLEMENTADO tras asignación, excepto R-10 y R-03 que son PARCIAL', () => {
+    const parciales = new Set(['R-10', 'R-03']);
     for (const d of registro.listar()) {
-      expect(d.estadoImplementacion).toBe('IMPLEMENTADO');
+      if (parciales.has(d.codigo)) {
+        expect(d.estadoImplementacion).toBe('PARCIAL');
+      } else {
+        expect(d.estadoImplementacion).toBe('IMPLEMENTADO');
+      }
     }
   });
 
-  it('ningún indicador tiene motivoPendiente tras asignación', () => {
+  it('ningún indicador tiene motivoPendiente tras asignación, excepto R-10 y R-03', () => {
+    const conMotivo = new Set(['R-10', 'R-03']);
     for (const d of registro.listar()) {
-      expect(d.motivoPendiente).toBeUndefined();
+      if (conMotivo.has(d.codigo)) {
+        expect(d.motivoPendiente).toBeDefined();
+      } else {
+        expect(d.motivoPendiente).toBeUndefined();
+      }
     }
   });
 
@@ -116,14 +126,22 @@ describe('RegistroIndicadores — estado efectivo post-asignación', () => {
 describe('RegistroIndicadores — asignarEvaluador no modifica IMPLEMENTADO ni PARCIAL', () => {
   it('asignarEvaluador sobre IMPLEMENTADO no altera el estado', () => {
     const reg = new RegistroIndicadores();
-    // R-03 ya es IMPLEMENTADO en el registro estático
+    // R-07 arranca en IMPLEMENTADO en el registro estático
+    reg.asignarEvaluador('R-07', stubEvaluador);
+    expect(reg.obtener('R-07')?.estadoImplementacion).toBe('IMPLEMENTADO');
+  });
+
+  it('asignarEvaluador sobre PARCIAL preserva el estado PARCIAL', () => {
+    // R-03 arranca en PARCIAL; asignarEvaluador no lo promueve a IMPLEMENTADO
+    const reg = new RegistroIndicadores();
+    const antesR03 = reg.obtener('R-03')?.estadoImplementacion;
     reg.asignarEvaluador('R-03', stubEvaluador);
-    expect(reg.obtener('R-03')?.estadoImplementacion).toBe('IMPLEMENTADO');
+    expect(reg.obtener('R-03')?.estadoImplementacion).toBe(antesR03);
+    expect(reg.obtener('R-03')?.estadoImplementacion).toBe('PARCIAL');
   });
 
   it('asignarEvaluador solo auto-promueve desde NO_IMPLEMENTADO', () => {
-    // Verificamos que la lógica de promoción solo opera sobre NO_IMPLEMENTADO
-    // usando un indicador que arranca en IMPLEMENTADO
+    // Verificamos que PARCIAL no se promueve a IMPLEMENTADO al asignar evaluador
     const reg = new RegistroIndicadores();
     const r03antes = reg.obtener('R-03')?.estadoImplementacion;
     reg.asignarEvaluador('R-03', stubEvaluador);

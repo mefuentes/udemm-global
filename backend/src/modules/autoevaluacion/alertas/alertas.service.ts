@@ -3,7 +3,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { ScopeService } from '../../scopes/scope.service';
 import type { AmbitoAnalisis } from '../analisis/analisis.dto';
 import type { EstadoCalculo } from '../types/estado-calculo.types';
-import type { AlertaBandeja, FiltrosBandeja, RespuestaBandeja } from './alertas.dto';
+import type { AlertaBandeja, FiltrosBandeja, GrupoAmbitoAlerta, RespuestaBandeja } from './alertas.dto';
 import { extraerAlertas } from './alertas.extractor';
 
 const ROLES_MODAUT = new Set([
@@ -21,6 +21,12 @@ const ROLES_GLOBALES = new Set([
 ]);
 
 const ORDEN_PRIORIDAD: Record<string, number> = { ALTA: 0, MEDIA: 1, INFORMATIVA: 2 };
+
+const REGLAS_GRUPO: Record<GrupoAmbitoAlerta, Set<string>> = {
+  DOCENTES: new Set(['R-03', 'R-07', 'R-10', 'R-12', 'IP-13']),
+  PLANES:   new Set(['IPL-01', 'IPL-02', 'IP-03']),
+  CRUZADAS: new Set(['IPL-03', 'IPL-04']),
+};
 
 const POR_PAGINA_DEFAULT = 20;
 const POR_PAGINA_MAX     = 100;
@@ -103,9 +109,13 @@ export class AlertasService {
     }
 
     // Apply filters
-    if (filtros.ambito)    todasAlertas = todasAlertas.filter(a => a.ambito    === filtros.ambito);
-    if (filtros.prioridad) todasAlertas = todasAlertas.filter(a => a.prioridad === filtros.prioridad);
-    if (filtros.regla)     todasAlertas = todasAlertas.filter(a => a.regla     === filtros.regla);
+    if (filtros.ambito)      todasAlertas = todasAlertas.filter(a => a.ambito    === filtros.ambito);
+    if (filtros.grupoAmbito) {
+      const reglas = REGLAS_GRUPO[filtros.grupoAmbito];
+      todasAlertas = todasAlertas.filter(a => reglas.has(a.regla));
+    }
+    if (filtros.prioridad)   todasAlertas = todasAlertas.filter(a => a.prioridad === filtros.prioridad);
+    if (filtros.regla)       todasAlertas = todasAlertas.filter(a => a.regla     === filtros.regla);
 
     // Sort ALTA > MEDIA > INFORMATIVA, then by fechaEjecucion desc
     todasAlertas.sort((a, b) => {

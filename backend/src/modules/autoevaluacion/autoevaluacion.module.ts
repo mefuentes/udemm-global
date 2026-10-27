@@ -31,6 +31,8 @@ import { AlertasService } from './alertas/alertas.service';
 import { ExportacionesService } from './exportaciones/exportaciones.service';
 import { FichaDocenteService } from './ficha-docente/ficha-docente.service';
 import { ReglasCatalogoService } from './reglas/reglas-catalogo.service';
+import { TipoDedicacionConeauService } from './catalogo/tipo-dedicacion-coneau.service';
+import { TipoPosgradoService } from './catalogo/tipo-posgrado.service';
 
 @Module({
   imports: [PrismaModule, ScopeModule],
@@ -65,6 +67,8 @@ import { ReglasCatalogoService } from './reglas/reglas-catalogo.service';
     ExportacionesService,
     FichaDocenteService,
     ReglasCatalogoService,
+    TipoDedicacionConeauService,
+    TipoPosgradoService,
   ],
   exports: [
     ConfigFacultadService,
@@ -96,6 +100,8 @@ import { ReglasCatalogoService } from './reglas/reglas-catalogo.service';
     ExportacionesService,
     FichaDocenteService,
     ReglasCatalogoService,
+    TipoDedicacionConeauService,
+    TipoPosgradoService,
   ],
 })
 export class AutoevaluacionModule {}

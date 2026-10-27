@@ -121,7 +121,7 @@ function alertasFacultad(snap: Record<string, unknown>): AlertaRaw[] {
   if (sobreasignados > 0) {
     alerts.push({
       regla: 'R-07',
-      prioridad: 'ALTA',
+      prioridad: 'MEDIA',
       descripcion: `${sobreasignados} docente(s) sobreasignados en la facultad`,
     });
   }
@@ -177,6 +177,7 @@ export function extraerAlertas(
     ambito,
     entidadId,
     facultadId,
+    carreraId: ambito === 'CARRERA' ? entidadId : undefined,
     regla: a.regla,
     prioridad: a.prioridad,
     descripcion: a.descripcion,

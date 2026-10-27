@@ -1,5 +1,6 @@
 import { ForbiddenException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ExportacionesService } from './exportaciones.service';
+import { metaCarreraLabels } from './pdf.generator';
 
 // ── IDs de prueba ──────────────────────────────────────────────────────────────
 const EJEC_ID = 'aaaa-1111';
@@ -423,6 +424,222 @@ describe('ExportacionesService', () => {
       const ws = wb.getWorksheet('Indicadores');
       expect(hayTextoEnHoja(ws, 'COMPOSICION')).toBe(true);
     });
+  });
+
+  // ── IMPL-18C: Acción Requerida + Listado de docentes ─────────────────────────
+
+  function makeDocPdf(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      docenteId: 'doc-001',
+      nombre: 'García López, Juan',
+      nMaterias: 3,
+      horasCarreraConocidas: 12,
+      tieneHorasIncompletas: false,
+      fichaScore: 3,
+      semaforo: 'VERDE',
+      alertas: {},
+      ...overrides,
+    };
+  }
+
+  function makeSnapConListado(
+    docentes: Record<string, unknown>[],
+    ar?: Record<string, unknown>,
+  ): Record<string, unknown> {
+    return {
+      ...makeSnapCarrera(),
+      accionRequerida: ar ?? {
+        conAlertasAltas:        { total: 0, docentes: [] },
+        sobreasignados:         { total: 0, docentes: [] },
+        sinActividadCurricular: { total: 0, docentes: [] },
+        bajaDedicacion:         { total: 0, docentes: [], umbral: 10, confirmados: 0, inciertos: 0 },
+      },
+      listadoDocentes: {
+        estadoCalculo: 'CALCULADO',
+        docentes,
+      },
+    };
+  }
+
+  function makePrismaConSnap(snap: Record<string, unknown>) {
+    return makePrisma({
+      analisisEjecucion: {
+        findUnique: jest.fn().mockResolvedValue(makeRegCarrera({ snapshot: snap })),
+        findFirst:  jest.fn().mockResolvedValue(makeRegCarrera({ snapshot: snap })),
+      },
+    });
+  }
+
+  async function generarPdf(snap: Record<string, unknown>): Promise<Buffer> {
+    const svc = new ExportacionesService(makePrismaConSnap(snap) as any, makeAnalisis() as any);
+    const r = await svc.exportarPorEjecucion(EJEC_ID, 'pdf', 'ADMINISTRADOR_SISTEMA', USER_ID);
+    return r.buffer;
+  }
+
+  describe('PDF tablero carrera — IMPL-18C', () => {
+
+    it('PDF-18C-01: listado sin docentes → PDF válido sin crash', async () => {
+      const snap = makeSnapConListado([]);
+      const buf = await generarPdf(snap);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+      expect(buf.length).toBeGreaterThan(1024);
+    });
+
+    it('PDF-18C-02: listado con docente y alertas → buffer mayor que snap vacío', async () => {
+      const snapVacio = makeSnapConListado([]);
+      const snapConDoc = makeSnapConListado([
+        makeDocPdf({ alertas: { altaTope: true }, semaforo: 'ROJO' }),
+      ]);
+      const [bufVacio, bufConDoc] = await Promise.all([
+        generarPdf(snapVacio),
+        generarPdf(snapConDoc),
+      ]);
+      expect(bufConDoc.length).toBeGreaterThan(bufVacio.length);
+    });
+
+    it('PDF-18C-03: 4 subindicadores AR con docentes → no crash', async () => {
+      const ar = {
+        conAlertasAltas:        { total: 1, docentes: [{ docenteId: 'x', nombre: 'Pérez, Ana' }] },
+        sobreasignados:         { total: 1, docentes: [{ docenteId: 'x', nombre: 'Pérez, Ana' }] },
+        sinActividadCurricular: { total: 1, docentes: [{ docenteId: 'x', nombre: 'Pérez, Ana' }] },
+        bajaDedicacion:         { total: 1, docentes: [{ docenteId: 'x', nombre: 'Pérez, Ana', incierto: false }], umbral: 10, confirmados: 1, inciertos: 0 },
+      };
+      const snap = makeSnapConListado([], ar);
+      const buf = await generarPdf(snap);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+    });
+
+    it('PDF-18C-04: bajaDedicacion con confirmados e inciertos → no crash', async () => {
+      const ar = {
+        conAlertasAltas:        { total: 0, docentes: [] },
+        sobreasignados:         { total: 0, docentes: [] },
+        sinActividadCurricular: { total: 0, docentes: [] },
+        bajaDedicacion: {
+          total: 3,
+          docentes: [
+            { docenteId: 'a', nombre: 'López, Carlos', incierto: false },
+            { docenteId: 'b', nombre: 'Martínez, Pedro', incierto: true },
+            { docenteId: 'c', nombre: 'Rodríguez, María', incierto: true },
+          ],
+          umbral: 10,
+          confirmados: 1,
+          inciertos: 2,
+        },
+      };
+      const snap = makeSnapConListado([], ar);
+      const buf = await generarPdf(snap);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+    });
+
+    it('PDF-18C-05: listado con múltiples docentes → buffer mayor que listado vacío', async () => {
+      const snapVacio = makeSnapConListado([]);
+      const snapMulti = makeSnapConListado([
+        makeDocPdf({ docenteId: 'a', nombre: 'Álvarez, Laura' }),
+        makeDocPdf({ docenteId: 'b', nombre: 'Bernal, Mario' }),
+        makeDocPdf({ docenteId: 'c', nombre: 'Cabrera, Sofía' }),
+      ]);
+      const [bufVacio, bufMulti] = await Promise.all([
+        generarPdf(snapVacio),
+        generarPdf(snapMulti),
+      ]);
+      expect(bufMulti.length).toBeGreaterThan(bufVacio.length);
+    });
+
+    it('PDF-18C-06: fichaScore en rango 0..4 → no crash', async () => {
+      const docentes = [0, 1, 2, 3, 4].map(score =>
+        makeDocPdf({ docenteId: `d${score}`, nombre: `Doc ${score}`, fichaScore: score }),
+      );
+      const snap = makeSnapConListado(docentes);
+      const buf = await generarPdf(snap);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+    });
+
+    it('PDF-18C-07: semáforos ROJO/AMARILLO/VERDE y alertas R-03/R-04/R-07 → no crash', async () => {
+      const docentes = [
+        makeDocPdf({ docenteId: 'r', semaforo: 'ROJO',    alertas: { altaTope: true } }),
+        makeDocPdf({ docenteId: 'a', semaforo: 'AMARILLO', alertas: { mediaSobreasignado: true } }),
+        makeDocPdf({ docenteId: 'v', semaforo: 'VERDE',    alertas: { altaSinActividad: true } }),
+      ];
+      const snap = makeSnapConListado(docentes);
+      const buf = await generarPdf(snap);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+    });
+
+    it('PDF-18C-08: valores nulos/undefined en campos opcionales → degradación elegante', async () => {
+      const docentes = [
+        makeDocPdf({
+          horasCarreraConocidas: undefined,
+          tieneHorasIncompletas: true,
+          fichaScore: undefined,
+          semaforo: undefined,
+          alertas: undefined,
+        }),
+      ];
+      const snap = {
+        ...makeSnapCarrera(),
+        accionRequerida: {
+          bajaDedicacion: { total: 1, docentes: [{ docenteId: 'x', nombre: 'X' }], umbral: undefined, confirmados: undefined, inciertos: undefined },
+        },
+        listadoDocentes: { estadoCalculo: 'NO_APLICA', docentes },
+      };
+      await expect(generarPdf(snap)).resolves.toBeInstanceOf(Buffer);
+    });
+
+    it('PDF-18C-09: listado con 25 docentes (paginación) → PDF válido mayor a 3KB', async () => {
+      const docentes = Array.from({ length: 25 }, (_, i) =>
+        makeDocPdf({ docenteId: `d${i}`, nombre: `Docente ${String(i).padStart(2, '0')}, Apellido` }),
+      );
+      const snap = makeSnapConListado(docentes);
+      const buf = await generarPdf(snap);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+      expect(buf.length).toBeGreaterThan(3072);
+    });
+
+    it('PDF-18C-10: PDF generado con docentes → buffer mayor que sin secciones IMPL-18C', async () => {
+      const snapBase = makeSnapCarrera(); // sin accionRequerida ni listadoDocentes
+      const snapCompleto = makeSnapConListado([
+        makeDocPdf({ docenteId: 'a', nombre: 'García López, Juan' }),
+      ]);
+      const [bufBase, bufCompleto] = await Promise.all([
+        generarPdf(snapBase),
+        generarPdf(snapCompleto),
+      ]);
+      expect(bufCompleto.length).toBeGreaterThan(bufBase.length);
+    });
+
+    it('PDF-18C-11: snapshot histórico sin listadoDocentes → no crash, degradación elegante', async () => {
+      const snapHistorico: Record<string, unknown> = {
+        ...makeSnapCarrera(),
+        accionRequerida: {
+          conAlertasAltas: { total: 0, docentes: [] },
+          sobreasignados:  { total: 0, docentes: [] },
+        },
+        // listadoDocentes ausente (snapshot pre-IMPL-18C)
+      };
+      const buf = await generarPdf(snapHistorico);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+    });
+
+    it('PDF-18C-12: snapshot sin accionRequerida → no crash, sección AR omitida', async () => {
+      const snapSinAR: Record<string, unknown> = {
+        ...makeSnapCarrera(),
+        // accionRequerida ausente (snapshot pre-IMPL-18A)
+        listadoDocentes: {
+          estadoCalculo: 'CALCULADO',
+          docentes: [makeDocPdf()],
+        },
+      };
+      const buf = await generarPdf(snapSinAR);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+    });
+
+    it('PDF-CIERRE01-01: etiqueta ip01 en metaCarreraLabels es "Total docentes" (CIERRE-01)', () => {
+      const ip01 = metaCarreraLabels.find(([k]) => k === 'ip01');
+      expect(ip01).toBeDefined();
+      expect(ip01![1]).toBe('IP-01 — Total docentes');
+      expect(ip01![1]).not.toContain('exclusiva');
+    });
+
   });
 
   describe('consistencia datos PDF / Excel / snapshot', () => {

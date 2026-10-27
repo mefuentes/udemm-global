@@ -1,8 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import { EstadoCalculo } from '../types/estado-calculo.types';
 import type {
-  DocenteVigenteR03,
-  DocentesParaR03,
+  DocenteVigenteR10,
+  DocentesParaR10,
   ConfigFacultadAut,
 } from '../consultas-academicas/consultas-academicas.types';
 import type { ContextoEvaluacion } from './indicadores.types';
@@ -23,7 +23,7 @@ function mkCtx(overrides: Partial<ContextoEvaluacion> = {}): ContextoEvaluacion 
   return { usuarioId: USR, rolNombre: ADMIN, carreraId: CAR_ID, fechaEvaluacion: FECHA, ...overrides };
 }
 
-function mkDocente(overrides: Partial<DocenteVigenteR03> = {}): DocenteVigenteR03 {
+function mkDocente(overrides: Partial<DocenteVigenteR10> = {}): DocenteVigenteR10 {
   return {
     docenteId: 'doc-1',
     nombre: 'Ana',
@@ -32,12 +32,19 @@ function mkDocente(overrides: Partial<DocenteVigenteR03> = {}): DocenteVigenteR0
     tieneMateriaSinHoras: false,
     tiempoDedicacionGestionSemanal: null,
     fechaFinGestion: null,
+    funcionGestion: null,
     desempenoActualJson: null,
+    tiempoInvestigacion: null,
+    tituloProyectoInvestigacion: null,
+    fechaFinProyectoInvestigacion: null,
+    tiempoExtension: null,
+    rolActividadExtension: null,
+    finEstadoActividadExtension: null,
     ...overrides,
   };
 }
 
-function mkData(overrides: Partial<DocentesParaR03> = {}): DocentesParaR03 {
+function mkData(overrides: Partial<DocentesParaR10> = {}): DocentesParaR10 {
   return {
     docentes: [],
     facultadId: FAC_ID,
@@ -51,9 +58,9 @@ function mkConfig(overrides: Partial<ConfigFacultadAut> = {}): ConfigFacultadAut
   return { facultadId: FAC_ID, p01TopeH: 60, p02BajaH: 10, p03MaxMat: 5, updatedAt: new Date(), ...overrides };
 }
 
-function makeSvc(data: DocentesParaR03, config: ConfigFacultadAut | null) {
+function makeSvc(data: DocentesParaR10, config: ConfigFacultadAut | null) {
   const consultas = {
-    obtenerDocentesParaR03: jest.fn().mockResolvedValue(data),
+    obtenerDocentesParaR10: jest.fn().mockResolvedValue(data),
     obtenerConfigDeCarrera: jest.fn().mockResolvedValue(config),
   };
   return { svc: new R10EvaluadorService(consultas as any), consultas };
@@ -156,7 +163,7 @@ describe('R10EvaluadorService', () => {
     expect(horas).toEqual([5, 9, 12]);
   });
 
-  it('TC-10: totalEnAlerta e totalInciertos se cuentan por separado', async () => {
+  it('TC-10: totalEnAlerta y totalInciertos se cuentan por separado', async () => {
     const data = mkData({
       docentes: [
         mkDocente({ docenteId: 'doc-a', horasDocenciaConocidas: 5, tieneMateriaSinHoras: false }),
@@ -192,5 +199,155 @@ describe('R10EvaluadorService', () => {
     const v = r.valor as ResultadoR10;
     expect(r.estadoCalculo).toBe(EstadoCalculo.PARCIAL);
     expect(v.enAlerta).toHaveLength(0);
+  });
+
+  // ── FSD §6: fórmula correcta docencia + gestión + investigación + vinculación ─
+
+  it('TC-13: docencia + gestión + investigación + vinculación sacan al docente del umbral', async () => {
+    const data = mkData({
+      docentes: [
+        mkDocente({
+          horasDocenciaConocidas: 6,
+          tiempoDedicacionGestionSemanal: '4',
+          tiempoInvestigacion: '5',
+          tiempoExtension: '6',
+        }),
+      ],
+    });
+    const { svc } = makeSvc(data, mkConfig({ p02BajaH: 20 }));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR10;
+    // 6 + 4 + 5 + 6 = 21 ≥ 20 → sin alerta
+    expect(v.enAlerta).toHaveLength(0);
+    expect(r.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+  });
+
+  it('TC-14: investigación "0" explícito → horas=0, no indeterminado → incierto=false', async () => {
+    const data = mkData({
+      docentes: [mkDocente({ horasDocenciaConocidas: 5, tiempoInvestigacion: '0' })],
+    });
+    const { svc } = makeSvc(data, mkConfig({ p02BajaH: 20 }));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR10;
+    expect(v.enAlerta).toHaveLength(1);
+    expect(v.enAlerta[0].incierto).toBe(false);
+    expect(v.enAlerta[0].componentes.horasInvestigacion).toBe(0);
+    expect(v.enAlerta[0].componentes.investigacionIndeterminada).toBe(false);
+    expect(r.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+  });
+
+  it('TC-15: investigación null sin actividad declarada → 0h, no indeterminado', async () => {
+    const data = mkData({
+      docentes: [mkDocente({
+        horasDocenciaConocidas: 5,
+        tiempoInvestigacion: null,
+        tituloProyectoInvestigacion: null, // sin actividad declarada
+      })],
+    });
+    const { svc } = makeSvc(data, mkConfig({ p02BajaH: 20 }));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR10;
+    expect(v.enAlerta[0].componentes.horasInvestigacion).toBe(0);
+    expect(v.enAlerta[0].componentes.investigacionIndeterminada).toBe(false);
+    expect(v.enAlerta[0].incierto).toBe(false);
+  });
+
+  it('TC-16: investigación con valor no numérico → investigacionIndeterminada=true → incierto=true, PARCIAL', async () => {
+    const data = mkData({
+      docentes: [
+        mkDocente({ horasDocenciaConocidas: 5, tiempoInvestigacion: 'N/A' }),
+      ],
+    });
+    const { svc } = makeSvc(data, mkConfig({ p02BajaH: 20 }));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR10;
+    expect(v.enAlerta).toHaveLength(1);
+    expect(v.enAlerta[0].incierto).toBe(true);
+    expect(v.enAlerta[0].componentes.investigacionIndeterminada).toBe(true);
+    expect(v.enAlerta[0].componentes.horasInvestigacion).toBe(0);
+    expect(r.estadoCalculo).toBe(EstadoCalculo.PARCIAL);
+    expect(r.datosFaltantes).toHaveLength(1);
+  });
+
+  it('TC-17: proyecto investigación declarado (tituloProyectoInvestigacion) sin horas → INDETERMINADO (FSD §3)', async () => {
+    const data = mkData({
+      docentes: [
+        mkDocente({
+          horasDocenciaConocidas: 8,
+          tiempoInvestigacion: null,
+          tituloProyectoInvestigacion: 'Proyecto IA aplicada',
+        }),
+      ],
+    });
+    const { svc } = makeSvc(data, mkConfig({ p02BajaH: 20 }));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR10;
+    expect(v.enAlerta[0].incierto).toBe(true);
+    expect(v.enAlerta[0].componentes.investigacionIndeterminada).toBe(true);
+    expect(r.estadoCalculo).toBe(EstadoCalculo.PARCIAL);
+  });
+
+  it('TC-18: combinación — docencia + investigación + vinculación suma exacta al umbral → no entra', async () => {
+    const data = mkData({
+      docentes: [
+        mkDocente({
+          horasDocenciaConocidas: 10,
+          tiempoInvestigacion: '6',
+          tiempoExtension: '4',
+        }),
+      ],
+    });
+    const { svc } = makeSvc(data, mkConfig({ p02BajaH: 20 }));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR10;
+    // 10 + 0 + 6 + 4 = 20 → no estrictamente menor
+    expect(v.enAlerta).toHaveLength(0);
+    expect(r.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+  });
+
+  it('TC-19: componentes refleja los cuatro valores (docencia+gestión+inv+vin) en entrada de alerta', async () => {
+    const data = mkData({
+      docentes: [
+        mkDocente({
+          horasDocenciaConocidas: 3,
+          tiempoDedicacionGestionSemanal: '2',
+          tiempoInvestigacion: '2',
+          tiempoExtension: '1',
+        }),
+      ],
+    });
+    const { svc } = makeSvc(data, mkConfig({ p02BajaH: 20 }));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR10;
+    // 3 + 2 + 2 + 1 = 8 < 20 → en alerta
+    expect(v.enAlerta).toHaveLength(1);
+    const comp = v.enAlerta[0].componentes;
+    expect(comp.horasDocencia).toBe(3);
+    expect(comp.horasGestion).toBe(2);
+    expect(comp.horasInvestigacion).toBe(2);
+    expect(comp.horasVinculacion).toBe(1);
+    expect(comp.gestionIndeterminada).toBe(false);
+    expect(comp.investigacionIndeterminada).toBe(false);
+    expect(comp.vinculacionIndeterminada).toBe(false);
+    expect(v.enAlerta[0].horasConocidas).toBe(8);
+    expect(v.enAlerta[0].incierto).toBe(false);
+  });
+
+  it('TC-20: vinculación con actividad declarada (rolActividadExtension) sin horas → INDETERMINADO (FSD §3)', async () => {
+    const data = mkData({
+      docentes: [
+        mkDocente({
+          horasDocenciaConocidas: 6,
+          tiempoExtension: null,
+          rolActividadExtension: 'Coordinador extensión',
+        }),
+      ],
+    });
+    const { svc } = makeSvc(data, mkConfig({ p02BajaH: 20 }));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR10;
+    expect(v.enAlerta[0].incierto).toBe(true);
+    expect(v.enAlerta[0].componentes.vinculacionIndeterminada).toBe(true);
+    expect(r.estadoCalculo).toBe(EstadoCalculo.PARCIAL);
   });
 });

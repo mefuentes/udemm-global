@@ -217,6 +217,27 @@ export class AutoevaluacionController {
     return this.tableroCarrera.consultarCarrera(carreraId, req.user.id, req.user.rol.nombre);
   }
 
+  // ── Listado de docentes por carrera ────────────────────────────────────────
+
+  /**
+   * Devuelve el listado detallado de docentes del plantel de una carrera (FSD §9.3).
+   *
+   * Cada fila incluye materias en la carrera, horas de docencia conocidas, completitud
+   * de ficha (C1–C4), semáforo (VERDE/AMARILLO/ROJO) y alertas activas.
+   * El campo totales contiene los contadores para los 4 filtros del listado.
+   *
+   * Seguridad: igual a tablroCarrera — UUID v4 en path, usuarioId/rol del token.
+   */
+  @Post('tablero/carrera/:carreraId/listado')
+  @HttpCode(200)
+  @Roles(...ROLES_MODAUT)
+  async listadoDocentesCarrera(
+    @Param('carreraId', new ParseUUIDPipe({ version: '4' })) carreraId: string,
+    @Req() req: any,
+  ) {
+    return this.tableroCarrera.consultarListadoDocentes(carreraId, req.user.id, req.user.rol.nombre);
+  }
+
   // ── Tablero por facultad ────────────────────────────────────────────────────
 
   /**
@@ -317,9 +338,10 @@ export class AutoevaluacionController {
   @Roles(...ROLES_MODAUT)
   obtenerBandejaAlertas(
     @Req() req: any,
-    @Query('ambito')    ambito?: string,
-    @Query('prioridad') prioridad?: string,
-    @Query('regla')     regla?: string,
+    @Query('ambito')      ambito?: string,
+    @Query('grupoAmbito') grupoAmbito?: string,
+    @Query('prioridad')   prioridad?: string,
+    @Query('regla')       regla?: string,
     @Query('pagina',    new ParseIntPipe({ optional: true })) pagina    = 1,
     @Query('porPagina', new ParseIntPipe({ optional: true })) porPagina = 20,
   ) {
@@ -328,7 +350,7 @@ export class AutoevaluacionController {
       req.user.rol.nombre,
       pagina,
       porPagina,
-      { ambito: ambito as any, prioridad: prioridad as any, regla },
+      { ambito: ambito as any, grupoAmbito: grupoAmbito as any, prioridad: prioridad as any, regla },
     );
   }
 
@@ -463,6 +485,33 @@ export class AutoevaluacionController {
     @Req() req: any,
   ) {
     return this.fichaDocente.obtenerFicha(docenteId, req.user.id, req.user.rol.nombre);
+  }
+
+  /**
+   * Ficha individual de un docente en el contexto de una carrera (IMPL-19B.5 live).
+   *
+   * Devuelve la ficha del docente con sus vinculaciones, cargos y alertas filtrados
+   * al scope de la carrera indicada. El docente debe tener al menos una vinculación
+   * APROBADA en esa carrera; de lo contrario responde 404.
+   *
+   * Seguridad:
+   * - carreraId y docenteId se validan como UUID v4.
+   * - El usuario debe tener scope sobre la carrera (tieneScopeCarrera).
+   * - El endpoint no revela si el docente existe fuera del scope de la carrera.
+   */
+  @Get('tablero/carrera/:carreraId/docente/:docenteId')
+  @Roles(...ROLES_MODAUT)
+  obtenerFichaDocenteEnCarrera(
+    @Param('carreraId', new ParseUUIDPipe({ version: '4' })) carreraId: string,
+    @Param('docenteId', new ParseUUIDPipe({ version: '4' })) docenteId: string,
+    @Req() req: any,
+  ) {
+    return this.fichaDocente.obtenerFichaEnCarrera(
+      docenteId,
+      carreraId,
+      req.user.id,
+      req.user.rol.nombre,
+    );
   }
 
   // ── Catálogo de reglas ───────────────────────────────────────────────────────

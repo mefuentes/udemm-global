@@ -214,6 +214,222 @@ export interface ResultadoIP10 {
   estadoCalculo: EstadoCalculo;
 }
 
+// ── Acción requerida ──────────────────────────────────────────────────────────
+
+/** Docente referenciado en el panel «Acción requerida». */
+export interface DocenteAccionRequerida {
+  docenteId: string;
+  nombre: string;
+  /**
+   * Solo presente en AR-04 (bajaDedicacion).
+   * true: las horas conocidas están bajo el umbral pero la información es incompleta
+   * (materias sin cargaHorariaSemanal o asignaciones cross-facultad).
+   * El incumplimiento real no puede confirmarse.
+   */
+  incierto?: boolean;
+}
+
+/** Un subindicador del panel «Acción requerida». */
+export interface SubindicadorAR {
+  total: number;
+  docentes: DocenteAccionRequerida[];
+}
+
+/**
+ * Panel «Acción requerida» del tablero de carrera (FSD §9.2).
+ * Todos los conteos son de docentes distintos, no de alertas ni cargos.
+ *
+ * Fuentes de datos vigentes (no snapshots históricos):
+ *   conAlertasAltas:        R-03 (tope horario) ∪ IP-13 (sobreasignados), dedup por docenteId.
+ *   sobreasignados:         IP-13 / R-07 (nMaterias > P-03).
+ *   sinActividadCurricular: R-04 (cargos sin actividad en algún plan), dedup por docenteId entre planes.
+ *   bajaDedicacion:         R-10 (horasConocidas < P-02), incluye inciertos.
+ *
+ * estadoCalculo: el más restrictivo entre R-03, IP-13, R-04 y R-10.
+ * No participa en estadoGeneralCalculo (sus fuentes ya están representadas allí).
+ */
+export interface ResultadoAccionRequerida {
+  /** AR-01: docentes con al menos una alerta ALTA (R-03 tope horario o IP-13 sobreasignados). */
+  conAlertasAltas: SubindicadorAR;
+  /** AR-02: docentes sobreasignados (nMaterias > P-03). Subset de conAlertasAltas. */
+  sobreasignados: SubindicadorAR;
+  /** AR-03: docentes con al menos un cargo sin actividad curricular en algún plan de la carrera. */
+  sinActividadCurricular: SubindicadorAR;
+  /**
+   * AR-04: docentes con horasConocidas < P-02 (R-10.enAlerta, confirmados + inciertos).
+   * confirmados: incierto=false — incumplimiento verificado.
+   * inciertos:   incierto=true  — datos insuficientes; el total real podría superar el umbral.
+   * total = confirmados + inciertos.
+   */
+  bajaDedicacion: SubindicadorAR & { umbral: number; confirmados: number; inciertos: number };
+  estadoCalculo: EstadoCalculo;
+}
+
+// ── Listado de docentes (IMPL-18B, FSD §9.3) ─────────────────────────────────
+
+/** Semáforo individual por docente: min(completitud_i, consistencia_i). */
+export type SemaforoDocente = 'VERDE' | 'AMARILLO' | 'ROJO';
+
+/**
+ * Distribución de semáforos del plantel (B-04).
+ * verde + amarillo + rojo = total (todos los docentes del listado).
+ */
+export interface DistribucionSemaforosDto {
+  verde: number;
+  amarillo: number;
+  rojo: number;
+  total: number;
+}
+
+/** Alertas activas para un docente en el contexto de la carrera. */
+export interface AlertasDocente {
+  /** R-03: tope horario semanal superado. Severidad ALTA. */
+  altaTope: boolean;
+  /** R-04: al menos un cargo vigente sin actividad curricular en algún plan. Severidad ALTA. */
+  altaSinActividad: boolean;
+  /** R-07/IP-13: nMaterias > P-03. Severidad MEDIA. */
+  mediaSobreasignado: boolean;
+  /** R-10: horas conocidas < P-02 (confirmado, incierto=false). Severidad INFORMATIVA. */
+  informativaBajaDedicacion: boolean;
+  /** R-10: horas conocidas < P-02 pero hay datos faltantes (incierto=true). */
+  bajaDedicacionIncierta: boolean;
+  /** R-12: al menos un ítem de ficha obligatorio incompleto. Severidad INFORMATIVA. */
+  fichaIncompleta: boolean;
+}
+
+/**
+ * Una fila del listado de docentes del tablero de carrera (FSD §9.3).
+ *
+ * semaforo = VERDE (≥90), AMARILLO (60–89), ROJO (<60),
+ *   donde score = min(completitud_i, consistencia_i).
+ * completitud_i = 25×(C1+C2+C3+1), C4=1 por construcción.
+ * consistencia_i = max(0, 100 − 25×A − 10×M), A=ALTA alerts, M=MEDIA alerts.
+ */
+export interface FilaDocenteListado {
+  docenteId: string;
+  /** Formato: "APELLIDO, Nombre" */
+  nombre: string;
+  materias: { materiaId: string; nombre: string }[];
+  nMaterias: number;
+  /** Suma de cargaHorariaSemanal de materias con ese campo informado (solo esta carrera). */
+  horasCarreraConocidas: number;
+  /** true si alguna materia en esta carrera no tiene cargaHorariaSemanal. */
+  tieneHorasIncompletas: boolean;
+  /** 25×(C1+C2+C3+1). Valores posibles: 25, 50, 75, 100. */
+  completitud: number;
+  /** completitud/25. Valores posibles: 1, 2, 3, 4. */
+  fichaScore: number;
+  semaforo: SemaforoDocente;
+  alertas: AlertasDocente;
+}
+
+/** Conteos para las pestañas de filtro del listado. */
+export interface TotalesListadoDocentes {
+  total: number;
+  /** Docentes con al menos una alerta ALTA o MEDIA. */
+  conAlertas: number;
+  /** Docentes con mediaSobreasignado=true. */
+  sobreasignados: number;
+  /** Docentes con informativaBajaDedicacion=true o bajaDedicacionIncierta=true. */
+  bajaDedicacion: number;
+  /** Docentes con fichaIncompleta=true. */
+  fichaIncompleta: number;
+}
+
+/**
+ * Respuesta del endpoint POST /autoevaluacion/tablero/carrera/:carreraId/listado.
+ *
+ * estadoCalculo: NO_APLICA si no hay docentes activos; CALCULADO o PARCIAL según
+ * las fuentes de datos disponibles (hereda el estado más restrictivo entre R-03, R-07,
+ * R-04, R-10 y R-12).
+ */
+export interface ListadoDocentesCarreraDto {
+  carreraId: string;
+  fechaEvaluacion: string;
+  docentes: FilaDocenteListado[];
+  totales: TotalesListadoDocentes;
+  distribucionSemaforos: DistribucionSemaforosDto;
+  estadoCalculo: EstadoCalculo;
+}
+
+/** Un ítem de la distribución de dedicación docente por tipo de designación. */
+export interface DedicacionTipoItem {
+  tipo: string;
+  docentes: number;
+}
+
+/** Un ítem de la distribución de docentes por nivel de posgrado CONEAU (D-06). */
+export interface PosgradoTipoItem {
+  /** Nombre canónico del nivel: 'DOCTORADO' | 'MAESTRIA' | 'ESPECIALIZACION'. */
+  tipo: string;
+  docentes: number;
+}
+
+/**
+ * Categoría de dedicación horaria según CONEAU.
+ * NO_DETERMINADA: valor de Docente.dedicacion ausente, vacío o con forma no reconocida.
+ */
+export type DedicacionConeau = 'EXCLUSIVA' | 'SEMIEXCLUSIVA' | 'SIMPLE' | 'NO_DETERMINADA';
+
+/** Un ítem de la distribución CONEAU de dedicación docente (CIERRE-03 Fase A). */
+export interface DedicacionConeauItem {
+  categoria: DedicacionConeau;
+  docentes: number;
+}
+
+/**
+ * Bloque "Condiciones del plantel" para indicadores CONEAU (FSD §9.2, B-03).
+ *
+ * conPosgrado:            docentes con tituloPosgrado declarado (boolean).
+ * conInvestigacion:       docentes con tituloProyectoInvestigacion declarado.
+ * conDesignacionRegular:  docentes con al menos un CargoDocente vigente cuya
+ *                         designacion contiene "Regular" (insensitive).
+ * conDesignacionInterina: docentes con al menos un CargoDocente vigente cuya
+ *                         designacion contiene "Interino" (insensitive).
+ *                         No es el complemento de regulares — se consulta explícitamente.
+ * relacionPA:             cargos P y A según IP-08 (FSD §9.2). Ausente cuando
+ *                         ip08.estadoCalculo = NO_APLICA (sin cargos en la carrera).
+ * dedicacionPorTipo:      distribución de docentes por Designacion.nombre
+ *                         (VinculacionCatedra APROBADA). NOTA: la fuente actual
+ *                         contiene categorías de designación académica
+ *                         (REGULAR RENTADO, INTERINO RENTADO, etc.), no rangos de
+ *                         dedicación horaria. Fuente de dedicación pendiente de
+ *                         decisión institucional (PD-1, IMPL-19B.3-B.0).
+ * dedicacionConeau:       distribución de docentes por categoría CONEAU, derivada de
+ *                         Docente.dedicacion con normalización conservadora (CIERRE-03 Fase A).
+ *                         Incluye NO_DETERMINADA para valores ausentes o no reconocidos.
+ * distribucionPosgrado:   distribución de docentes por nivel máximo de posgrado CONEAU (D-06).
+ *                         Solo incluye docentes clasificados (tipoPosgradoId != null).
+ *                         Ausente cuando estadoCalculo = NO_APLICA.
+ */
+export interface CondicionesPlantellDto {
+  totalDocentes: number;
+  conPosgrado: number;
+  conInvestigacion: number;
+  conDesignacionRegular: number;
+  /** Docentes con al menos un CargoDocente vigente cuya designacion contiene "Interino". */
+  conDesignacionInterina: number;
+  /**
+   * Cargos profesores y auxiliares según IP-08.
+   * Ausente cuando ip08.estadoCalculo = NO_APLICA.
+   */
+  relacionPA?: { profesores: number; auxiliares: number };
+  dedicacionPorTipo: DedicacionTipoItem[];
+  /**
+   * Distribución CONEAU de dedicación docente (CIERRE-03 Fase A).
+   * Fuente: Docente.dedicacion normalizado. Incluye las cuatro categorías siempre.
+   */
+  dedicacionConeau: DedicacionConeauItem[];
+  /**
+   * Distribución de docentes por nivel máximo de posgrado CONEAU (D-06).
+   * Ordena: DOCTORADO, MAESTRIA, ESPECIALIZACION.
+   * Solo incluye los niveles con al menos un docente clasificado.
+   * Un docente con tipoPosgradoId = null no aparece en ningún bucket (null ≠ SIN_POSGRADO).
+   */
+  distribucionPosgrado?: PosgradoTipoItem[];
+  estadoCalculo: EstadoCalculo;
+}
+
 /**
  * Respuesta del endpoint POST /autoevaluacion/tablero/carrera/:carreraId.
  *
@@ -234,5 +450,18 @@ export interface TablroCarreraResponseDto {
   ip13: ResultadoIP13;
   r10: ResultadoR10;
   r12: ResultadoR12;
+  /** Panel «Acción requerida» (FSD §9.2). Calculado con datos vigentes (no snapshots). */
+  accionRequerida: ResultadoAccionRequerida;
+  /**
+   * Listado detallado de docentes del plantel (FSD §9.3).
+   * Presente en ejecuciones ≥ v2.0 (IMPL-18C). Ausente en snapshots históricos anteriores.
+   * El generador PDF degradará graciosamente si el campo está ausente.
+   */
+  listadoDocentes?: ListadoDocentesCarreraDto;
+  /**
+   * Bloque "Condiciones del plantel" CONEAU (FSD §9.2, B-03).
+   * Presente en ejecuciones ≥ v2.1. Ausente en snapshots históricos anteriores.
+   */
+  condicionesPlantell?: CondicionesPlantellDto;
   estadoGeneralCalculo: EstadoCalculo;
 }

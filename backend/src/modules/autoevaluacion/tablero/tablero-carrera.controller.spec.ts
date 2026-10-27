@@ -146,6 +146,13 @@ const escenarioA: TablroCarreraResponseDto = {
     alcanceFacultad: true,
     estadoCalculo: EstadoCalculo.CALCULADO,
   },
+  accionRequerida: {
+    conAlertasAltas: { total: 1, docentes: [{ docenteId: 'd-5', nombre: 'Doc E' }] },
+    sobreasignados:  { total: 1, docentes: [{ docenteId: 'd-5', nombre: 'Doc E' }] },
+    sinActividadCurricular: { total: 0, docentes: [] },
+    bajaDedicacion: { total: 0, docentes: [], umbral: 20, confirmados: 0, inciertos: 0 },
+    estadoCalculo: EstadoCalculo.CALCULADO,
+  },
   estadoGeneralCalculo: EstadoCalculo.CALCULADO,
 };
 
@@ -210,6 +217,13 @@ const escenarioE: TablroCarreraResponseDto = {
     totalNoDeterminables: 0,
     noDeterminables: [],
     alcanceFacultad: true,
+    estadoCalculo: EstadoCalculo.NO_APLICA,
+  },
+  accionRequerida: {
+    conAlertasAltas: { total: 0, docentes: [] },
+    sobreasignados:  { total: 0, docentes: [] },
+    sinActividadCurricular: { total: 0, docentes: [] },
+    bajaDedicacion: { total: 0, docentes: [], umbral: 20, confirmados: 0, inciertos: 0 },
     estadoCalculo: EstadoCalculo.NO_APLICA,
   },
   estadoGeneralCalculo: EstadoCalculo.NO_APLICA,

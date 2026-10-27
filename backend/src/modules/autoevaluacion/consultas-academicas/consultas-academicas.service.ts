@@ -9,11 +9,14 @@ import type {
   ConfigFormacionPracticaAut,
   DocenteConCargosR04,
   DocenteFichaAut,
+  DocenteParaListado,
   DocentesParaIP09,
   DocentesParaR03,
+  DocentesParaR10,
   DocentesParaR12,
   DocenteVigenteIP09,
   DocenteVigenteR03,
+  DocenteVigenteR10,
   EstadoSeccion,
   FacultadAut,
   MateriaProgramaAut,
@@ -811,6 +814,7 @@ export class ConsultasAcademicasService {
             apellido: true,
             tiempoDedicacionGestionSemanal: true,
             fechaFinGestion: true,
+            funcionGestion: true,
             desempenoActualJson: true,
           },
         },
@@ -824,6 +828,7 @@ export class ConsultasAcademicasService {
       tieneMateriaSinHoras: boolean;
       tiempoDedicacionGestionSemanal: string | null;
       fechaFinGestion: string | null;
+      funcionGestion: string | null;
       desempenoActualJson: string | null;
     }>();
 
@@ -836,6 +841,7 @@ export class ConsultasAcademicasService {
           tieneMateriaSinHoras: false,
           tiempoDedicacionGestionSemanal: v.docente.tiempoDedicacionGestionSemanal ?? null,
           fechaFinGestion: v.docente.fechaFinGestion ?? null,
+          funcionGestion: v.docente.funcionGestion ?? null,
           desempenoActualJson: v.docente.desempenoActualJson ?? null,
         });
       }
@@ -849,6 +855,132 @@ export class ConsultasAcademicasService {
     }
 
     const docentes: DocenteVigenteR03[] = Array.from(porDocente.entries()).map(
+      ([docenteId, d]) => ({ docenteId, ...d }),
+    );
+
+    const docentesMultiFacultad = alcanceFacultad
+      ? await this.detectarDocentesMultiFacultad(
+          docentes.map((d) => d.docenteId),
+          facultadId,
+        )
+      : new Set<string>();
+
+    return { docentes, facultadId, alcanceFacultad, docentesMultiFacultad };
+  }
+
+  // ── Docentes para R-10 (dedicación total CONEAU) ────────────────────────
+
+  /**
+   * Devuelve los docentes con al menos una VinculacionCatedra APROBADA en el scope,
+   * con las horas de docencia acumuladas y los campos necesarios para R-10.
+   *
+   * R-10 calcula la "dedicación total" = docencia + gestión + investigación + vinculación (FSD §6).
+   * Extiende DocenteVigenteR03 con los campos de investigación y extensión/vinculación.
+   *
+   * Alcance (idéntico a obtenerDocentesParaR03):
+   *   Roles globales y DECANO: toda la facultad (alcanceFacultad=true).
+   *   DIRECTOR_CARRERA: solo la carrera solicitada (alcanceFacultad=false → PARCIAL).
+   */
+  async obtenerDocentesParaR10(
+    carreraId: string,
+    usuarioId: string,
+    rolNombre: string,
+  ): Promise<DocentesParaR10> {
+    this.checkRol(rolNombre);
+
+    const carrera = await this.prisma.carrera.findUnique({
+      where: { id: carreraId },
+      select: { id: true, facultadId: true },
+    });
+    if (!carrera) throw new NotFoundException(`Carrera ${carreraId} no encontrada`);
+
+    const tieneScope = await this.scope.tieneScopeCarrera(usuarioId, rolNombre, carreraId);
+    if (!tieneScope) throw new ForbiddenException();
+
+    const { facultadId } = carrera;
+
+    const ROLES_ALCANCE_FACULTAD = new Set([
+      'ADMINISTRADOR_SISTEMA',
+      'SECRETARIA_ACADEMICA',
+      'RECTORADO',
+      'DECANO',
+    ]);
+    const alcanceFacultad = ROLES_ALCANCE_FACULTAD.has(rolNombre);
+
+    const rows = await this.prisma.vinculacionCatedra.findMany({
+      where: {
+        ...(alcanceFacultad ? { facultadId } : { carreraId }),
+        estado: 'APROBADA',
+        docente: { activo: true },
+      },
+      select: {
+        docenteId: true,
+        materia: { select: { cargaHorariaSemanal: true } },
+        docente: {
+          select: {
+            nombre: true,
+            apellido: true,
+            tiempoDedicacionGestionSemanal: true,
+            fechaFinGestion: true,
+            funcionGestion: true,
+            desempenoActualJson: true,
+            tiempoInvestigacion: true,
+            tituloProyectoInvestigacion: true,
+            fechaFinProyectoInvestigacion: true,
+            tiempoExtension: true,
+            rolActividadExtension: true,
+            finEstadoActividadExtension: true,
+          },
+        },
+      },
+    });
+
+    const porDocente = new Map<string, {
+      nombre: string;
+      apellido: string;
+      horasDocenciaConocidas: number;
+      tieneMateriaSinHoras: boolean;
+      tiempoDedicacionGestionSemanal: string | null;
+      fechaFinGestion: string | null;
+      funcionGestion: string | null;
+      desempenoActualJson: string | null;
+      tiempoInvestigacion: string | null;
+      tituloProyectoInvestigacion: string | null;
+      fechaFinProyectoInvestigacion: string | null;
+      tiempoExtension: string | null;
+      rolActividadExtension: string | null;
+      finEstadoActividadExtension: string | null;
+    }>();
+
+    for (const v of rows) {
+      if (!porDocente.has(v.docenteId)) {
+        porDocente.set(v.docenteId, {
+          nombre: v.docente.nombre,
+          apellido: v.docente.apellido,
+          horasDocenciaConocidas: 0,
+          tieneMateriaSinHoras: false,
+          tiempoDedicacionGestionSemanal: v.docente.tiempoDedicacionGestionSemanal ?? null,
+          fechaFinGestion: v.docente.fechaFinGestion ?? null,
+          funcionGestion: v.docente.funcionGestion ?? null,
+          desempenoActualJson: v.docente.desempenoActualJson ?? null,
+          tiempoInvestigacion: v.docente.tiempoInvestigacion ?? null,
+          tituloProyectoInvestigacion: v.docente.tituloProyectoInvestigacion ?? null,
+          fechaFinProyectoInvestigacion: v.docente.fechaFinProyectoInvestigacion ?? null,
+          tiempoExtension: v.docente.tiempoExtension ?? null,
+          rolActividadExtension: v.docente.rolActividadExtension ?? null,
+          finEstadoActividadExtension: v.docente.finEstadoActividadExtension ?? null,
+        });
+      }
+      const entry = porDocente.get(v.docenteId)!;
+      const horas = v.materia?.cargaHorariaSemanal;
+      if (horas === null || horas === undefined) {
+        entry.tieneMateriaSinHoras = true;
+      } else {
+        entry.horasDocenciaConocidas += horas;
+      }
+    }
+
+    const docentes: DocenteVigenteR10[] = Array.from(porDocente.entries()).map(
       ([docenteId, d]) => ({ docenteId, ...d }),
     );
 
@@ -909,6 +1041,89 @@ export class ConsultasAcademicasService {
     }));
 
     return { docentes };
+  }
+
+  /**
+   * Docentes activos con al menos una VinculacionCatedra APROBADA en la carrera evaluada.
+   * Incluye los campos necesarios para calcular C1–C3 (completitud IP-09) y la lista de
+   * materias en esa carrera con su carga horaria semanal.
+   *
+   * Las materias se deduplicen por materiaId: el mismo docente puede tener varias
+   * vinculaciones APROBADAS en la misma materia (roles distintos en la cátedra),
+   * pero la materia se cuenta una sola vez.
+   *
+   * Usado por TablroCarreraService.consultarListadoDocentes (IMPL-18B, FSD §9.3).
+   */
+  async obtenerDocentesParaListado(carreraId: string): Promise<DocenteParaListado[]> {
+    const rows = await this.prisma.vinculacionCatedra.findMany({
+      where: { carreraId, estado: 'APROBADA', docente: { activo: true } },
+      select: {
+        docenteId: true,
+        materia: { select: { id: true, nombre: true, cargaHorariaSemanal: true } },
+        docente: {
+          select: {
+            nombre: true, apellido: true,
+            sexo: true, fechaNacimiento: true, cuit: true,
+            pisoDepto: true, residencia: true, tipoDocumento: true,
+            tituloGrado: true, areaDisciplinarId: true,
+          },
+        },
+      },
+    });
+
+    const byDocente = new Map<string, {
+      nombre: string; apellido: string;
+      sexo: string | null; fechaNacimiento: Date | null; cuit: string | null;
+      pisoDepto: string | null; residencia: string | null; tipoDocumento: string;
+      tituloGrado: string | null; areaDisciplinarId: string | null;
+      materias: Map<string, { materiaId: string; nombre: string; cargaHorariaSemanal: number | null }>;
+    }>();
+
+    for (const row of rows) {
+      const existing = byDocente.get(row.docenteId);
+      if (!existing) {
+        byDocente.set(row.docenteId, {
+          nombre: row.docente.nombre,
+          apellido: row.docente.apellido,
+          sexo: row.docente.sexo ?? null,
+          fechaNacimiento: row.docente.fechaNacimiento ?? null,
+          cuit: row.docente.cuit ?? null,
+          pisoDepto: row.docente.pisoDepto ?? null,
+          residencia: row.docente.residencia ?? null,
+          tipoDocumento: row.docente.tipoDocumento,
+          tituloGrado: row.docente.tituloGrado ?? null,
+          areaDisciplinarId: row.docente.areaDisciplinarId ?? null,
+          materias: new Map([[row.materia.id, {
+            materiaId: row.materia.id,
+            nombre: row.materia.nombre,
+            cargaHorariaSemanal: row.materia.cargaHorariaSemanal ?? null,
+          }]]),
+        });
+      } else {
+        if (!existing.materias.has(row.materia.id)) {
+          existing.materias.set(row.materia.id, {
+            materiaId: row.materia.id,
+            nombre: row.materia.nombre,
+            cargaHorariaSemanal: row.materia.cargaHorariaSemanal ?? null,
+          });
+        }
+      }
+    }
+
+    return [...byDocente.entries()].map(([docenteId, d]) => ({
+      docenteId,
+      nombre: d.nombre,
+      apellido: d.apellido,
+      sexo: d.sexo,
+      fechaNacimiento: d.fechaNacimiento,
+      cuit: d.cuit,
+      pisoDepto: d.pisoDepto,
+      residencia: d.residencia,
+      tipoDocumento: d.tipoDocumento,
+      tituloGrado: d.tituloGrado,
+      areaDisciplinarId: d.areaDisciplinarId,
+      materias: [...d.materias.values()],
+    }));
   }
 
   /**

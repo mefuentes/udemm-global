@@ -153,7 +153,12 @@ export class RegistroIndicadores {
       severidad: 'ALTA',
       alcance: 'DOCENTE',
       grupo: 'DOCENTES',
-      estadoImplementacion: 'IMPLEMENTADO',
+      estadoImplementacion: 'PARCIAL',
+      motivoPendiente:
+        'FSD §5.2 exige evaluador docente-céntrico (alcance GLOBAL): detectar el tope por suma de horas ' +
+        'de todos los cargos del docente en todas sus carreras. Evaluador actual (r03.evaluador.ts) opera ' +
+        'solo en alcance carrera. Pendiente: contratos de datos numéricos verificables de horas de gestión ' +
+        'y desempeño no académico provenientes de MOD-DOC.',
       parametros: [
         {
           codigo: 'P-01',
@@ -188,7 +193,7 @@ export class RegistroIndicadores {
       descripcion:
         'Listado de docentes con más materias vigentes que el máximo permitido (p03MaxMat).',
       tipo: 'ALERTA',
-      severidad: 'ALTA',
+      severidad: 'MEDIA',
       alcance: 'DOCENTE',
       grupo: 'DOCENTES',
       estadoImplementacion: 'IMPLEMENTADO',
@@ -212,11 +217,17 @@ export class RegistroIndicadores {
         'Docentes cuya carga horaria semanal (cargaHorariaSemanal numérico) es menor al umbral ' +
         'de baja dedicación (p02BajaH). Integrado en tablero de carrera. ' +
         'Usa datos numéricos de CargoDocente; no infiere categorías textuales.',
-      tipo: 'DETALLE',
+      tipo: 'ALERTA',
       severidad: 'INFORMATIVA',
       alcance: 'DOCENTE',
       grupo: 'DOCENTES',
-      estadoImplementacion: 'IMPLEMENTADO',
+      estadoImplementacion: 'PARCIAL',
+      motivoPendiente:
+        'FSD §6.2 exige dedicación total (docencia + gestión + investigación + vinculación). ' +
+        'CIERRE-03 Fase A: evaluador incluye docencia (cargaHorariaSemanal), gestión ' +
+        '(tiempoDedicacionGestionSemanal) y desempeño no académico (desempenoActualJson). ' +
+        'Pendiente: horas de investigación y vinculación no disponibles en el modelo actual; ' +
+        'D-09 confirmación institucional del umbral P-02.',
       parametros: [
         {
           codigo: 'P-02',

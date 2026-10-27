@@ -149,7 +149,10 @@ async function crearApp(overrides: {
       } },
       { provide: AlertasService, useValue: { obtenerBandeja: jest.fn().mockResolvedValue({ total: 0, pagina: 1, porPagina: 20, tieneAnalisis: false, items: [] }) } },
       { provide: ExportacionesService, useValue: { exportarPorEjecucion: jest.fn(), exportarPorEntidad: jest.fn() } },
-      { provide: FichaDocenteService, useValue: { obtenerFicha: jest.fn().mockResolvedValue({ identificacion: {}, completitud: {} }) } },
+      { provide: FichaDocenteService, useValue: {
+        obtenerFicha: jest.fn().mockResolvedValue({ identificacion: {}, completitud: {} }),
+        obtenerFichaEnCarrera: jest.fn().mockResolvedValue({ identificacion: {}, completitud: {} }),
+      } },
       { provide: ReglasCatalogoService, useValue: {
         listarCatalogo: jest.fn().mockReturnValue([]),
         obtenerFacultadesConConfig: jest.fn().mockResolvedValue([]),
@@ -176,11 +179,13 @@ describe('GET /autoevaluacion/indicadores', () => {
   let evaluar: jest.Mock;
   let listar: jest.Mock;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     ({ app, evaluar, listar } = await crearApp());
   });
 
-  afterEach(() => app.close());
+  beforeEach(() => { evaluar.mockClear(); listar.mockClear(); });
+
+  afterAll(async () => { await app.close(); });
 
   // ── Autenticación ──────────────────────────────────────────────────────────
 
@@ -315,11 +320,13 @@ describe('POST /autoevaluacion/indicadores/:codigo/evaluar', () => {
   let app: INestApplication;
   let evaluar: jest.Mock;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     ({ app, evaluar } = await crearApp());
   });
 
-  afterEach(() => app.close());
+  beforeEach(() => { evaluar.mockClear(); });
+
+  afterAll(async () => { await app.close(); });
 
   // ── Autenticación ──────────────────────────────────────────────────────────
 
@@ -630,11 +637,13 @@ describe('R-07 — Seguridad de scope territorial', () => {
   let app: INestApplication;
   let evaluar: jest.Mock;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     ({ app, evaluar } = await crearApp());
   });
 
-  afterEach(() => app.close());
+  beforeEach(() => { evaluar.mockClear(); });
+
+  afterAll(async () => { await app.close(); });
 
   it('DIRECTOR_CARRERA: el controlador pasa el rol correcto — sin escalada', async () => {
     await request(app.getHttpServer())
@@ -714,5 +723,103 @@ describe('R-07 — Seguridad de scope territorial', () => {
 
     expect(res.body.estadoCalculo).toBe('NO_DETERMINABLE');
     expect(res.body.valor).toBeNull();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// H. GET /autoevaluacion/tablero/carrera/:carreraId/docente/:docenteId
+//    IMPL-19B.5 live — ficha docente en contexto de carrera
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('GET /autoevaluacion/tablero/carrera/:carreraId/docente/:docenteId', () => {
+  const DOC_ID = 'c3d4e5f6-a7b8-4901-8def-012345678902';
+  const FICHA_OK = {
+    identificacion: { id: DOC_ID, nombre: 'Ana', apellido: 'García', nombreCompleto: 'García, Ana' },
+    completitud: { porcentaje: 75 },
+    vinculaciones: [],
+    alertasEnScope: [],
+  };
+
+  let app: INestApplication;
+  let obtenerFichaEnCarrera: jest.Mock;
+
+  beforeAll(async () => {
+    obtenerFichaEnCarrera = jest.fn().mockResolvedValue(FICHA_OK);
+    ({ app } = await crearApp());
+    // Override FichaDocenteService mock to capture the specific mock for this suite
+    // crearApp already includes obtenerFichaEnCarrera; we replace with a controlled one
+    const fichaProvider = (app as any).get(FichaDocenteService) as { obtenerFichaEnCarrera: jest.Mock };
+    fichaProvider.obtenerFichaEnCarrera = obtenerFichaEnCarrera;
+  });
+
+  beforeEach(() => { obtenerFichaEnCarrera.mockClear(); });
+
+  afterAll(async () => { await app.close(); });
+
+  const url = `/autoevaluacion/tablero/carrera/${CAR_ID}/docente/${DOC_ID}`;
+
+  it('sin token → 401', () => {
+    return request(app.getHttpServer()).get(url).expect(401);
+  });
+
+  it.each([USR_DOCENTE, USR_ADMVO])('rol $rol.nombre → 403', async (usr) => {
+    return request(app.getHttpServer())
+      .get(url)
+      .set('x-test-user', JSON.stringify(usr))
+      .expect(403);
+  });
+
+  it.each([USR_ADMIN, USR_SECRETA, USR_RECTO, USR_DECANO, USR_DIRECTOR])(
+    'rol $rol.nombre con scope válido → 200 y ficha',
+    async (usr) => {
+      const res = await request(app.getHttpServer())
+        .get(url)
+        .set('x-test-user', JSON.stringify(usr))
+        .expect(200);
+      expect(res.body.identificacion.id).toBe(DOC_ID);
+      expect(obtenerFichaEnCarrera).toHaveBeenCalledWith(DOC_ID, CAR_ID, usr.id, usr.rol.nombre);
+    },
+  );
+
+  it('carreraId no UUID → 400', () => {
+    return request(app.getHttpServer())
+      .get(`/autoevaluacion/tablero/carrera/no-uuid/docente/${DOC_ID}`)
+      .set('x-test-user', JSON.stringify(USR_ADMIN))
+      .expect(400);
+  });
+
+  it('docenteId no UUID → 400', () => {
+    return request(app.getHttpServer())
+      .get(`/autoevaluacion/tablero/carrera/${CAR_ID}/docente/no-uuid`)
+      .set('x-test-user', JSON.stringify(USR_ADMIN))
+      .expect(400);
+  });
+
+  it('scope inválido → 403 (ForbiddenException del servicio)', async () => {
+    obtenerFichaEnCarrera.mockRejectedValueOnce(new ForbiddenException('Acceso fuera del scope autorizado'));
+    return request(app.getHttpServer())
+      .get(url)
+      .set('x-test-user', JSON.stringify(USR_DIRECTOR))
+      .expect(403);
+  });
+
+  it('docente no pertenece a la carrera → 404 (IDOR: no revela existencia)', async () => {
+    obtenerFichaEnCarrera.mockRejectedValueOnce(
+      new NotFoundException(`Docente no encontrado en la carrera ${CAR_ID}`),
+    );
+    return request(app.getHttpServer())
+      .get(url)
+      .set('x-test-user', JSON.stringify(USR_ADMIN))
+      .expect(404);
+  });
+
+  it('pasa carreraId y docenteId al servicio en el orden correcto', async () => {
+    await request(app.getHttpServer())
+      .get(url)
+      .set('x-test-user', JSON.stringify(USR_ADMIN))
+      .expect(200);
+    const [argDocId, argCarId] = obtenerFichaEnCarrera.mock.calls[0];
+    expect(argDocId).toBe(DOC_ID);
+    expect(argCarId).toBe(CAR_ID);
   });
 });

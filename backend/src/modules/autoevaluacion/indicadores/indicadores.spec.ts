@@ -159,7 +159,7 @@ function makeR03Stub(): R03EvaluadorService {
 function makeR10Stub(): R10EvaluadorService {
   return new R10EvaluadorService(
     {
-      obtenerDocentesParaR03: jest.fn().mockResolvedValue({ docentes: [], facultadId: 'fac-test', alcanceFacultad: true, docentesMultiFacultad: new Set() }),
+      obtenerDocentesParaR10: jest.fn().mockResolvedValue({ docentes: [], facultadId: 'fac-test', alcanceFacultad: true, docentesMultiFacultad: new Set() }),
       obtenerConfigDeCarrera: jest.fn().mockResolvedValue(null),
     } as any,
   );
@@ -274,15 +274,29 @@ describe('RegistroIndicadores', () => {
     expect(codigos).not.toContain('R-05');
   });
 
-  it('estado inicial post-IMPL-15B: todos los 13 indicadores son IMPLEMENTADO sin motivoPendiente', () => {
+  it('estado inicial post-CIERRE-01: 11 indicadores IMPLEMENTADO, R-10 y R-03 PARCIAL con motivoPendiente', () => {
+    const parciales = new Set(['R-10', 'R-03']);
     for (const d of registro.listar()) {
-      expect(d.estadoImplementacion).toBe('IMPLEMENTADO');
-      expect(d.motivoPendiente).toBeUndefined();
+      if (parciales.has(d.codigo)) {
+        expect(d.estadoImplementacion).toBe('PARCIAL');
+        expect(d.motivoPendiente).toBeDefined();
+      } else {
+        expect(d.estadoImplementacion).toBe('IMPLEMENTADO');
+        expect(d.motivoPendiente).toBeUndefined();
+      }
     }
     // R-13: completamente implementado tras IMPL-14B (campos schema disponibles)
     const r13 = registro.obtener('R-13')!;
     expect(r13.estadoImplementacion).toBe('IMPLEMENTADO');
     expect(r13.motivoPendiente).toBeUndefined();
+    // R-10: PARCIAL — cobertura FSD §6.2 incompleta (solo cargaHorariaSemanal, falta investigación/vinculación)
+    const r10 = registro.obtener('R-10')!;
+    expect(r10.estadoImplementacion).toBe('PARCIAL');
+    expect(r10.motivoPendiente).toBeDefined();
+    // R-03: PARCIAL — evaluador carrera-scope implementado, falta evaluador docente-céntrico global
+    const r03 = registro.obtener('R-03')!;
+    expect(r03.estadoImplementacion).toBe('PARCIAL');
+    expect(r03.motivoPendiente).toBeDefined();
   });
 
   it('tieneEvaluador devuelve false cuando no hay evaluador asignado', () => {
@@ -569,7 +583,7 @@ describe('IndicadoresService — orquestación', () => {
     ).rejects.toThrow(NotFoundException);
   });
 
-  it('indicador implementado con evaluador → estadoCalculo no null (stub vacío → NO_APLICA)', async () => {
+  it('indicador PARCIAL en registro con evaluador → estadoCalculo no null (stub vacío → NO_APLICA)', async () => {
     const reg = new RegistroIndicadores();
     const resultado = await makeSvc(makeScope(), makePrisma(), reg).evaluar({
       codigoIndicador: 'R-10',

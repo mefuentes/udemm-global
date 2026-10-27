@@ -35,6 +35,7 @@ function mkDocente(overrides: Partial<DocenteVigenteR03> = {}): DocenteVigenteR0
     tieneMateriaSinHoras: false,
     tiempoDedicacionGestionSemanal: null,
     fechaFinGestion: null,
+    funcionGestion: null,
     desempenoActualJson: null,
     ...overrides,
   };
@@ -98,6 +99,16 @@ describe('parsearHorasGestion', () => {
 
   it('TC-G8: valor "20.5" (punto decimal no permitido en gestión) → indeterminado', () => {
     expect(parsearHorasGestion('20.5', null, FECHA)).toEqual({ horas: 0, indeterminado: true });
+  });
+
+  it('TC-G_FUNC: actividad declarada (actividadDeclarada=true) pero dedicación vacía → INDETERMINADO', () => {
+    expect(parsearHorasGestion(null, null, FECHA, true)).toEqual({ horas: 0, indeterminado: true });
+    expect(parsearHorasGestion('', null, FECHA, true)).toEqual({ horas: 0, indeterminado: true });
+  });
+
+  it('TC-G_FUNC2: actividad NO declarada y dedicación vacía → 0h, no indeterminado', () => {
+    expect(parsearHorasGestion(null, null, FECHA, false)).toEqual({ horas: 0, indeterminado: false });
+    expect(parsearHorasGestion(null, null, FECHA, undefined)).toEqual({ horas: 0, indeterminado: false });
   });
 });
 
@@ -414,6 +425,20 @@ describe('R03EvaluadorService', () => {
     expect(r.codigo).toBe('R-03');
     expect(r.tipoContexto).toBe('DOCENTE');
     expect(r.estadoImplementacion).toBe('IMPLEMENTADO');
+  });
+
+  it('TC-G_FUNC_EVAL: funcionGestion declarada pero tiempoDedicacionGestionSemanal null → noDeterminable', async () => {
+    const doc = mkDocente({
+      horasDocenciaConocidas: 20,
+      funcionGestion: 'Secretario Académico',
+      tiempoDedicacionGestionSemanal: null,
+    });
+    const { svc } = makeSvc(mkData({ docentes: [doc] }), mkConfig(60));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR03;
+    expect(v.totalNoDeterminables).toBe(1);
+    expect(v.noDeterminables[0].causa).toBe('DATOS_INCOMPLETOS');
+    expect(v.noDeterminables[0].detalleDatos).toContain('tiempoDedicacionGestionSemanal');
   });
 
   it('TC-26: gestión con fechaFin un día futuro → cargo vigente, horas incluidas', async () => {

@@ -277,6 +277,8 @@ export interface DocentesParaIP09 {
  *   materia sin ese campo, tieneMateriaSinHoras=true y la suma puede estar subestimada.
  * tiempoDedicacionGestionSemanal: sección 5.1 de la ficha, almacenado como String?.
  *   Vigencia verificada mediante fechaFinGestion.
+ * funcionGestion: función de gestión declarada. Si no es null/vacío y
+ *   tiempoDedicacionGestionSemanal es null/vacío, la gestión es indeterminada (FSD §3 "No asumir 0").
  * desempenoActualJson: JSON de sección 6.1; cada ítem incluye dedicacionSeman:string.
  */
 export interface DocenteVigenteR03 {
@@ -289,7 +291,49 @@ export interface DocenteVigenteR03 {
   tieneMateriaSinHoras: boolean;
   tiempoDedicacionGestionSemanal: string | null;
   fechaFinGestion: string | null;
+  /** Función de gestión declarada (p. ej. "Secretario Académico"). null = sin gestión. */
+  funcionGestion: string | null;
   desempenoActualJson: string | null;
+}
+
+/**
+ * Datos de un docente activo para evaluar R-10 (FSD §8.1: Dedicación total).
+ *
+ * Extiende DocenteVigenteR03 con los componentes de investigación y vinculación
+ * que conforman la "dedicación total" = docencia + gestión + investigación + vinculación.
+ *
+ * Nota: desempenoActualJson NO forma parte de la dedicación total (es parte de la
+ * "carga para el tope" de R-03). R-10 usa investigación y vinculación.
+ *
+ * tiempoInvestigacion: horas semanales de investigación (String?).
+ * tituloProyectoInvestigacion: indica si hay proyecto declarado; si no es null/vacío
+ *   y tiempoInvestigacion es null/vacío, la investigación es indeterminada.
+ * tiempoExtension: horas semanales de vinculación/extensión (String?).
+ * rolActividadExtension: indica si hay actividad de extensión declarada; si no es null/vacío
+ *   y tiempoExtension es null/vacío, la vinculación es indeterminada.
+ */
+export interface DocenteVigenteR10 extends DocenteVigenteR03 {
+  tiempoInvestigacion: string | null;
+  /** Título del proyecto de investigación; presencia indica actividad declarada. */
+  tituloProyectoInvestigacion: string | null;
+  /** Fecha de fin del proyecto de investigación para verificar vigencia. */
+  fechaFinProyectoInvestigacion: string | null;
+  tiempoExtension: string | null;
+  /** Rol en actividad de extensión/vinculación; presencia indica actividad declarada. */
+  rolActividadExtension: string | null;
+  /** Fecha de fin del estado de actividad de extensión para verificar vigencia. */
+  finEstadoActividadExtension: string | null;
+}
+
+/**
+ * Resultado de la consulta de docentes para el evaluador R-10.
+ * Paralela a DocentesParaR03 pero incluye los campos de investigación y vinculación.
+ */
+export interface DocentesParaR10 {
+  docentes: DocenteVigenteR10[];
+  facultadId: string;
+  alcanceFacultad: boolean;
+  docentesMultiFacultad: Set<string>;
 }
 
 /**
@@ -375,6 +419,33 @@ export interface CargosParaR04 {
  * Cuando tienePrograma=false, todos los campos derivados del programa son null/0.
  * seccionesCompletas es un conteo derivado [0–6], siempre presente.
  */
+// ── Listado de docentes por carrera ───────────────────────────────────────────
+
+/**
+ * Datos de un docente activo con al menos una VinculacionCatedra APROBADA en la carrera.
+ * Combina los campos de completitud de IP-09 (C1–C3) con las materias que el docente
+ * tiene en esa carrera (distintas por materiaId), incluyendo carga horaria.
+ *
+ * Usado por TablroCarreraService.consultarListadoDocentes (IMPL-18B).
+ */
+export interface DocenteParaListado {
+  docenteId: string;
+  nombre: string;
+  apellido: string;
+  // Campos de ficha para evaluar C1 (datos personales)
+  sexo: string | null;
+  fechaNacimiento: Date | null;
+  cuit: string | null;
+  pisoDepto: string | null;
+  residencia: string | null;
+  tipoDocumento: string;
+  // Campos de ficha para evaluar C2 y C3
+  tituloGrado: string | null;
+  areaDisciplinarId: string | null;
+  // Materias en esta carrera (APROBADAS, deduplicadas por materiaId)
+  materias: { materiaId: string; nombre: string; cargaHorariaSemanal: number | null }[];
+}
+
 export interface MateriaProgramaAut {
   materiaId: string;
   materiaNombre: string;

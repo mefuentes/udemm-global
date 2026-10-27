@@ -20,7 +20,7 @@ const CONTENT_W = PAGE_W - MARGIN * 2;
 // ── Metadata de indicadores ────────────────────────────────────────────────────
 
 const META_CARRERA: Array<[string, string]> = [
-  ['ip01', 'IP-01 — Docentes con dedicación exclusiva o semi-exclusiva'],
+  ['ip01', 'IP-01 — Total docentes'],
   ['ip02', 'IP-02 — Docentes con formación de posgrado'],
   ['ip03', 'IP-03 — Materias con cobertura docente aprobada'],
   ['ip04', 'IP-04 — Docentes con actividad de investigación'],
@@ -216,6 +216,201 @@ function renderIndicadores(
   }
 }
 
+// ── Acción requerida ──────────────────────────────────────────────────────────
+
+interface SubAR { total: number; docentes: { docenteId: string; nombre: string; incierto?: boolean }[] }
+interface BajaAR extends SubAR { umbral: number; confirmados: number; inciertos: number }
+
+function renderARSubrow(doc: PDFKit.PDFDocument, codigo: string, titulo: string, sub: SubAR): void {
+  addPageIfNeeded(doc, 28);
+  const y = doc.y;
+  doc.fillColor(sub.total > 0 ? C_ALTA : C_OK).font('Helvetica-Bold').fontSize(7.5)
+    .text(`[${codigo}]`, MARGIN, y, { lineBreak: false, width: 55 });
+  doc.fillColor(C_DARK).font('Helvetica').fontSize(7.5)
+    .text(titulo, MARGIN + 57, y, { lineBreak: false, width: 290 });
+  doc.fillColor(sub.total > 0 ? C_ALTA : C_OK).font('Helvetica-Bold').fontSize(7.5)
+    .text(`${sub.total} docente${sub.total !== 1 ? 's' : ''}`, MARGIN + 350, y, { lineBreak: false, width: 100 });
+  doc.y = Math.max(doc.y, y + 12);
+
+  if (sub.total > 0) {
+    addPageIfNeeded(doc, 14);
+    const names = sub.docentes.map(d => d.nombre).join(', ');
+    doc.fillColor(C_MID).font('Helvetica').fontSize(6.5)
+      .text(names, MARGIN + 57, doc.y, { width: CONTENT_W - 57, lineBreak: true });
+    doc.moveDown(0.1);
+  }
+}
+
+function renderAccionRequerida(doc: PDFKit.PDFDocument, snapshot: Record<string, unknown>): void {
+  const ar = snapshot['accionRequerida'] as Record<string, unknown> | undefined;
+  if (!ar) return;
+
+  renderSectionTitle(doc, 'Acción Requerida');
+
+  const conAlertasAltas      = ar['conAlertasAltas']      as SubAR | undefined;
+  const sobreasignados       = ar['sobreasignados']       as SubAR | undefined;
+  const sinActividadCurricular = ar['sinActividadCurricular'] as SubAR | undefined;
+  const bajaDedicacion       = ar['bajaDedicacion']       as BajaAR | undefined;
+
+  if (conAlertasAltas) {
+    renderARSubrow(doc, 'AR-01', 'Con alertas altas (R-03 tope horario / IP-13 sobreasignados)',
+      conAlertasAltas);
+  }
+  if (sobreasignados) {
+    renderARSubrow(doc, 'AR-02', 'Sobreasignados (nMaterias > P-03)', sobreasignados);
+  }
+  if (sinActividadCurricular) {
+    renderARSubrow(doc, 'AR-03', 'Cargos sin actividad curricular (R-04)', sinActividadCurricular);
+  }
+  if (bajaDedicacion) {
+    addPageIfNeeded(doc, 28);
+    const y = doc.y;
+    const total = bajaDedicacion.total ?? 0;
+    doc.fillColor(total > 0 ? C_MEDIA : C_OK).font('Helvetica-Bold').fontSize(7.5)
+      .text('[AR-04]', MARGIN, y, { lineBreak: false, width: 55 });
+    const umbralStr = typeof bajaDedicacion.umbral === 'number'
+      ? ` (umbral ${bajaDedicacion.umbral}h)` : '';
+    doc.fillColor(C_DARK).font('Helvetica').fontSize(7.5)
+      .text(`Dedicación inferior al umbral P-02${umbralStr}`, MARGIN + 57, y,
+        { lineBreak: false, width: 290 });
+    const confirmados = bajaDedicacion.confirmados ?? 0;
+    const inciertos   = bajaDedicacion.inciertos   ?? 0;
+    const desglose    = `${total} (${confirmados} conf. + ${inciertos} inc.)`;
+    doc.fillColor(total > 0 ? C_MEDIA : C_OK).font('Helvetica-Bold').fontSize(7.5)
+      .text(desglose, MARGIN + 350, y, { lineBreak: false, width: 145 });
+    doc.y = Math.max(doc.y, y + 12);
+
+    if (total > 0) {
+      addPageIfNeeded(doc, 14);
+      const names = (bajaDedicacion.docentes ?? [])
+        .map((d: { nombre: string; incierto?: boolean }) =>
+          `${d.nombre}${d.incierto ? ' (inc.)' : ''}`)
+        .join(', ');
+      doc.fillColor(C_MID).font('Helvetica').fontSize(6.5)
+        .text(names, MARGIN + 57, doc.y, { width: CONTENT_W - 57, lineBreak: true });
+      doc.moveDown(0.1);
+    }
+  }
+}
+
+// ── Listado de docentes ───────────────────────────────────────────────────────
+
+function semaforoColor(semaforo: string | undefined): string {
+  if (semaforo === 'VERDE')    return C_OK;
+  if (semaforo === 'AMARILLO') return C_MEDIA;
+  if (semaforo === 'ROJO')     return C_ALTA;
+  return C_LIGHT;
+}
+
+function renderListadoHeader(doc: PDFKit.PDFDocument, y: number): void {
+  doc.rect(MARGIN, y, CONTENT_W, 13).fill('#e2e8f0');
+  doc.fillColor(C_MID).font('Helvetica-Bold').fontSize(6.5)
+    .text('DOCENTE',    MARGIN + 2,   y + 3, { lineBreak: false, width: 145 })
+    .text('MATERIAS',   MARGIN + 148, y + 3, { lineBreak: false, width: 35 })
+    .text('HORAS/SEM',  MARGIN + 184, y + 3, { lineBreak: false, width: 45 })
+    .text('FICHA',      MARGIN + 230, y + 3, { lineBreak: false, width: 30 })
+    .text('ESTADO',     MARGIN + 261, y + 3, { lineBreak: false, width: 55 })
+    .text('ALERTAS',    MARGIN + 317, y + 3, { lineBreak: false, width: CONTENT_W - 317 });
+  doc.y = y + 15;
+}
+
+function renderListadoDocentes(doc: PDFKit.PDFDocument, snapshot: Record<string, unknown>): void {
+  const ld = snapshot['listadoDocentes'] as Record<string, unknown> | undefined;
+
+  renderSectionTitle(doc, 'Docentes del Plantel');
+
+  if (!ld) {
+    addPageIfNeeded(doc, 20);
+    doc.fillColor(C_MID).font('Helvetica').fontSize(7.5)
+      .text('Datos no disponibles en esta ejecución. Regenere el análisis para incluir el listado.', MARGIN);
+    doc.moveDown(0.3);
+    return;
+  }
+
+  const docentes = (ld['docentes'] ?? []) as Record<string, unknown>[];
+  const estado   = (ld['estadoCalculo'] ?? '') as string;
+
+  if (docentes.length === 0) {
+    addPageIfNeeded(doc, 20);
+    doc.fillColor(estadoColor(estado)).font('Helvetica-Bold').fontSize(7.5)
+      .text(`Estado: ${estado.replace(/_/g, ' ')}`, MARGIN, doc.y, { lineBreak: false, width: 150 });
+    doc.fillColor(C_MID).font('Helvetica').fontSize(7.5)
+      .text('Sin docentes activos en la carrera.', MARGIN + 155, doc.y);
+    doc.moveDown(0.3);
+    return;
+  }
+
+  // Distribución de semáforos (B-04) — presente en snapshots ≥ v2.1
+  const dist = ld['distribucionSemaforos'] as Record<string, number> | undefined;
+  if (dist && typeof dist['total'] === 'number' && dist['total'] > 0) {
+    addPageIfNeeded(doc, 22);
+    const dY = doc.y;
+    doc.fillColor(C_DARK).font('Helvetica-Bold').fontSize(7)
+      .text('Distribución del plantel:', MARGIN, dY, { lineBreak: false, width: 100 });
+    const items: [string, string][] = [
+      [`VERDE: ${dist['verde'] ?? 0}`, C_OK],
+      [`AMARILLO: ${dist['amarillo'] ?? 0}`, C_MEDIA],
+      [`ROJO: ${dist['rojo'] ?? 0}`, C_ALTA],
+      [`Total: ${dist['total']}`, C_PRIMARY],
+    ];
+    let xOff = MARGIN + 105;
+    for (const [label, color] of items) {
+      doc.fillColor(color).font('Helvetica-Bold').fontSize(7)
+        .text(label, xOff, dY, { lineBreak: false, width: 65 });
+      xOff += 68;
+    }
+    doc.moveDown(0.8);
+  }
+
+  // Header + rows
+  addPageIfNeeded(doc, 40);
+  renderListadoHeader(doc, doc.y);
+
+  let lastHeaderPage = (doc as any)._pageBuffer?.length ?? 0;
+
+  for (const d of docentes) {
+    addPageIfNeeded(doc, 18);
+
+    // Repeat header on new page
+    const currentPage = (doc as any)._pageBuffer?.length ?? 0;
+    if (currentPage !== lastHeaderPage) {
+      renderListadoHeader(doc, doc.y);
+      lastHeaderPage = currentPage;
+    }
+
+    const y = doc.y;
+    const alertas = (d['alertas'] ?? {}) as Record<string, boolean>;
+    const semaforo = (d['semaforo'] ?? '') as string;
+    const fichaScore = typeof d['fichaScore'] === 'number' ? d['fichaScore'] : '?';
+    const horas      = typeof d['horasCarreraConocidas'] === 'number' ? d['horasCarreraConocidas'] : '?';
+    const incompletas = d['tieneHorasIncompletas'] === true ? '+?' : '';
+    const nMaterias  = typeof d['nMaterias'] === 'number' ? d['nMaterias'] : '?';
+
+    // Alert badges (only non-informative)
+    const alertaBadges: string[] = [];
+    if (alertas['altaTope'])          alertaBadges.push('R-03');
+    if (alertas['altaSinActividad'])  alertaBadges.push('R-04');
+    if (alertas['mediaSobreasignado'])alertaBadges.push('R-07');
+
+    doc.fillColor(C_DARK).font('Helvetica').fontSize(6.5)
+      .text(String(d['nombre'] ?? ''), MARGIN + 2, y, { lineBreak: false, width: 143 });
+    doc.fillColor(C_MID).font('Helvetica').fontSize(6.5)
+      .text(String(nMaterias), MARGIN + 148, y, { lineBreak: false, width: 33 });
+    doc.fillColor(d['tieneHorasIncompletas'] ? C_MEDIA : C_MID).font('Helvetica').fontSize(6.5)
+      .text(`${horas}h${incompletas}`, MARGIN + 184, y, { lineBreak: false, width: 43 });
+    doc.fillColor(C_PRIMARY).font('Helvetica-Bold').fontSize(6.5)
+      .text(`${fichaScore}/4`, MARGIN + 230, y, { lineBreak: false, width: 28 });
+    doc.fillColor(semaforoColor(semaforo)).font('Helvetica-Bold').fontSize(6.5)
+      .text(semaforo || '—', MARGIN + 261, y, { lineBreak: false, width: 53 });
+    doc.fillColor(alertaBadges.length > 0 ? C_ALTA : C_OK).font('Helvetica').fontSize(6.5)
+      .text(alertaBadges.length > 0 ? alertaBadges.join(' ') : '—',
+        MARGIN + 317, y, { lineBreak: false, width: CONTENT_W - 317 });
+    doc.y = Math.max(doc.y, y + 11);
+  }
+
+  doc.moveDown(0.3);
+}
+
 function renderAlertas(doc: PDFKit.PDFDocument, alertas: AlertaBandeja[]): void {
   if (alertas.length === 0) return;
   renderSectionTitle(doc, `Alertas vigentes (${alertas.length})`);
@@ -251,6 +446,10 @@ function addFooters(doc: PDFKit.PDFDocument, ejecucionId: string): void {
   }
 }
 
+// ── Exportaciones de metadatos (accesibles en tests) ──────────────────────────
+
+export const metaCarreraLabels: ReadonlyArray<readonly [string, string]> = META_CARRERA;
+
 // ── Exportación principal ──────────────────────────────────────────────────────
 
 export async function generarPdfBuffer(data: SnapshotExport): Promise<Buffer> {
@@ -277,6 +476,8 @@ export async function generarPdfBuffer(data: SnapshotExport): Promise<Buffer> {
 
       if (data.ambito === 'CARRERA') {
         renderIndicadores(doc, data.snapshot, META_CARRERA);
+        renderAccionRequerida(doc, data.snapshot);
+        renderListadoDocentes(doc, data.snapshot);
       } else if (data.ambito === 'PLAN') {
         renderIndicadores(doc, data.snapshot, META_PLAN);
       } else if (data.ambito === 'FACULTAD') {

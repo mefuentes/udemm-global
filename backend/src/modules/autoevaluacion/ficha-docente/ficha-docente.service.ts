@@ -45,6 +45,8 @@ export class FichaDocenteService {
     const docente = await this.prisma.docente.findUnique({
       where: { id: docenteId },
       include: {
+        tipoDedicacionConeau: { select: { id: true, nombre: true, codigo: true } },
+        tipoPosgrado: { select: { id: true, nombre: true } },
         cargosInstitucionales: {
           include: { cargo: { select: { nombre: true } } },
           orderBy: { fechaInicio: 'desc' },
@@ -82,6 +84,8 @@ export class FichaDocenteService {
         correoElectronico:          docente.correoElectronico,
         activo:                     docente.activo,
         dedicacion:                 docente.dedicacion,
+        tipoDedicacionConeau:       docente.tipoDedicacionConeau ?? null,
+        tipoPosgrado:               docente.tipoPosgrado ?? null,
         categoriaDocente:           docente.categoriaDocente,
         tituloGrado:                docente.tituloGrado,
         tituloPosgrado:             docente.tituloPosgrado,
@@ -91,6 +95,101 @@ export class FichaDocenteService {
         tituloGrado:           docente.tituloGrado,
         tituloPosgrado:        docente.tituloPosgrado,
         otrosTitulos:          docente.otrosTitulos,
+        actividadesPosgradoJson: docente.actividadesPosgradoJson,
+      },
+      actividadesInvestigacion: {
+        tituloProyectoInvestigacion: docente.tituloProyectoInvestigacion,
+        proyectosInvestigacionJson:  docente.proyectosInvestigacionJson,
+        produccionCientificaJson:    docente.produccionCientificaJson,
+      },
+      cargosInstitucionales: cargos,
+      vinculaciones,
+      alertasEnScope: alertas,
+      completitud,
+    };
+  }
+
+  /**
+   * Ficha de un docente en el contexto de una carrera específica (IMPL-19B.5 live).
+   *
+   * Seguridad:
+   * 1. El usuario debe tener scope sobre la carrera (tieneScopeCarrera).
+   * 2. El docente debe tener al menos una VinculacionCatedra APROBADA en esa carrera.
+   *    Sin esto → NotFoundException (no 403, para no revelar la existencia del docente).
+   *
+   * Devuelve la ficha completa del docente con vinculaciones filtradas a la carrera,
+   * más los cargos vigentes y las alertas históricas del scope de esa carrera.
+   */
+  async obtenerFichaEnCarrera(
+    docenteId: string,
+    carreraId: string,
+    usuarioId: string,
+    rolNombre: string,
+  ): Promise<FichaDocenteDto> {
+    if (!ROLES_MODAUT.has(rolNombre)) {
+      throw new ForbiddenException('Rol sin acceso al módulo de autoevaluación');
+    }
+
+    const tieneScope = await this.scope.tieneScopeCarrera(usuarioId, rolNombre, carreraId);
+    if (!tieneScope) throw new ForbiddenException('Acceso fuera del scope autorizado');
+
+    // Verificar que el docente exista Y pertenezca a la carrera
+    const docente = await this.prisma.docente.findUnique({
+      where: { id: docenteId },
+      include: {
+        tipoDedicacionConeau: { select: { id: true, nombre: true, codigo: true } },
+        tipoPosgrado: { select: { id: true, nombre: true } },
+        cargosInstitucionales: {
+          include: { cargo: { select: { nombre: true } } },
+          orderBy: { fechaInicio: 'desc' },
+        },
+        vinculaciones: {
+          where: { carreraId, estado: 'APROBADA' },
+          include: {
+            materia:     { select: { id: true, nombre: true } },
+            carrera:     { select: { id: true, nombre: true } },
+            planEstudio: { select: { id: true, nombre: true } },
+            facultad:    { select: { id: true, nombre: true } },
+          },
+          orderBy: { fechaCreacion: 'desc' },
+        },
+      },
+    });
+
+    if (!docente || docente.vinculaciones.length === 0) {
+      throw new NotFoundException(
+        `Docente no encontrado en la carrera ${carreraId}`,
+      );
+    }
+
+    const fechaCalculo = new Date();
+    const cargos       = this._parsearCargos(docente.cargosInstitucionales, fechaCalculo);
+    const vinculaciones = this._parsearVinculaciones(docente.vinculaciones);
+    const alertas      = await this._obtenerAlertasEnScope(docente.vinculaciones);
+    const completitud  = this._calcularCompletitud(docente);
+
+    return {
+      identificacion: {
+        id:                         docente.id,
+        nombre:                     docente.nombre,
+        apellido:                   docente.apellido,
+        nombreCompleto:             `${docente.apellido}, ${docente.nombre}`,
+        tipoDocumento:              docente.tipoDocumento,
+        numeroDocumento:            docente.numeroDocumento,
+        correoElectronico:          docente.correoElectronico,
+        activo:                     docente.activo,
+        dedicacion:                 docente.dedicacion,
+        tipoDedicacionConeau:       docente.tipoDedicacionConeau ?? null,
+        tipoPosgrado:               docente.tipoPosgrado ?? null,
+        categoriaDocente:           docente.categoriaDocente,
+        tituloGrado:                docente.tituloGrado,
+        tituloPosgrado:             docente.tituloPosgrado,
+        relevamientoCargosCompleto: docente.relevamientoCargosCompleto,
+      },
+      formacionAcademica: {
+        tituloGrado:             docente.tituloGrado,
+        tituloPosgrado:          docente.tituloPosgrado,
+        otrosTitulos:            docente.otrosTitulos,
         actividadesPosgradoJson: docente.actividadesPosgradoJson,
       },
       actividadesInvestigacion: {

@@ -129,6 +129,125 @@ export interface ResultadoR12 {
   estadoCalculo: EstadoCalculo;
 }
 
+/** Docente referenciado en el panel «Acción requerida». */
+export interface DocenteAccionRequerida {
+  docenteId: string;
+  nombre: string;
+  /** Solo presente en AR-04. true = datos de horas incompletos; el incumplimiento no está confirmado. */
+  incierto?: boolean;
+}
+
+/** Un subindicador del panel «Acción requerida». */
+export interface SubindicadorAR {
+  total: number;
+  docentes: DocenteAccionRequerida[];
+}
+
+/** Panel «Acción requerida» (FSD §9.2). Todos los conteos son de docentes distintos. */
+export interface ResultadoAccionRequerida {
+  /** AR-01: docentes con al menos una alerta ALTA (R-03 tope horario o IP-13 sobreasignados). */
+  conAlertasAltas: SubindicadorAR;
+  /** AR-02: docentes sobreasignados (nMaterias > P-03). */
+  sobreasignados: SubindicadorAR;
+  /** AR-03: docentes con al menos un cargo sin actividad curricular en algún plan. */
+  sinActividadCurricular: SubindicadorAR;
+  /** AR-04: docentes con horasConocidas < P-02. total = confirmados + inciertos. */
+  bajaDedicacion: SubindicadorAR & { umbral: number; confirmados: number; inciertos: number };
+  estadoCalculo: EstadoCalculo;
+}
+
+// ── Listado de docentes (IMPL-18B, FSD §9.3) ─────────────────────────────────
+
+export type SemaforoDocente = 'VERDE' | 'AMARILLO' | 'ROJO';
+
+export interface AlertasDocente {
+  altaTope: boolean;
+  altaSinActividad: boolean;
+  mediaSobreasignado: boolean;
+  informativaBajaDedicacion: boolean;
+  bajaDedicacionIncierta: boolean;
+  fichaIncompleta: boolean;
+}
+
+export interface FilaDocenteListado {
+  docenteId: string;
+  /** "APELLIDO, Nombre" */
+  nombre: string;
+  materias: { materiaId: string; nombre: string }[];
+  nMaterias: number;
+  horasCarreraConocidas: number;
+  tieneHorasIncompletas: boolean;
+  completitud: number;
+  fichaScore: number;
+  semaforo: SemaforoDocente;
+  alertas: AlertasDocente;
+}
+
+export interface TotalesListadoDocentes {
+  total: number;
+  conAlertas: number;
+  sobreasignados: number;
+  bajaDedicacion: number;
+  fichaIncompleta: number;
+}
+
+export interface DistribucionSemaforosCarrera {
+  verde: number;
+  amarillo: number;
+  rojo: number;
+  total: number;
+}
+
+export interface ListadoDocentesCarreraResponse {
+  carreraId: string;
+  fechaEvaluacion: string;
+  docentes: FilaDocenteListado[];
+  totales: TotalesListadoDocentes;
+  /** Distribución de semáforos del plantel (B-04). Presente en respuestas ≥ v2.1. */
+  distribucionSemaforos?: DistribucionSemaforosCarrera;
+  estadoCalculo: EstadoCalculo;
+}
+
+/** Un ítem de distribución de dedicación docente por tipo de designación. */
+export interface DedicacionTipoItem {
+  tipo: string;
+  docentes: number;
+}
+
+/** Categoría CONEAU de dedicación docente (CIERRE-03 Fase A). */
+export type DedicacionConeau = 'EXCLUSIVA' | 'SEMIEXCLUSIVA' | 'SIMPLE' | 'NO_DETERMINADA';
+
+/** Ítem de distribución CONEAU de dedicación (CIERRE-03 Fase A). */
+export interface DedicacionConeauItem {
+  categoria: DedicacionConeau;
+  docentes: number;
+}
+
+/** Ítem de distribución por nivel de posgrado CONEAU (D-06). */
+export interface PosgradoTipoItem {
+  /** Nombre canónico: 'DOCTORADO' | 'MAESTRIA' | 'ESPECIALIZACION'. */
+  tipo: string;
+  docentes: number;
+}
+
+/** Bloque "Condiciones del plantel" CONEAU (FSD §9.2, B-03). */
+export interface CondicionesPlantellResponse {
+  totalDocentes: number;
+  conPosgrado: number;
+  conInvestigacion: number;
+  conDesignacionRegular: number;
+  /** Docentes con al menos un CargoDocente vigente con designación interina. */
+  conDesignacionInterina: number;
+  /** Cargos P/A (IP-08). Ausente cuando estadoCalculo = NO_APLICA. */
+  relacionPA?: { profesores: number; auxiliares: number };
+  dedicacionPorTipo: DedicacionTipoItem[];
+  /** Distribución por categoría CONEAU de dedicación (CIERRE-03 Fase A). Presente en respuestas ≥ v2.2. */
+  dedicacionConeau?: DedicacionConeauItem[];
+  /** Distribución por nivel máximo de posgrado CONEAU (D-06). Solo docentes clasificados. Presente en respuestas ≥ v2.3. */
+  distribucionPosgrado?: PosgradoTipoItem[];
+  estadoCalculo: EstadoCalculo;
+}
+
 export interface TablroCarreraResponse {
   carreraId: string;
   /** ISO 8601 */
@@ -143,5 +262,9 @@ export interface TablroCarreraResponse {
   ip13: ResultadoIP13;
   r10: ResultadoR10;
   r12: ResultadoR12;
+  /** Panel «Acción requerida» (FSD §9.2). */
+  accionRequerida: ResultadoAccionRequerida;
+  /** Condiciones del plantel CONEAU (FSD §9.2, B-03). Presente en ejecuciones ≥ v2.1. */
+  condicionesPlantell?: CondicionesPlantellResponse;
   estadoGeneralCalculo: EstadoCalculo;
 }

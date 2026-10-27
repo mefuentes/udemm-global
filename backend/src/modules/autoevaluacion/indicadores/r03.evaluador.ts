@@ -62,18 +62,27 @@ export interface ResultadoParseoGestion {
  * Parsea las horas del cargo de gestión académica (sección 5.1).
  *
  * Reglas:
- * - Sin dedicación declarada → 0h, no indeterminado (dato opcional ausente).
+ * - Sin dedicación declarada y sin actividad declarada → 0h, no indeterminado (opcional ausente).
+ * - Sin dedicación declarada pero con actividad declarada → 0h, INDETERMINADO
+ *   (FSD §3: no asumir que una hora faltante equivale a cero).
  * - Cargo vencido (fechaFin ≤ fechaCalculo) → 0h, no indeterminado.
- * - Vigente (fechaFin vacía o > fechaCalculo) con valor no entero → indeterminado.
+ * - Vigente con valor no entero → indeterminado.
  * - Vigente con valor entero → horas parseadas.
+ *
+ * @param actividadDeclarada - true si la actividad (gestión, investigación, vinculación)
+ *   está declarada en la ficha aunque el campo de horas sea null/vacío.
  */
 export function parsearHorasGestion(
   tiempoDedicacionGestionSemanal: string | null | undefined,
   fechaFinGestion: string | null | undefined,
   fechaCalculo: Date,
+  actividadDeclarada?: boolean,
 ): ResultadoParseoGestion {
   const dedicacion = tiempoDedicacionGestionSemanal?.trim() ?? '';
-  if (dedicacion === '') return { horas: 0, indeterminado: false };
+  if (dedicacion === '') {
+    // Actividad declarada (p. ej. funcionGestion no nula) pero sin horas → indeterminado
+    return { horas: 0, indeterminado: actividadDeclarada === true };
+  }
 
   const fin = fechaFinGestion?.trim() ?? '';
   if (fin !== '') {
@@ -247,11 +256,14 @@ export class R03EvaluadorService implements IndicadorEvaluador<ResultadoR03> {
     for (const d of docentes) {
       const nombre = `${d.nombre} ${d.apellido}`.trim();
 
+      const gestionDeclarada = (d.funcionGestion?.trim() ?? '') !== '';
+
       if (alcanceFacultad && docentesMultiFacultad.has(d.docenteId)) {
         const g = parsearHorasGestion(
           d.tiempoDedicacionGestionSemanal,
           d.fechaFinGestion,
           contexto.fechaEvaluacion,
+          gestionDeclarada,
         );
         const na = parsearHorasNoAcademico(d.desempenoActualJson);
         const sumaParcial = d.horasDocenciaConocidas + g.horas + na.horas;
@@ -272,6 +284,7 @@ export class R03EvaluadorService implements IndicadorEvaluador<ResultadoR03> {
         d.tiempoDedicacionGestionSemanal,
         d.fechaFinGestion,
         contexto.fechaEvaluacion,
+        gestionDeclarada,
       );
       const na = parsearHorasNoAcademico(d.desempenoActualJson);
       const tieneIndeterminados =
