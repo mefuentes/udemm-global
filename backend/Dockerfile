@@ -7,8 +7,9 @@ RUN npm install
 
 COPY prisma ./prisma
 COPY src ./src
+COPY start.sh ./
 
-RUN npm run build
+RUN npm run build && chmod +x start.sh
 
 EXPOSE 5000
-CMD ["node", "dist/main.js"]
+CMD ["sh", "start.sh"]

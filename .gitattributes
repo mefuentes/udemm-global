@@ -1,0 +1,2 @@
+# Force LF for shell scripts (required for Linux/Alpine containers)
+*.sh text eol=lf
