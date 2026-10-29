@@ -1,0 +1,40 @@
+name: Backup PostgreSQL Render
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    container:
+      image: postgres:18
+
+    steps:
+      - name: Crear respaldo
+        env:
+          DATABASE_URL: ${{ secrets.RENDER_DATABASE_URL }}
+        run: |
+          set -eu
+          test -n "$DATABASE_URL"
+          mkdir -p backups
+          pg_dump \
+            --dbname="$DATABASE_URL" \
+            --format=custom \
+            --no-owner \
+            --no-acl \
+            --file="backups/udemm-global.dump"
+
+      - name: Guardar respaldo en GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: udemm-global-backup
+          path: backups/udemm-global.dump
+          retention-days: 30
+          if-no-files-found: error
