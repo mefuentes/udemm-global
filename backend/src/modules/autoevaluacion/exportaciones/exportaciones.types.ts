@@ -7,6 +7,8 @@ export interface SnapshotExport {
   ambito: AmbitoAnalisis;
   entidadId: string;
   entidadNombre: string;
+  carreraNombre?: string;
+  facultadNombre?: string;
   facultadId: string;
   usuarioId: string;
   fechaEjecucion: string;

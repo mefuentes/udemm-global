@@ -424,7 +424,10 @@ function TablerFacultadInner() {
   const params = useParams<{ facultadId: string }>();
   const searchParams = useSearchParams();
   const facultadId = params.facultadId;
-  const facultadNombre = searchParams.get('nombre') ?? facultadId;
+
+  const [facultadNombre, setFacultadNombre] = useState<string | null>(
+    searchParams.get('nombre') ?? null,
+  );
 
   const [dato, setDato] = useState<TablroFacultadResponse | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -488,6 +491,14 @@ function TablerFacultadInner() {
     }
   }
 
+  useEffect(() => {
+    if (facultadNombre || !facultadId) return;
+    apiFetch(`/facultades/${facultadId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then((d: { nombre?: string } | null) => { if (d?.nombre) setFacultadNombre(d.nombre); })
+      .catch(() => {});
+  }, [facultadId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => { if (facultadId) cargarHistorial(); }, [facultadId, paginaHistorial]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function cargar() {
@@ -516,15 +527,15 @@ function TablerFacultadInner() {
         <span>/</span>
         <Link href="/autoevaluacion" className="hover:text-[#0f4c81] transition-colors">Autoevaluación</Link>
         <span>/</span>
-        <span className="text-slate-600 font-medium truncate max-w-[18rem]">{facultadNombre}</span>
+        <span className="text-slate-600 font-medium">Tablero por facultad</span>
       </nav>
 
       {/* Encabezado */}
       <div className="flex items-start justify-between gap-4 mb-5">
         <div>
-          <h1 className="text-lg font-bold text-slate-800 leading-tight">{facultadNombre}</h1>
+          <h1 className="text-lg font-bold text-slate-800 leading-tight">Tablero por facultad</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Tablero de facultad — MOD-AUT v2.0
+            {facultadNombre ? `Facultad: ${facultadNombre} — ` : ''}MOD-AUT v2.0
             {dato && <> · Evaluado el {formatFecha(dato.fechaEvaluacion)}</>}
           </p>
         </div>

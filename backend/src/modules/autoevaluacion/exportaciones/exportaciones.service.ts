@@ -127,7 +127,7 @@ export class ExportacionesService {
     const snap          = (reg.snapshot ?? {}) as Record<string, unknown>;
     const estadoCalculo = (snap['estadoGeneralCalculo'] as EstadoCalculo | null) ?? null;
     const fechaEjecucion = reg.fechaFin?.toISOString() ?? new Date().toISOString();
-    const entidadNombre  = await this._obtenerNombreEntidad(reg.ambito as AmbitoAnalisis, reg.entidadId);
+    const meta = await this._obtenerMetadataEntidad(reg.ambito as AmbitoAnalisis, reg.entidadId);
 
     const alertas = extraerAlertas(
       reg.snapshot,
@@ -140,12 +140,14 @@ export class ExportacionesService {
     );
 
     return {
-      ejecucionId: reg.id,
-      ambito:      reg.ambito as AmbitoAnalisis,
-      entidadId:   reg.entidadId,
-      entidadNombre,
-      facultadId:  reg.facultadId,
-      usuarioId:   reg.usuarioId,
+      ejecucionId:    reg.id,
+      ambito:         reg.ambito as AmbitoAnalisis,
+      entidadId:      reg.entidadId,
+      entidadNombre:  meta.entidadNombre,
+      carreraNombre:  meta.carreraNombre,
+      facultadNombre: meta.facultadNombre,
+      facultadId:     reg.facultadId,
+      usuarioId:      reg.usuarioId,
       fechaEjecucion,
       estadoCalculo,
       snapshot: snap,
@@ -153,20 +155,43 @@ export class ExportacionesService {
     };
   }
 
-  private async _obtenerNombreEntidad(ambito: AmbitoAnalisis, entidadId: string): Promise<string> {
+  private async _obtenerMetadataEntidad(
+    ambito: AmbitoAnalisis,
+    entidadId: string,
+  ): Promise<{ entidadNombre: string; carreraNombre?: string; facultadNombre?: string }> {
     try {
       if (ambito === 'FACULTAD') {
-        const f = await (this.prisma as any).facultad.findUnique({ where: { id: entidadId }, select: { nombre: true } });
-        return f?.nombre ?? entidadId;
+        const f = await (this.prisma as any).facultad.findUnique({
+          where: { id: entidadId },
+          select: { nombre: true },
+        });
+        return { entidadNombre: f?.nombre ?? entidadId };
       }
       if (ambito === 'CARRERA') {
-        const c = await (this.prisma as any).carrera.findUnique({ where: { id: entidadId }, select: { nombre: true } });
-        return c?.nombre ?? entidadId;
+        const c = await (this.prisma as any).carrera.findUnique({
+          where: { id: entidadId },
+          select: { nombre: true, facultad: { select: { nombre: true } } },
+        });
+        return {
+          entidadNombre:  c?.nombre             ?? entidadId,
+          facultadNombre: c?.facultad?.nombre,
+        };
       }
-      const p = await (this.prisma as any).planEstudio.findUnique({ where: { id: entidadId }, select: { nombre: true } });
-      return p?.nombre ?? entidadId;
+      // PLAN scope
+      const p = await (this.prisma as any).planEstudio.findUnique({
+        where: { id: entidadId },
+        select: {
+          nombre:  true,
+          carrera: { select: { nombre: true, facultad: { select: { nombre: true } } } },
+        },
+      });
+      return {
+        entidadNombre:  p?.nombre                    ?? entidadId,
+        carreraNombre:  p?.carrera?.nombre,
+        facultadNombre: p?.carrera?.facultad?.nombre,
+      };
     } catch {
-      return entidadId;
+      return { entidadNombre: entidadId };
     }
   }
 
