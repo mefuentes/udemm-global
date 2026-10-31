@@ -1,17 +1,11 @@
-import { ForbiddenException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { MateriasService } from './materias.service';
+import { RolesGuard } from '../../common/guards/roles.guard';
 
-/**
- * El servicio ejecuta: vinculacionCatedra.findFirst({ where: { docenteId, materiaId, estado: 'APROBADA' } })
- * Los mocks simulan lo que Prisma devolvería con ese filtro:
- *   - estado 'APROBADA'  → findFirst retorna el registro (encontrado)
- *   - cualquier otro estado → findFirst retorna null (no encontrado, porque el filtro excluye ese estado)
- */
+// ── Constantes compartidas ────────────────────────────────────────────────────
 
 const MATERIA_A_ID = 'materia-a-id';
-const MATERIA_B_ID = 'materia-b-id';
-const USUARIO_ID   = 'usuario-docente-id';
-const DOCENTE_ID   = 'docente-id';
+const USUARIO_ID   = 'usuario-id';
 
 const MATERIA_A = {
   id: MATERIA_A_ID, codigo: 'MAT001', nombre: 'Materia A',
@@ -22,18 +16,7 @@ const MATERIA_A = {
   fechaCreacion: new Date(), fechaActualizacion: new Date(),
 };
 
-// findFirst retorna el registro solo si la vinculación es APROBADA (simula el filtro Prisma)
-const makePrisma = (tieneVinculacionAprobada: boolean) => ({
-  docente: {
-    findUnique: jest.fn().mockResolvedValue({ id: DOCENTE_ID, usuarioId: USUARIO_ID }),
-  },
-  vinculacionCatedra: {
-    findFirst: jest.fn().mockResolvedValue(
-      tieneVinculacionAprobada
-        ? { id: 'vc-id', docenteId: DOCENTE_ID, materiaId: MATERIA_A_ID, estado: 'APROBADA' }
-        : null,
-    ),
-  },
+const makePrisma = () => ({
   materia: {
     findUnique: jest.fn().mockResolvedValue(MATERIA_A),
     update: jest.fn().mockResolvedValue(MATERIA_A),
@@ -45,77 +28,128 @@ const makePrisma = (tieneVinculacionAprobada: boolean) => ({
 
 const makeService = (prisma: any) => new MateriasService(prisma as any);
 
-describe('MateriasService — ownership DOCENTE — política definitiva S4', () => {
-  describe('DOCENTE sin perfil docente asociado', () => {
-    it('lanza 403', async () => {
-      const prisma = makePrisma(true);
-      prisma.docente.findUnique = jest.fn().mockResolvedValue(null);
-      await expect(makeService(prisma).actualizar(MATERIA_A_ID, {}, USUARIO_ID, 'DOCENTE'))
-        .rejects.toThrow(ForbiddenException);
-    });
+// ── Helper: RolesGuard con contexto simulado ──────────────────────────────────
+
+function makeGuardContext(rolNombre: string, requiredRoles: string[]) {
+  const reflector = new Reflector();
+  jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(requiredRoles);
+  const guard = new RolesGuard(reflector);
+  const context = {
+    switchToHttp: () => ({
+      getRequest: () => ({ user: { rol: { nombre: rolNombre } } }),
+    }),
+    getHandler: () => null,
+    getClass:   () => null,
+  } as any;
+  return { guard, context };
+}
+
+const ROLES_ACTUALIZAR_MATERIA = [
+  'ADMINISTRADOR_SISTEMA',
+  'SECRETARIA_ACADEMICA',
+  'DIRECTOR_CARRERA',
+  'ADMINISTRATIVO',
+];
+
+// ── Suite 1: Guard — DOCENTE bloqueado en PATCH /materias/:id ─────────────────
+
+describe('Guard — DOCENTE bloqueado en PATCH materias/:id', () => {
+  it('DOCENTE: RolesGuard retorna false → HTTP 403', () => {
+    const { guard, context } = makeGuardContext('DOCENTE', ROLES_ACTUALIZAR_MATERIA);
+    expect(guard.canActivate(context)).toBe(false);
   });
 
-  describe('DOCENTE sin ninguna vinculación con la materia', () => {
-    it('lanza 403', async () => {
-      await expect(makeService(makePrisma(false)).actualizar(MATERIA_B_ID, {}, USUARIO_ID, 'DOCENTE'))
-        .rejects.toThrow(ForbiddenException);
-    });
+  it('DOCENTE con vinculación aprobada: guard sigue retornando false (ownership ya no exime)', () => {
+    // El guard evalúa el rol, no las vinculaciones. DOCENTE no está en ROLES_ACTUALIZAR_MATERIA.
+    const { guard, context } = makeGuardContext('DOCENTE', ROLES_ACTUALIZAR_MATERIA);
+    expect(guard.canActivate(context)).toBe(false);
   });
 
-  describe('DOCENTE con vinculación PENDIENTE_DE_APROBACION (Prisma no retorna nada con filtro APROBADA)', () => {
-    it('lanza 403 — PENDIENTE no otorga permisos de modificación', async () => {
-      // Prisma filtra estado='APROBADA': como la vinculación es PENDIENTE, retorna null
-      await expect(
-        makeService(makePrisma(false)).actualizar(MATERIA_A_ID, {}, USUARIO_ID, 'DOCENTE'),
-      ).rejects.toThrow(ForbiddenException);
+  it('usuario sin rol (undefined): RolesGuard retorna false', () => {
+    const reflector = new Reflector();
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(ROLES_ACTUALIZAR_MATERIA);
+    const guard = new RolesGuard(reflector);
+    const context = {
+      switchToHttp: () => ({ getRequest: () => ({ user: null }) }),
+      getHandler: () => null,
+      getClass:   () => null,
+    } as any;
+    expect(guard.canActivate(context)).toBe(false);
+  });
+});
+
+// ── Suite 2: Guard — roles autorizados pasan ──────────────────────────────────
+
+describe('Guard — roles autorizados en PATCH materias/:id', () => {
+  const rolesAutorizados = [
+    'ADMINISTRADOR_SISTEMA',
+    'SECRETARIA_ACADEMICA',
+    'DIRECTOR_CARRERA',
+    'ADMINISTRATIVO',
+  ];
+
+  for (const rol of rolesAutorizados) {
+    it(`${rol}: RolesGuard retorna true`, () => {
+      const { guard, context } = makeGuardContext(rol, ROLES_ACTUALIZAR_MATERIA);
+      expect(guard.canActivate(context)).toBe(true);
     });
+  }
+});
+
+// ── Suite 3: Guard — DOCENTE puede acceder a operaciones de lectura ───────────
+
+describe('Guard — DOCENTE mantiene acceso de lectura (GET materias)', () => {
+  const ROLES_VER = [
+    'ADMINISTRADOR_SISTEMA', 'SECRETARIA_ACADEMICA', 'DIRECTOR_CARRERA',
+    'ADMINISTRATIVO', 'DECANO', 'RECTORADO', 'DOCENTE',
+  ];
+
+  it('DOCENTE: RolesGuard retorna true para GET /materias', () => {
+    const { guard, context } = makeGuardContext('DOCENTE', ROLES_VER);
+    expect(guard.canActivate(context)).toBe(true);
   });
 
-  describe('DOCENTE con vinculación RECHAZADA (Prisma no retorna nada con filtro APROBADA)', () => {
-    it('lanza 403', async () => {
-      await expect(
-        makeService(makePrisma(false)).actualizar(MATERIA_A_ID, {}, USUARIO_ID, 'DOCENTE'),
-      ).rejects.toThrow(ForbiddenException);
-    });
+  it('DOCENTE: RolesGuard retorna true para GET /materias/:id', () => {
+    const { guard, context } = makeGuardContext('DOCENTE', ROLES_VER);
+    expect(guard.canActivate(context)).toBe(true);
   });
 
-  describe('DOCENTE con vinculación DESVINCULADA (Prisma no retorna nada con filtro APROBADA)', () => {
-    it('lanza 403 — vinculación histórica no otorga permisos', async () => {
-      await expect(
-        makeService(makePrisma(false)).actualizar(MATERIA_A_ID, {}, USUARIO_ID, 'DOCENTE'),
-      ).rejects.toThrow(ForbiddenException);
-    });
+  it('DOCENTE: RolesGuard retorna true para GET /materias/:id/correlativas', () => {
+    const { guard, context } = makeGuardContext('DOCENTE', ROLES_VER);
+    expect(guard.canActivate(context)).toBe(true);
+  });
+});
+
+// ── Suite 4: Service.actualizar — funciona sin parámetro de rol ───────────────
+
+describe('MateriasService.actualizar — roles institucionales sin ownership', () => {
+  it('actualizar no recibe rolNombre — llama materia.update correctamente', async () => {
+    const prisma = makePrisma();
+    const result = await makeService(prisma).actualizar(MATERIA_A_ID, { nombre: 'Nuevo nombre' }, USUARIO_ID);
+    expect(result).toBeDefined();
+    expect(prisma.materia.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: MATERIA_A_ID } })
+    );
   });
 
-  describe('DOCENTE con vinculación APROBADA sobre Materia A', () => {
-    it('permite modificar Materia A', async () => {
-      const prisma = makePrisma(true);
-      const result = await makeService(prisma).actualizar(MATERIA_A_ID, { nombre: 'Nuevo nombre' }, USUARIO_ID, 'DOCENTE');
-      expect(result).toBeDefined();
-      expect(prisma.materia.update).toHaveBeenCalled();
-    });
-
-    it('lanza 403 al intentar modificar Materia B (IDOR — manipulación de materiaId)', async () => {
-      // DOCENTE tiene vinculación APROBADA con Materia A, pero intenta modificar Materia B.
-      // La query busca por materiaId=MATERIA_B, que no tiene vinculación → findFirst retorna null.
-      const prisma = makePrisma(false);
-      await expect(
-        makeService(prisma).actualizar(MATERIA_B_ID, {}, USUARIO_ID, 'DOCENTE'),
-      ).rejects.toThrow(ForbiddenException);
-    });
+  it('no consulta tabla docente ni vinculacionCatedra (ownership eliminado)', async () => {
+    const prisma = {
+      ...makePrisma(),
+      docente:           { findUnique: jest.fn() },
+      vinculacionCatedra: { findFirst: jest.fn() },
+    };
+    await makeService(prisma).actualizar(MATERIA_A_ID, {}, USUARIO_ID);
+    expect(prisma.docente.findUnique).not.toHaveBeenCalled();
+    expect(prisma.vinculacionCatedra.findFirst).not.toHaveBeenCalled();
   });
 
-  describe('Roles institucionales — sin chequeo de ownership', () => {
-    it('ADMINISTRADOR_SISTEMA puede modificar cualquier materia sin verificar vinculación', async () => {
-      const prisma = makePrisma(false);
-      await makeService(prisma).actualizar(MATERIA_B_ID, {}, USUARIO_ID, 'ADMINISTRADOR_SISTEMA');
-      expect(prisma.docente.findUnique).not.toHaveBeenCalled();
-    });
-
-    it('SECRETARIA_ACADEMICA puede modificar cualquier materia sin verificar vinculación', async () => {
-      const prisma = makePrisma(false);
-      await makeService(prisma).actualizar(MATERIA_B_ID, {}, USUARIO_ID, 'SECRETARIA_ACADEMICA');
-      expect(prisma.docente.findUnique).not.toHaveBeenCalled();
-    });
+  it('registra historial de ACTUALIZACION', async () => {
+    const prisma = makePrisma();
+    await makeService(prisma).actualizar(MATERIA_A_ID, { nombre: 'Nombre actualizado' }, USUARIO_ID);
+    expect(prisma.historialMateria.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accion: 'ACTUALIZACION', materiaId: MATERIA_A_ID })
+      })
+    );
   });
 });

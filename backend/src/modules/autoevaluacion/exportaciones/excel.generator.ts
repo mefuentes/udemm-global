@@ -199,7 +199,7 @@ function addNoDataRow(ws: ExcelJS.Worksheet, ncols: number, msg = 'Sin datos dis
 
 // ── Hoja Resumen ───────────────────────────────────────────────────────────────
 
-function buildHojaResumen(ws: ExcelJS.Worksheet, data: SnapshotExport): void {
+function buildHojaResumen(ws: ExcelJS.Worksheet, data: SnapshotExport, nombreInstitucion: string): void {
   ws.columns = [
     { key: 'label', width: 26 },
     { key: 'value', width: 50 },
@@ -222,7 +222,7 @@ function buildHojaResumen(ws: ExcelJS.Worksheet, data: SnapshotExport): void {
 
   // Jerarquía institucional completa para PLAN; parcial para CARRERA
   const metaRows: [string, string][] = [
-    ['Universidad', 'Universidad del Museo Social Argentino (UDEMM)'],
+    ['Universidad', nombreInstitucion],
   ];
   if (data.facultadNombre) metaRows.push(['Facultad',         data.facultadNombre]);
   if (data.carreraNombre)  metaRows.push(['Carrera',          data.carreraNombre]);
@@ -1360,14 +1360,14 @@ function buildHojaFacB06(ws: ExcelJS.Worksheet, snap: Record<string, unknown>): 
   }
 }
 
-export async function generarExcelBuffer(data: SnapshotExport): Promise<Buffer> {
+export async function generarExcelBuffer(data: SnapshotExport, nombreInstitucion = 'Universidad de la Marina Mercante'): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator  = 'UDEMM Global';
   wb.subject  = 'Autoevaluación Institucional';
   wb.created  = new Date();
   wb.modified = new Date();
 
-  buildHojaResumen(    wb.addWorksheet('Resumen'),     data);
+  buildHojaResumen(    wb.addWorksheet('Resumen'),     data, nombreInstitucion);
   buildHojaIndicadores(wb.addWorksheet('Indicadores'), data);
   buildHojaAlertas(    wb.addWorksheet('Alertas'),     data);
 

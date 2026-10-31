@@ -38,13 +38,11 @@ const ROLES_EDITAR = [
   'ADMINISTRATIVO'
 ] as const;
 
-// DOCENTE puede editar datos de materias con vinculación activa (ownership verificado en servicio)
 const ROLES_ACTUALIZAR_MATERIA = [
   'ADMINISTRADOR_SISTEMA',
   'SECRETARIA_ACADEMICA',
   'DIRECTOR_CARRERA',
   'ADMINISTRATIVO',
-  'DOCENTE',
 ] as const;
 
 // Correlatividades son arquitectura curricular: solo roles institucionales
@@ -102,7 +100,7 @@ export class MateriasController {
   @Patch(':id')
   @Roles(...ROLES_ACTUALIZAR_MATERIA)
   actualizar(@Param('id') id: string, @Body() dto: ActualizarMateriaDto, @Req() req: any) {
-    return this.materiasService.actualizar(id, dto, req.user.id, req.user.rol.nombre);
+    return this.materiasService.actualizar(id, dto, req.user.id);
   }
 
   @Delete(':id')

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch, mensajeErrorHttp } from '@/lib/api';
+import { obtenerLogoInstitucion, obtenerParametrosPublicos } from '@/lib/parametros';
 
 interface Docente {
   id: string;
@@ -63,7 +64,11 @@ export default function DocentesPage() {
     }
   }
 
-  function exportPdf() {
+  async function exportPdf() {
+    const [{ siglaInstitucion }, logoDataUrl] = await Promise.all([
+      obtenerParametrosPublicos(),
+      obtenerLogoInstitucion(),
+    ]);
     const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
     const marginX = 40;
@@ -77,10 +82,13 @@ export default function DocentesPage() {
     let y = 70;
 
     const drawHeader = () => {
+      if (logoDataUrl) {
+        try { doc.addImage(logoDataUrl, marginX, 12, 36, 36); } catch { /* logo inválido: ignorar */ }
+      }
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(15, 76, 129);
       doc.setFontSize(22);
-      doc.text('UDEMM', pageWidth / 2, 34, { align: 'center' });
+      doc.text(siglaInstitucion, pageWidth / 2, 34, { align: 'center' });
       doc.setTextColor(51, 65, 85);
       doc.setFontSize(12);
       doc.text('Listado de Docentes', pageWidth / 2, 52, { align: 'center' });
@@ -128,11 +136,12 @@ export default function DocentesPage() {
   }
 
   async function exportFichaPorRegistro(docente: Docente) {
-    let data: Record<string, unknown> = {};
-    try {
-      const res = await apiFetch(`${API_URL}/docentes/${docente.id}`);
-      if (res.ok) data = await res.json();
-    } catch { /* usa datos básicos */ }
+    const [fichaData, params, logoDataUrl] = await Promise.all([
+      apiFetch(`${API_URL}/docentes/${docente.id}`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+      obtenerParametrosPublicos(),
+      obtenerLogoInstitucion(),
+    ]);
+    let data: Record<string, unknown> = fichaData;
 
     const parseLista = (raw: unknown): any[] => {
       if (typeof raw !== 'string' || !raw.trim()) return [];
@@ -263,10 +272,13 @@ export default function DocentesPage() {
       y += 12;
     };
 
+    if (logoDataUrl) {
+      try { doc.addImage(logoDataUrl, marginX, 12, 36, 36); } catch { /* logo inválido: ignorar */ }
+    }
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 76, 129);
     doc.setFontSize(22);
-    doc.text('UDEMM', pageWidth / 2, 34, { align: 'center' });
+    doc.text(params.siglaInstitucion, pageWidth / 2, 34, { align: 'center' });
     doc.setFontSize(12);
     doc.setTextColor(51, 65, 85);
     doc.text('Ficha Docente Completa', pageWidth / 2, 52, { align: 'center' });

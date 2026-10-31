@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
+import { invalidarCacheParametros } from '@/lib/parametros';
 
 interface Parametro { id: string; clave: string; valor: string; descripcion: string | null; }
 
@@ -10,13 +11,13 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 const INPUT = 'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:ring-1 focus:ring-[#0f4c81]/20 transition';
 
 const LABELS: Record<string, string> = {
-  nombreInstitucion: 'Nombre de la Institución',
-  siglaInstitucion: 'Sigla Institucional',
-  correoSoporte: 'Correo de Soporte',
-  telefonoInstitucional: 'Teléfono Institucional',
-  colorPrimario: 'Color Primario',
-  colorSecundario: 'Color Secundario',
+  nombreInstitucion:  'Nombre de la Institución',
+  siglaInstitucion:   'Sigla Institucional',
+  cicloLectivoActual: 'Ciclo Lectivo Actual',
+  correoSoporte:      'Correo de Soporte',
 };
+
+const CLAVES_CICLO = new Set(['cicloLectivoActual']);
 
 export default function ParametrosPage() {
   const [parametros, setParametros] = useState<Parametro[]>([]);
@@ -26,14 +27,30 @@ export default function ParametrosPage() {
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
 
+  // Logo
+  const [logoActual, setLogoActual] = useState<string | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const [logoSubiendo, setLogoSubiendo] = useState(false);
+  const [logoExito, setLogoExito] = useState<string | null>(null);
+  const inputLogoRef = useRef<HTMLInputElement>(null);
+
   async function cargar() {
     setLoading(true); setError(null);
     try {
-      const res = await apiFetch(`${API}/configuracion/parametros`);
-      if (!res.ok) throw new Error('Error al cargar parámetros');
-      const data: Parametro[] = await res.json();
+      const [resParam, resLogo] = await Promise.all([
+        apiFetch(`${API}/configuracion/parametros`),
+        apiFetch(`${API}/configuracion/parametros/logo`),
+      ]);
+      if (!resParam.ok) throw new Error('Error al cargar parámetros');
+      const data: Parametro[] = await resParam.json();
       setParametros(data);
       setValores(Object.fromEntries(data.map(p => [p.clave, p.valor])));
+      if (resLogo.ok) {
+        const { valor } = await resLogo.json() as { valor: string | null };
+        setLogoActual(valor ?? null);
+      }
     } catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
   }
@@ -42,17 +59,63 @@ export default function ParametrosPage() {
 
   async function guardar() {
     setSubmitting(true); setError(null); setExito(null);
+    // Validar ciclo lectivo antes de guardar
+    const ciclo = valores['cicloLectivoActual'];
+    if (ciclo !== undefined && ciclo !== '' && !/^\d{4}$/.test(ciclo)) {
+      setError('El ciclo lectivo debe ser exactamente 4 dígitos numéricos.');
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const payload = { parametros: Object.entries(valores).map(([clave, valor]) => ({ clave, valor })) };
       const res = await apiFetch(`${API}/configuracion/parametros`, { method: 'PATCH', body: JSON.stringify(payload) });
       if (!res.ok) throw new Error('Error al guardar');
+      invalidarCacheParametros();
       setExito('Parámetros guardados correctamente.');
       cargar();
     } catch (e) { setError((e as Error).message); }
     finally { setSubmitting(false); setTimeout(() => setExito(null), 3000); }
   }
 
-  const esColor = (clave: string) => clave.toLowerCase().includes('color');
+  function seleccionarLogo(e: React.ChangeEvent<HTMLInputElement>) {
+    setLogoError(null); setLogoExito(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      setLogoError('Solo se aceptan archivos PNG o JPEG.');
+      return;
+    }
+    if (file.size > 200 * 1024) {
+      setLogoError('El archivo no puede superar los 200 KB.');
+      return;
+    }
+    setLogoFile(file);
+    const reader = new FileReader();
+    reader.onload = ev => setLogoPreview(ev.target?.result as string ?? null);
+    reader.readAsDataURL(file);
+  }
+
+  async function subirLogo() {
+    if (!logoFile) return;
+    setLogoSubiendo(true); setLogoError(null); setLogoExito(null);
+    try {
+      const form = new FormData();
+      form.append('logo', logoFile);
+      const res = await apiFetch(`${API}/configuracion/parametros/logo`, { method: 'POST', body: form });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error((j as { message?: string }).message ?? 'Error al subir el logo'); }
+      const { valor } = await res.json() as { valor: string };
+      setLogoActual(valor);
+      setLogoPreview(null);
+      setLogoFile(null);
+      if (inputLogoRef.current) inputLogoRef.current.value = '';
+      invalidarCacheParametros();
+      setLogoExito('Logo actualizado correctamente.');
+      setTimeout(() => setLogoExito(null), 3000);
+    } catch (e) { setLogoError((e as Error).message); }
+    finally { setLogoSubiendo(false); }
+  }
+
   const CLAVES_NORMALIZAR = new Set(['nombreInstitucion', 'siglaInstitucion']);
 
   return (
@@ -70,6 +133,7 @@ export default function ParametrosPage() {
       {loading ? (
         <div className="text-slate-500 text-sm">Cargando parámetros...</div>
       ) : (
+        <>
         <div className="rounded-xl bg-white p-5 shadow-sm border border-slate-200">
           <div className="grid gap-4 sm:grid-cols-2">
             {parametros.map(p => (
@@ -78,15 +142,23 @@ export default function ParametrosPage() {
                   {LABELS[p.clave] ?? p.clave}
                 </label>
                 {p.descripcion && <p className="text-xs text-slate-400 mb-1">{p.descripcion}</p>}
-                {esColor(p.clave) ? (
-                  <div className="flex items-center gap-2">
-                    <input type="color" value={valores[p.clave] ?? '#000000'}
-                      onChange={e => setValores(v => ({ ...v, [p.clave]: e.target.value }))}
-                      className="h-9 w-14 cursor-pointer rounded border border-slate-300 p-0.5" />
-                    <input type="text" value={valores[p.clave] ?? ''}
-                      data-no-uppercase="true"
-                      onChange={e => setValores(v => ({ ...v, [p.clave]: e.target.value }))}
-                      className={INPUT + ' flex-1'} placeholder="#000000" />
+                {CLAVES_CICLO.has(p.clave) ? (
+                  <div>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={valores[p.clave] ?? ''}
+                      onChange={e => {
+                        const solo = e.target.value.replace(/\D/g, '').slice(0, 4);
+                        setValores(v => ({ ...v, [p.clave]: solo }));
+                      }}
+                      placeholder={String(new Date().getFullYear())}
+                      className={INPUT + (valores[p.clave] && !/^\d{4}$/.test(valores[p.clave]) ? ' border-red-400' : '')}
+                    />
+                    {valores[p.clave] && !/^\d{4}$/.test(valores[p.clave]) && (
+                      <p className="mt-1 text-xs text-red-600">Debe ser exactamente 4 dígitos numéricos.</p>
+                    )}
                   </div>
                 ) : (
                   <input type={p.clave === 'correoSoporte' ? 'email' : 'text'}
@@ -102,22 +174,6 @@ export default function ParametrosPage() {
             ))}
           </div>
 
-          {valores.colorPrimario && valores.colorSecundario && (
-            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Preview de colores</p>
-              <div className="flex gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded border border-slate-200 shadow-sm" style={{ backgroundColor: valores.colorPrimario }} />
-                  <span className="text-xs text-slate-600">Primario {valores.colorPrimario}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded border border-slate-200 shadow-sm" style={{ backgroundColor: valores.colorSecundario }} />
-                  <span className="text-xs text-slate-600">Secundario {valores.colorSecundario}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
           <div className="mt-5 flex justify-end">
             <button onClick={guardar} disabled={submitting}
               className="rounded-md bg-[#0f4c81] px-4 py-2 text-sm font-medium text-white hover:bg-[#0a3960] disabled:opacity-50 transition">
@@ -125,6 +181,51 @@ export default function ParametrosPage() {
             </button>
           </div>
         </div>
+
+        {/* ── Sección: Logo Institucional ── */}
+        <div className="rounded-xl bg-white p-5 shadow-sm border border-slate-200 mt-5">
+          <h2 className="text-sm font-semibold text-slate-700 mb-1">Logo Institucional</h2>
+          <p className="text-xs text-slate-400 mb-4">PNG o JPG · máx. 200 KB · aparece en encabezados de PDF y Excel.</p>
+
+          {logoExito && <div className="mb-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{logoExito}</div>}
+          {logoError && <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{logoError}</div>}
+
+          <div className="flex flex-wrap items-start gap-6">
+            {/* Preview actual o del archivo seleccionado */}
+            <div className="flex-shrink-0">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                {logoPreview ? 'Vista previa' : 'Logo actual'}
+              </p>
+              <div className="flex h-24 w-24 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50">
+                {(logoPreview ?? logoActual) ? (
+                  <img src={logoPreview ?? logoActual!} alt="Logo institucional" className="max-h-20 max-w-20 object-contain rounded" />
+                ) : (
+                  <span className="text-xs text-slate-400 text-center px-2">Sin logo configurado</span>
+                )}
+              </div>
+            </div>
+
+            {/* Controles */}
+            <div className="flex flex-col gap-2 justify-center pt-5">
+              <input
+                ref={inputLogoRef}
+                type="file"
+                accept="image/png,image/jpeg"
+                onChange={seleccionarLogo}
+                className="text-xs text-slate-600 file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+              />
+              {logoFile && (
+                <button
+                  onClick={subirLogo}
+                  disabled={logoSubiendo}
+                  className="rounded-md bg-[#0f4c81] px-4 py-1.5 text-xs font-medium text-white hover:bg-[#0a3960] disabled:opacity-50 transition w-fit">
+                  {logoSubiendo ? 'Subiendo...' : 'Confirmar logo'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        </>
       )}
     </div>
   );

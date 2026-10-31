@@ -57,10 +57,16 @@ function makeAnalisis(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const PARAM_STUB = {
+  obtenerValor: jest.fn().mockResolvedValue('Universidad de la Marina Mercante'),
+  obtenerLogo:  jest.fn().mockResolvedValue(null),
+};
+
 function makeService(prismaOverrides = {}, analisisOverrides = {}) {
   return new ExportacionesService(
     makePrisma(prismaOverrides) as any,
     makeAnalisis(analisisOverrides) as any,
+    PARAM_STUB as any,
   );
 }
 
@@ -179,7 +185,7 @@ describe('ExportacionesService', () => {
         facultad:   { findUnique: jest.fn().mockResolvedValue({ nombre: 'Facultad' }) },
         planEstudio:{ findUnique: jest.fn().mockResolvedValue({ nombre: 'Plan' }) },
       };
-      const svc = new ExportacionesService(prisma as any, analisis as any);
+      const svc = new ExportacionesService(prisma as any, analisis as any, PARAM_STUB as any);
       await svc.exportarPorEntidad('CARRERA', CAR_ID, 'pdf', 'ADMINISTRADOR_SISTEMA', USER_ID);
       expect(analisis.ejecutarCarrera).toHaveBeenCalledWith(CAR_ID, USER_ID, 'ADMINISTRADOR_SISTEMA');
     });
@@ -195,7 +201,7 @@ describe('ExportacionesService', () => {
         facultad:   { findUnique: jest.fn().mockResolvedValue({ nombre: 'Facultad' }) },
         planEstudio:{ findUnique: jest.fn().mockResolvedValue({ nombre: 'Plan 2020' }) },
       };
-      const svc = new ExportacionesService(prisma as any, analisis as any);
+      const svc = new ExportacionesService(prisma as any, analisis as any, PARAM_STUB as any);
       await svc.exportarPorEntidad('PLAN', PLAN_ID, 'pdf', 'ADMINISTRADOR_SISTEMA', USER_ID);
       expect(analisis.ejecutarPlan).toHaveBeenCalledWith(PLAN_ID, USER_ID, 'ADMINISTRADOR_SISTEMA');
     });
@@ -211,7 +217,7 @@ describe('ExportacionesService', () => {
         facultad:   { findUnique: jest.fn().mockResolvedValue({ nombre: 'Facultad' }) },
         planEstudio:{ findUnique: jest.fn().mockResolvedValue({ nombre: 'Plan' }) },
       };
-      const svc = new ExportacionesService(prisma as any, analisis as any);
+      const svc = new ExportacionesService(prisma as any, analisis as any, PARAM_STUB as any);
       await expect(
         svc.exportarPorEntidad('CARRERA', CAR_ID, 'pdf', 'ADMINISTRADOR_SISTEMA', USER_ID),
       ).rejects.toThrow(InternalServerErrorException);
@@ -240,7 +246,7 @@ describe('ExportacionesService', () => {
           findFirst:  jest.fn().mockResolvedValue(makeRegCarrera({ ambito: 'FACULTAD', entidadId: FAC_ID })),
         },
       });
-      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any);
+      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any, PARAM_STUB as any);
       const r = await svc.exportarPorEjecucion(EJEC_ID, 'xlsx', 'DECANO', USER_ID);
       expect(r.filename).toContain('facultad');
     });
@@ -284,7 +290,7 @@ describe('ExportacionesService', () => {
         facultad:   { findUnique: jest.fn().mockResolvedValue({ nombre: 'Facultad' }) },
         planEstudio:{ findUnique: jest.fn().mockResolvedValue({ nombre: 'Plan' }) },
       };
-      const svc = new ExportacionesService(prisma as any, analisis as any);
+      const svc = new ExportacionesService(prisma as any, analisis as any, PARAM_STUB as any);
       await expect(
         svc.exportarPorEntidad('CARRERA', CAR_ID, 'pdf', 'DIRECTOR_CARRERA', USER_ID),
       ).rejects.toThrow(ForbiddenException);
@@ -329,7 +335,7 @@ describe('ExportacionesService', () => {
           findFirst:  jest.fn().mockResolvedValue(null),
         },
       });
-      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any);
+      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any, PARAM_STUB as any);
       const r = await svc.exportarPorEjecucion(EJEC_ID, 'pdf', 'ADMINISTRADOR_SISTEMA', USER_ID);
       expect(r.buffer.length).toBeGreaterThan(1024);
     });
@@ -402,7 +408,7 @@ describe('ExportacionesService', () => {
           findFirst:  jest.fn().mockResolvedValue(null),
         },
       });
-      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any);
+      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any, PARAM_STUB as any);
       const r = await svc.exportarPorEjecucion(EJEC_ID, 'xlsx', 'ADMINISTRADOR_SISTEMA', USER_ID);
       const wb = await leerExcel(r.buffer);
       const ws = wb.getWorksheet('Indicadores');
@@ -422,7 +428,7 @@ describe('ExportacionesService', () => {
           findFirst:  jest.fn().mockResolvedValue(null),
         },
       });
-      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any);
+      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any, PARAM_STUB as any);
       const r = await svc.exportarPorEjecucion(EJEC_ID, 'xlsx', 'DECANO', USER_ID);
       const wb = await leerExcel(r.buffer);
       const ws = wb.getWorksheet('Indicadores');
@@ -475,7 +481,7 @@ describe('ExportacionesService', () => {
   }
 
   async function generarPdf(snap: Record<string, unknown>): Promise<Buffer> {
-    const svc = new ExportacionesService(makePrismaConSnap(snap) as any, makeAnalisis() as any);
+    const svc = new ExportacionesService(makePrismaConSnap(snap) as any, makeAnalisis() as any, PARAM_STUB as any);
     const r = await svc.exportarPorEjecucion(EJEC_ID, 'pdf', 'ADMINISTRADOR_SISTEMA', USER_ID);
     return r.buffer;
   }
@@ -728,7 +734,7 @@ describe('ExportacionesService', () => {
     }
 
     async function generarPdfPlan(snap?: Record<string, unknown>): Promise<Buffer> {
-      const svc = new ExportacionesService(makePlanPrisma(snap) as any, makeAnalisis() as any);
+      const svc = new ExportacionesService(makePlanPrisma(snap) as any, makeAnalisis() as any, PARAM_STUB as any);
       const r = await svc.exportarPorEjecucion(EJEC_ID, 'pdf', 'ADMINISTRADOR_SISTEMA', USER_ID);
       return r.buffer;
     }
@@ -761,7 +767,7 @@ describe('ExportacionesService', () => {
     it('PDF-PLAN-05: jerarquía facultad/carrera/plan llega al servicio desde Prisma', async () => {
       // Verifica que _obtenerMetadataEntidad resuelve la cadena plan→carrera→facultad
       const prisma = makePlanPrisma();
-      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any);
+      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any, PARAM_STUB as any);
       const r = await svc.exportarPorEjecucion(EJEC_ID, 'pdf', 'ADMINISTRADOR_SISTEMA', USER_ID);
       expect(r.buffer.slice(0, 4).toString()).toBe('%PDF');
       expect((prisma.planEstudio.findUnique as jest.Mock)).toHaveBeenCalledWith(
@@ -858,7 +864,7 @@ describe('ExportacionesService', () => {
           }),
         },
       });
-      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any);
+      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any, PARAM_STUB as any);
       const r = await svc.exportarPorEjecucion(EJEC_ID, 'xlsx', 'ADMINISTRADOR_SISTEMA', USER_ID);
       const wb = new ExcelJS3.Workbook();
       await wb.xlsx.load(r.buffer);
@@ -1391,7 +1397,7 @@ describe('ExportacionesService', () => {
     async function generarExcelCarrera5(snap?: Record<string, unknown>): Promise<{ wb: any; buffer: Buffer }> {
       const snapFinal = snap ?? makeSnapCarreraExcel();
       const prisma = makePrismaCarrera5(snapFinal);
-      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any);
+      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any, PARAM_STUB as any);
       const r = await svc.exportarPorEjecucion(EJEC_CAR5, 'xlsx', 'ADMINISTRADOR_SISTEMA', USER_CAR5);
       const wb = new ExcelJS5.Workbook();
       await wb.xlsx.load(r.buffer);
@@ -1542,7 +1548,7 @@ describe('ExportacionesService', () => {
           }),
         },
       });
-      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any);
+      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any, PARAM_STUB as any);
       const r = await svc.exportarPorEjecucion(EJEC_ID, 'xlsx', 'ADMINISTRADOR_SISTEMA', USER_ID);
       const wb = new ExcelJSR.Workbook();
       await wb.xlsx.load(r.buffer);
@@ -1878,7 +1884,7 @@ describe('ExportacionesService', () => {
     async function generarExcelFacultad(snap?: Record<string, unknown>): Promise<{ wb: any; buffer: Buffer }> {
       const snapFinal = snap ?? makeSnapFacultadXls();
       const prisma = makePrismaFacultad6c(snapFinal);
-      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any);
+      const svc = new ExportacionesService(prisma as any, makeAnalisis() as any, PARAM_STUB as any);
       const r = await svc.exportarPorEjecucion(EJEC_FAC6C, 'xlsx', 'ADMINISTRADOR_SISTEMA', USER_FAC6C);
       const wb = new ExcelJS6.Workbook();
       await wb.xlsx.load(r.buffer);
@@ -2074,6 +2080,7 @@ describe('ExportacionesService', () => {
           },
         }) as any,
         makeAnalisis() as any,
+        PARAM_STUB as any,
       );
       const r = await svc.exportarPorEjecucion('ejec-nb-plan', 'pdf', 'ADMINISTRADOR_SISTEMA', 'user-nb');
       return r.buffer;

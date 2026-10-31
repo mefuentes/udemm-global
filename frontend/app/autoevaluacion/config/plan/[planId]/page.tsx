@@ -394,7 +394,7 @@ function ConfigPlanInner() {
                             setForm(prev => ({ ...prev, [campo]: e.target.value }));
                           }}
                           placeholder="Sin umbral"
-                          className={`w-full text-xs border rounded-lg px-3 py-2 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] ${
+                          className={`w-full text-xs border rounded-lg pl-3 pr-7 py-2 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] ${
                             errCampo
                               ? 'border-red-300 bg-red-50'
                               : modificado
@@ -403,14 +403,14 @@ function ConfigPlanInner() {
                           }`}
                         />
                         {form[campo] !== '' && (
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none select-none" style={{ marginRight: '1.75rem' }}>
-                            h
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none select-none">
+                            Hs
                           </span>
                         )}
                       </div>
                     ) : (
                       <p className="text-sm font-semibold tabular-nums text-right text-slate-700">
-                        {config[campo] !== null ? `${config[campo]} h` : (
+                        {config[campo] !== null ? `${config[campo]} Hs` : (
                           <span className="text-slate-400 font-normal text-xs">Sin configurar</span>
                         )}
                       </p>
@@ -591,7 +591,7 @@ function ConfigPlanInner() {
                         setFormR13(prev => ({ ...prev, porcentajeMinFormacion: e.target.value }));
                       }}
                       placeholder="Sin umbral"
-                      className={`w-full text-xs border rounded-lg px-3 py-2 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] ${
+                      className={`w-full text-xs border rounded-lg pl-3 pr-7 py-2 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] ${
                         errPorcentaje
                           ? 'border-red-300 bg-red-50'
                           : r13Pctmod
@@ -600,7 +600,7 @@ function ConfigPlanInner() {
                       }`}
                     />
                     {formR13.porcentajeMinFormacion !== '' && (
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none select-none" style={{ marginRight: '1.75rem' }}>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none select-none">
                         %
                       </span>
                     )}

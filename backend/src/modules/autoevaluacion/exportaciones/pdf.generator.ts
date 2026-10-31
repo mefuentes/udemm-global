@@ -137,22 +137,32 @@ function addPageIfNeeded(doc: PDFKit.PDFDocument, neededHeight = 60): void {
 
 // ── Cabecera institucional ─────────────────────────────────────────────────────
 
-function renderHeader(doc: PDFKit.PDFDocument, data: SnapshotExport): void {
+function renderHeader(doc: PDFKit.PDFDocument, data: SnapshotExport, nombreInstitucion: string, logoDataUrl: string | null): void {
   // Primary blue bar (fixed 52 px)
   doc.rect(0, 0, PAGE_W, 52).fill(C_PRIMARY);
 
-  // Left half: title + subtitle
-  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(15)
-    .text('UDEMM GLOBAL', MARGIN, 11, { lineBreak: false, width: CONTENT_W / 2 });
-  doc.font('Helvetica').fontSize(9)
-    .text('Autoevaluación Institucional', MARGIN, 30, { lineBreak: false, width: CONTENT_W / 2 });
+  // Logo institucional (derecha del encabezado)
+  if (logoDataUrl) {
+    try {
+      const logoBuf = Buffer.from(logoDataUrl.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+      doc.image(logoBuf, PAGE_W - MARGIN - 50, 6, { fit: [46, 40] });
+    } catch { /* logo inválido: ignorar */ }
+  }
 
-  // Right half: date, same y as subtitle — no overlap
+  // Left side: system name, institution name, subtitle
+  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(13)
+    .text('UDEMM GLOBAL', MARGIN, 7, { lineBreak: false, width: CONTENT_W / 2 });
+  doc.fillColor('#bfdbfe').font('Helvetica').fontSize(7)
+    .text(nombreInstitucion, MARGIN, 21, { lineBreak: false, width: CONTENT_W / 2 });
+  doc.fillColor('#ffffff').font('Helvetica').fontSize(8)
+    .text('Autoevaluación Institucional', MARGIN, 34, { lineBreak: false, width: CONTENT_W / 2 });
+
+  // Right half: date (width reduced to avoid logo overlap)
   const fechaStr = fmtFecha(data.fechaEjecucion);
-  doc.font('Helvetica').fontSize(8)
-    .text(fechaStr, MARGIN + CONTENT_W / 2, 30, {
+  doc.fillColor('#ffffff').font('Helvetica').fontSize(8)
+    .text(fechaStr, MARGIN + CONTENT_W / 2, 34, {
       lineBreak: false,
-      width: CONTENT_W / 2,
+      width: CONTENT_W / 2 - 54,
       align: 'right',
     });
 
@@ -1503,7 +1513,11 @@ export const metaCarreraLabels: ReadonlyArray<readonly [string, string]> = META_
 
 // ── Exportación principal ──────────────────────────────────────────────────────
 
-export async function generarPdfBuffer(data: SnapshotExport): Promise<Buffer> {
+export async function generarPdfBuffer(
+  data: SnapshotExport,
+  nombreInstitucion = 'Universidad de la Marina Mercante',
+  logoDataUrl: string | null = null,
+): Promise<Buffer> {
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({
       margin: MARGIN,
@@ -1522,7 +1536,7 @@ export async function generarPdfBuffer(data: SnapshotExport): Promise<Buffer> {
     doc.on('error', reject);
 
     try {
-      renderHeader(doc, data);
+      renderHeader(doc, data, nombreInstitucion, logoDataUrl);
       renderMetadata(doc, data);
 
       if (data.ambito === 'CARRERA') {

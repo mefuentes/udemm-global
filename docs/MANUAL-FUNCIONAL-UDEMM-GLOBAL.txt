@@ -1,0 +1,822 @@
+================================================================
+UDEMM GLOBAL
+Manual Funcional de Usuario
+Version de pruebas
+Fecha: septiembre de 2026
+================================================================
+
+INDICE
+
+  1. Introduccion
+  2. Ingreso al sistema
+  3. Gestion de usuarios
+  4. Repositorio de normativas
+  5. Vinculacion de una materia a un docente
+  6. Circuito del docente - aprobar materias asignadas
+  7. Mi Ficha Docente
+  8. Docencia universitaria y materias aprobadas
+  9. Ejemplo completo de principio a fin
+ 10. Guia rapida para pruebas
+ 11. Como reportar un error
+
+================================================================
+1. INTRODUCCION
+================================================================
+
+UDEMM Global es el sistema de gestion academica institucional de la
+UDEMM. Permite administrar docentes, normativas, planes de estudio,
+vinculaciones a catedra y fichas academicas de cada docente.
+
+Las opciones visibles en el menu lateral dependen del rol asignado
+al usuario. Un docente vera su propia ficha y su bandeja de
+aprobaciones. Un administrador tendra acceso a toda la configuracion
+del sistema.
+
+================================================================
+2. INGRESO AL SISTEMA
+================================================================
+
+INICIAR SESION
+--------------
+Rol: Cualquier usuario registrado
+Ruta: Pagina de inicio de la aplicacion
+Objetivo: Autenticarse en el sistema
+
+Pasos:
+1. Ingresar la direccion de la aplicacion en el navegador.
+2. En el campo "Correo electronico" escribir el correo institucional
+   (ej: usuario@udemm.edu.ar).
+3. En el campo "Contrasena" escribir la contrasena asignada.
+4. Presionar el boton "Iniciar sesion".
+5. El sistema redirige automaticamente al inicio una vez que las
+   credenciales son validas.
+
+Resultado esperado: El usuario ingresa al sistema y ve el menu
+lateral con las opciones habilitadas para su rol.
+
+IMPORTANTE: Si las credenciales no son validas, el sistema muestra
+un mensaje de error en rojo bajo los campos. Verificar correo y
+contrasena, y volver a intentar.
+
+Dato de prueba: admin@udemm.edu.ar / Admin1234!
+
+
+RECUPERAR CONTRASENA
+--------------------
+Pasos:
+1. En la pantalla de login, hacer clic en "?Olvidaste tu contrasena?"
+2. Ingresar el correo electronico registrado.
+3. Presionar "Enviar enlace de recuperacion".
+4. El sistema confirma el envio.
+
+Resultado esperado: Si el correo esta registrado, se recibe un
+enlace valido por 1 hora. Revisar tambien la carpeta de spam.
+
+
+CERRAR SESION
+-------------
+Pasos:
+1. Hacer clic en el boton o icono de cierre de sesion en el menu.
+2. El sistema regresa a la pantalla de login.
+
+================================================================
+3. GESTION DE USUARIOS
+================================================================
+
+Rol: Administrador del sistema
+Ruta: Menu lateral -> Configuracion -> Usuarios
+
+---------------------------------------------------------
+3.1 Crear usuario
+---------------------------------------------------------
+Objetivo: Registrar un nuevo usuario en el sistema
+
+Pasos:
+1. Ir a Configuracion -> Usuarios.
+2. Presionar "Nuevo usuario" (esquina superior derecha).
+3. Se abre un modal con el formulario.
+4. Completar los campos:
+
+   Campo         | Descripcion                        | Obligatorio
+   --------------|------------------------------------|-----------
+   Nombre        | Nombre del usuario                 | Si
+   Apellido      | Apellido del usuario               | Si
+   Email         | Correo electronico institucional   | Si
+   Contrasena    | Contrasena de acceso               | Si (creacion)
+   Rol           | Seleccionar de la lista            | Si
+
+5. Presionar "Guardar".
+
+Resultado esperado: El sistema muestra "Usuario creado." y el nuevo
+usuario aparece en la tabla.
+
+Observacion: La contrasena es obligatoria solo al crear. Al editar,
+dejarla vacia preserva la contrasena existente.
+
+
+---------------------------------------------------------
+3.2 Editar usuario
+---------------------------------------------------------
+Objetivo: Modificar los datos de un usuario existente
+
+Pasos:
+1. Ir a Configuracion -> Usuarios.
+2. Localizar el usuario en la tabla.
+3. En la columna Acciones, presionar "Editar".
+4. El modal se abre con los datos actuales.
+5. Modificar los campos necesarios.
+6. Presionar "Guardar".
+
+Resultado esperado: El sistema muestra "Usuario actualizado." y los
+datos se reflejan en la tabla.
+
+
+---------------------------------------------------------
+3.3 Activar o desactivar usuario
+---------------------------------------------------------
+Objetivo: Habilitar o inhabilitar el acceso de un usuario
+
+Pasos:
+1. Ir a Configuracion -> Usuarios.
+2. Localizar el usuario.
+3. En la columna Acciones, presionar:
+   - "Desactivar" si el usuario esta activo.
+   - "Activar" si el usuario esta inactivo.
+
+Resultado esperado: La columna Estado cambia entre Activo e Inactivo.
+
+ATENCIÓN: Un usuario inactivo no puede iniciar sesion. Esta accion
+no elimina al usuario ni sus datos.
+
+
+FILTROS DISPONIBLES EN USUARIOS
+--------------------------------
+- Buscar: texto libre por nombre, apellido o email.
+- Todos los roles: filtrar por rol.
+- Todos los estados: ver solo Activos o Inactivos.
+
+================================================================
+4. REPOSITORIO DE NORMATIVAS
+================================================================
+
+Rol: Administrador (cargar y editar). Cualquier usuario con acceso
+puede consultar.
+Ruta: Menu lateral -> Repositorio de Normativas
+
+---------------------------------------------------------
+4.1 Cargar una nueva normativa
+---------------------------------------------------------
+Objetivo: Registrar un nuevo documento normativo
+
+Pasos:
+1. Ir a Repositorio de Normativas.
+2. Presionar "Nueva normativa".
+3. Completar INFORMACION PRINCIPAL:
+
+   Campo              | Descripcion                    | Obligatorio
+   -------------------|--------------------------------|------------
+   Titulo             | Nombre completo (max 200 car.) | Si
+   Tipo de normativa  | Seleccionar de lista           | Si
+
+4. Completar IDENTIFICACION:
+
+   Campo              | Descripcion                         | Obligatorio
+   -------------------|-------------------------------------|------------
+   N. de norma        | Solo digitos (ej: 002, 31, 4702)   | Si
+   Ano (2 digitos)    | Ultimos 2 digitos del ano (ej: 26) | Si
+   Fecha de emision   | Fecha del documento (no futura)    | Si
+   Area emisora       | Seleccionar de lista               | Si
+   Vigencia           | VIGENTE / DEROGADA / SUSPENDIDA    | Si
+                      | / REEMPLAZADA                       |
+
+5. Opcional: Palabras clave (escribir y presionar Enter o coma).
+   Backspace elimina la ultima etiqueta.
+
+6. Seccion ARCHIVO PDF: hacer clic o arrastrar el archivo.
+
+   IMPORTANTE: Solo se admiten archivos .pdf, maximo 15 MB.
+   El PDF es OBLIGATORIO al crear una normativa.
+
+7. Presionar "REGISTRAR NORMATIVA".
+
+Resultado esperado: "NORMATIVA REGISTRADA CORRECTAMENTE."
+
+
+---------------------------------------------------------
+4.2 Consultar una normativa
+---------------------------------------------------------
+Pasos:
+1. Ir a Repositorio de Normativas.
+2. Explorar por tipo/categoria o usar los filtros disponibles.
+3. Hacer clic en la normativa de interes.
+
+Resultado esperado: Se muestra el detalle con todos los datos.
+
+
+---------------------------------------------------------
+4.3 Visualizar el PDF
+---------------------------------------------------------
+Pasos:
+1. Ingresar al detalle de una normativa.
+2. Presionar el boton "VER DOCUMENTO".
+3. El PDF se abre en una nueva pestana del navegador.
+
+
+---------------------------------------------------------
+4.4 Editar una normativa
+---------------------------------------------------------
+Pasos:
+1. Ingresar al detalle de la normativa.
+2. Presionar el boton de edicion disponible.
+3. Modificar los campos necesarios.
+4. Para reemplazar el PDF: hacer clic en "+ Reemplazar archivo PDF"
+   y seleccionar el nuevo documento.
+5. Presionar "GUARDAR CAMBIOS".
+
+ATENCIÓN: Si no se selecciona un nuevo archivo, el documento
+anterior se conserva.
+
+Resultado esperado: "CAMBIOS GUARDADOS CORRECTAMENTE."
+
+
+---------------------------------------------------------
+4.5 Estados de vigencia
+---------------------------------------------------------
+
+  VIGENTE      - Normativa en plena vigencia
+  DEROGADA     - Normativa sin efecto
+  SUSPENDIDA   - Vigencia temporalmente suspendida
+  REEMPLAZADA  - Fue reemplazada por otra normativa posterior
+
+================================================================
+5. VINCULACION DE UNA MATERIA A UN DOCENTE
+================================================================
+
+Rol: Administrador del sistema o rol autorizado
+Ruta: Menu lateral -> Vinculacion a Catedra
+
+Una vinculacion registra la asignacion de un docente a una
+asignatura dentro de un plan de estudio. Al guardarla, queda en
+estado PENDIENTE DE APROBACION hasta que el docente la confirme.
+
+---------------------------------------------------------
+5.1 Acceder a Vinculacion a Catedra
+---------------------------------------------------------
+Pasos:
+1. En el menu lateral, hacer clic en "Vinculacion a Catedra".
+2. Se muestra la tabla con todas las vinculaciones registradas.
+
+
+---------------------------------------------------------
+5.2 Crear nueva vinculacion
+---------------------------------------------------------
+Pasos:
+1. Presionar "Nueva Vinculacion" (esquina superior derecha).
+2. Se abre un formulario lateral con los campos a completar.
+
+
+---------------------------------------------------------
+5.3 Completar Facultad
+---------------------------------------------------------
+Seleccionar la Facultad de la lista desplegable.
+
+Observacion: Al seleccionar una facultad, la lista de Carreras se
+actualiza automaticamente.
+
+
+---------------------------------------------------------
+5.4 Carrera
+---------------------------------------------------------
+Seleccionar la Carrera de la lista desplegable.
+
+Observacion: Al seleccionar una carrera, la lista de Planes de
+Estudio se actualiza automaticamente.
+
+
+---------------------------------------------------------
+5.5 Plan de Estudio
+---------------------------------------------------------
+Seleccionar el Plan de Estudio activo.
+
+Observacion: Al seleccionar un plan, la lista de Asignaturas se
+actualiza automaticamente.
+
+
+---------------------------------------------------------
+5.6 Asignatura
+---------------------------------------------------------
+Seleccionar la Asignatura (materia) activa.
+
+Observacion: Al seleccionar la asignatura, las Horas semanales se
+completan automaticamente. Si la asignatura no tiene carga horaria
+definida, el sistema mostrara un error y no permitira guardar.
+
+
+---------------------------------------------------------
+5.7 Docente
+---------------------------------------------------------
+Seleccionar el Docente de la lista de docentes activos.
+
+
+---------------------------------------------------------
+5.8 Catedra
+---------------------------------------------------------
+Seleccionar la Catedra de la lista desplegable.
+
+
+---------------------------------------------------------
+5.9 Cargo
+---------------------------------------------------------
+Seleccionar el Cargo (ej: Titular, Adjunto, JTP, Auxiliar).
+
+
+---------------------------------------------------------
+5.10 Modalidad
+---------------------------------------------------------
+Seleccionar la Modalidad (ej: Presencial, Virtual, Hibrida).
+
+
+---------------------------------------------------------
+5.11 Designacion
+---------------------------------------------------------
+Seleccionar el tipo de Designacion (ej: Ordinario, Interino,
+Ad honorem).
+
+
+---------------------------------------------------------
+5.12 Ano de inicio
+---------------------------------------------------------
+Ingresar el Ano de inicio con 4 digitos (ej: 2026).
+Debe estar entre 1900 y 2100.
+
+
+---------------------------------------------------------
+5.13 Observaciones
+---------------------------------------------------------
+Campo de texto libre opcional. Permite registrar cualquier
+aclaracion sobre la vinculacion.
+
+
+---------------------------------------------------------
+5.14 Guardar
+---------------------------------------------------------
+1. Verificar que todos los campos obligatorios esten completos.
+2. Presionar "Guardar".
+
+Resultado esperado: "Vinculacion creada correctamente. Quedo en
+estado Pendiente de Aprobacion."
+
+IMPORTANTE: La vinculacion no tiene efecto inmediato. El docente
+debe recibirla y aprobarla desde su Bandeja de Aprobaciones.
+
+
+ESTADOS POSIBLES DE UNA VINCULACION
+-------------------------------------
+  Pendiente     - Creada, esperando accion del docente
+  Aprobada      - El docente la acepto
+  Rechazada     - El docente la rechazo con un motivo
+  Desvinculada  - La vinculacion fue finalizada por un administrador
+
+================================================================
+6. CIRCUITO DEL DOCENTE - APROBAR MATERIAS ASIGNADAS
+================================================================
+
+Rol: Docente
+Ruta: Menu lateral -> Bandeja de Aprobaciones
+
+---------------------------------------------------------
+6.1 Ingresar con usuario Docente
+---------------------------------------------------------
+Pasos:
+1. En la pantalla de login, ingresar el correo y contrasena del
+   usuario con rol DOCENTE.
+2. Presionar "Iniciar sesion".
+
+
+---------------------------------------------------------
+6.2 Abrir Bandeja de Aprobaciones
+---------------------------------------------------------
+Pasos:
+1. En el menu lateral, hacer clic en "Bandeja de Aprobaciones".
+2. Si hay novedades pendientes, el sistema muestra un indicador
+   numerico (ej: "2 novedades") junto al titulo.
+
+
+---------------------------------------------------------
+6.3 Ver materias pendientes
+---------------------------------------------------------
+La seccion "Pendientes de accion" muestra todas las vinculaciones
+que requieren una decision del docente.
+
+Para cada vinculacion pendiente se visualiza:
+  - Nombre de la asignatura (y codigo si corresponde)
+  - Carrera y Plan de Estudio
+  - Catedra y Cargo
+  - Horas semanales y Ano de inicio
+  - Fecha de creacion de la solicitud
+
+
+---------------------------------------------------------
+6.4 Abrir el detalle
+---------------------------------------------------------
+Pasos:
+1. Hacer clic en "Ver" de la vinculacion a revisar.
+2. Se abre un modal con todos los datos.
+3. Revisar la informacion.
+4. Cerrar con "Volver".
+
+
+---------------------------------------------------------
+6.5 Aprobar una materia
+---------------------------------------------------------
+Pasos:
+1. En la seccion Pendientes de accion, localizar la vinculacion.
+2. Presionar "Aprobar" (verde).
+3. Confirmar en el cuadro de dialogo.
+
+Resultado esperado: "Vinculacion aprobada correctamente." La
+vinculacion desaparece de Pendientes y su estado pasa a Aprobada.
+
+
+---------------------------------------------------------
+6.6 Rechazar una materia
+---------------------------------------------------------
+Pasos:
+1. Localizar la vinculacion en Pendientes de accion.
+2. Presionar "Rechazar" (rojo).
+3. Se abre un modal para ingresar el motivo.
+4. Escribir el motivo y confirmar.
+
+Resultado esperado: La vinculacion pasa al estado Rechazada.
+
+
+---------------------------------------------------------
+6.7 Visualizar notificaciones
+---------------------------------------------------------
+La seccion "Notificaciones" muestra el historial de novedades
+(aprobaciones, rechazos, desvinculaciones).
+
+Pasos:
+1. Hacer clic en "Ver" junto a cualquier notificacion.
+2. Se abre un modal con el detalle completo.
+
+Las notificaciones no leidas muestran un punto azul. Al abrirlas
+se marcan como leidas automaticamente.
+
+Observacion: Las notificaciones son solo informativas. No requieren
+ninguna accion adicional.
+
+================================================================
+7. MI FICHA DOCENTE
+================================================================
+
+Rol: Docente
+Ruta: Menu lateral -> Mi Ficha Docente
+
+Mi Ficha Docente es el CV academico del docente dentro del sistema.
+Concentra toda la informacion personal, formativa y academica en
+diez pestanas.
+
+COMO ACCEDER Y EDITAR
+----------------------
+Pasos:
+1. En el menu lateral, hacer clic en "Mi Ficha Docente".
+2. La ficha se muestra en modo lectura por defecto.
+3. Para editar, presionar "Editar ficha" (esquina superior).
+4. Aparecen los botones "Guardar Cambios" y "Cancelar".
+5. Navegar entre pestanas usando los botones numerados (1 al 10).
+6. En cada pestana, completar o modificar los campos.
+7. Presionar "Guardar Cambios" para guardar la pestana activa.
+   Cada pestana se guarda de forma independiente.
+8. Presionar "Cancelar" para descartar cambios.
+
+Para exportar la ficha en PDF: presionar "Exportar ficha".
+
+
+PESTANA 1 - DATOS PERSONALES
+------------------------------
+Proposito: Informacion de identificacion del docente.
+
+Campos principales:
+  - Nombre y Apellido
+  - Sexo
+  - Fecha de nacimiento
+  - Tipo de documento / Numero de documento
+  - CUIT
+  - Correo electronico / Telefono
+  - Domicilio: Calle, Numero, Piso/Depto
+  - Residencia, Provincia, Localidad, Codigo postal
+
+Como guardar: Presionar "Guardar Cambios".
+
+
+PESTANA 2 - FORMACION
+-----------------------
+Proposito: Titulos y formacion academica del docente.
+
+Secciones (cada una con tabla y boton "+ Agregar"):
+
+  Titulos de grado:
+    Denominacion, Ano, Pais, Institucion
+
+  Titulos de posgrado:
+    Denominacion, Tipo (Especializacion/Maestria/Doctorado/etc.),
+    Ano, Institucion
+
+  Otros titulos:
+    Denominacion, Ano, Institucion
+
+  Carrera de formacion docente:
+    Denominacion, Institucion, Unidad academica, Ano
+
+Cada tabla permite Editar y Eliminar registros existentes.
+
+
+PESTANA 3 - AREA DE DESEMPENO
+-------------------------------
+Proposito: Clasificacion disciplinar del docente.
+
+Campos:
+  - Area disciplinar (seleccionar de lista)
+  - Subarea (se actualiza al elegir el area)
+  - Observaciones del area (texto libre)
+
+
+PESTANA 4 - DOCENCIA UNIVERSITARIA
+------------------------------------
+Proposito: Registro de la actividad docente actual.
+
+4.1 Situacion actual - COMPLETADO AUTOMATICAMENTE
+  Se actualiza con las vinculaciones a catedra aprobadas en la
+  Bandeja de Aprobaciones. NO admite edicion manual.
+
+  Columnas que se muestran:
+    Facultad | Carrera | Plan | Asignatura | Catedra | Cargo
+    Modalidad | Designacion | H/SEM | Ano inicio | Aprobada
+
+4.2 Actividades curriculares de posgrado (boton "+ Agregar"):
+    Carreras de posgrado, Actividad curricular, Plan, Ano inicio
+
+
+PESTANA 5 - GESTION ACADEMICA
+-------------------------------
+Proposito: Cargos y funciones de gestion academica.
+
+Campos:
+  - Funcion de gestion
+  - Unidad academica de gestion
+  - Carrera asociada a la gestion
+  - Tiempo de dedicacion semanal
+  - Fecha de inicio / Fecha fin
+  - Normativa de designacion
+
+Secciones en tabla:
+  - Trayectoria - Cargos pasados (boton "+ Agregar"):
+    Periodo desde/hasta, Institucion, Unidad academica,
+    Cargo, Modalidad
+
+  - Cargos academicos (boton "+ Agregar"):
+    Cargo, Institucion, Modalidad, Periodo, Dedicacion semanal
+
+
+PESTANA 6 - DESEMPENO NO ACADEMICO
+------------------------------------
+Proposito: Actividad profesional no academica del docente.
+
+Campos de texto libre:
+  - Cargo declarado
+  - Justificacion de pertinencia
+  - Actividades profesionales
+  - Antecedentes academicos
+
+Secciones en tabla:
+  - Desempeno actual (boton "+ Agregar"):
+    Periodo, Institucion, Cargo, Modalidad, Dedicacion semanal
+
+  - Desempeno pasado (boton "+ Agregar"):
+    Periodo, Institucion, Cargo
+
+  - Otras dedicaciones (boton "+ Agregar"):
+    Concepto, Horas semanales
+
+  - Experiencia en educacion a distancia (texto libre)
+
+  - Direccion de tesis (boton "+ Agregar")
+
+
+PESTANA 7 - INVESTIGACION
+---------------------------
+Proposito: Actividad de investigacion del docente.
+
+Secciones en tabla:
+  - Proyectos de investigacion (boton "+ Agregar"):
+    Codigo, Titulo, Rol, Horas semanales
+
+  - Sistemas de promocion en investigacion (boton "+ Agregar"):
+    Sistema, Categoria, Detalle, Periodo
+
+  - Participacion en vinculacion (boton "+ Agregar"):
+    Codigo, Actividad, Rol, Horas semanales
+
+  - Produccion cientifica (boton "+ Agregar"):
+    Tipo, Referencia bibliografica, Ano
+
+  - Premios y distinciones (texto libre)
+  - Estancias y cursos en el exterior (texto libre)
+  - Membresias en instituciones (texto libre)
+
+
+PESTANA 8 - REUNIONES CIENTIFICAS
+------------------------------------
+Proposito: Participacion en congresos, jornadas y eventos.
+
+Seccion en tabla (boton "+ Agregar"):
+  Titulo del evento, Lugar, Forma de participacion, Tipo, Fecha
+
+
+PESTANA 9 - COMITES Y JURADOS
+-------------------------------
+Proposito: Participacion en comites evaluadores y jurados.
+
+Seccion en tabla (boton "+ Agregar"):
+  Organismo convocante, Lugar, Tipo de evaluacion, Fecha
+
+
+PESTANA 10 - OTRA INFORMACION
+-------------------------------
+Proposito: Campos adicionales y de cierre de la ficha.
+
+Campos:
+  - Carrera docente de posgrado (texto libre)
+  - Actividades de transferencia y extension (texto libre)
+  - Registros de promocion (tabla con boton "+ Agregar"):
+    Sistema, Categoria, Fecha de alta
+
+================================================================
+8. DOCENCIA UNIVERSITARIA Y MATERIAS APROBADAS
+================================================================
+
+Rol: Docente
+Ruta: Mi Ficha Docente -> Pestana 4 -> Seccion 4.1 Situacion actual
+
+La seccion 4.1 Situacion actual se completa AUTOMATICAMENTE a
+partir de las vinculaciones que el docente aprobo en la Bandeja de
+Aprobaciones. El docente NO puede editar esta seccion manualmente.
+
+FLUJO COMPLETO:
+
+  El administrador crea la vinculacion
+    -> La vinculacion queda en estado: Pendiente de aprobacion
+    -> El docente ingresa a su Bandeja de Aprobaciones
+    -> El docente revisa y presiona Aprobar
+    -> El estado pasa a: Aprobada
+    -> La vinculacion aparece automaticamente en:
+       Mi Ficha Docente -> Pestana 4 -> 4.1 Situacion actual
+
+COLUMNAS QUE SE MUESTRAN EN SITUACION ACTUAL:
+
+  Facultad    - Facultad a la que pertenece la asignatura
+  Carrera     - Carrera donde se dicta
+  Plan        - Plan de estudios activo
+  Asignatura  - Nombre de la materia
+  Catedra     - Catedra asignada
+  Cargo       - Cargo docente (Titular, Adjunto, JTP, etc.)
+  Modalidad   - Modalidad de dictado
+  Designacion - Tipo de designacion
+  H/SEM       - Horas semanales de la asignatura
+  Ano inicio  - Ano en que comenzo la vinculacion
+  Aprobada    - Fecha en que el docente aprobo la vinculacion
+
+IMPORTANTE: Si el docente no tiene vinculaciones aprobadas, la
+seccion mostrara el mensaje:
+"No posee vinculaciones a catedra aprobadas."
+
+================================================================
+9. EJEMPLO COMPLETO DE PRINCIPIO A FIN
+================================================================
+
+Escenario: El administrador quiere asignar a la profesora Maria
+Gonzalez la asignatura "Metodologia de la Investigacion" de la
+Facultad de Ciencias Sociales, Carrera Trabajo Social.
+
+
+PASO 1 - Crear usuario docente
+-------------------------------
+1. Ingresar con usuario administrador.
+2. Ir a Configuracion -> Usuarios.
+3. Presionar "Nuevo usuario".
+4. Completar:
+     Nombre: MARIA
+     Apellido: GONZALEZ
+     Email: m.gonzalez@udemm.edu.ar
+     Contrasena: (temporal)
+     Rol: DOCENTE
+5. Presionar "Guardar".
+6. El sistema confirma: "Usuario creado."
+
+
+PASO 2 - Crear la vinculacion
+------------------------------
+1. Ir a Vinculacion a Catedra.
+2. Presionar "Nueva Vinculacion".
+3. Seleccionar: Facultad -> Ciencias Sociales.
+4. Seleccionar: Carrera -> Trabajo Social.
+5. Seleccionar: Plan de Estudio -> (el plan activo disponible).
+6. Seleccionar: Asignatura -> Metodologia de la Investigacion.
+7. Seleccionar: Docente -> GONZALEZ, MARIA.
+8. Seleccionar: Catedra, Cargo, Modalidad, Designacion.
+9. Completar: Ano de inicio = 2026.
+10. Presionar "Guardar".
+11. El sistema confirma: "Vinculacion creada correctamente.
+    Quedo en estado Pendiente de Aprobacion."
+
+
+PASO 3 - Ingresar como docente y aprobar la asignacion
+--------------------------------------------------------
+1. Cerrar sesion del administrador.
+2. Ingresar con m.gonzalez@udemm.edu.ar.
+3. Ir a Bandeja de Aprobaciones.
+4. En "Pendientes de accion", localizar "Metodologia de la
+   Investigacion".
+5. Hacer clic en "Ver" para revisar los datos.
+6. Presionar "Aprobar" y confirmar.
+7. El sistema confirma: "Vinculacion aprobada correctamente."
+
+
+PASO 4 - Verificar en Mi Ficha Docente
+----------------------------------------
+1. En el menu lateral, ir a "Mi Ficha Docente".
+2. Abrir la pestana 4 - Docencia universitaria.
+3. En "4.1 Situacion actual", comprobar que aparece:
+   - Facultad: Ciencias Sociales
+   - Asignatura: Metodologia de la Investigacion
+   - Cargo, Modalidad, Designacion y H/SEM correspondientes
+   - Fecha de aprobacion: la del dia actual
+
+Resultado esperado: La materia aparece en la tabla. El circuito
+esta completo.
+
+================================================================
+10. GUIA RAPIDA PARA PRUEBAS
+================================================================
+
+Utilizar esta lista para verificar que el sistema funciona:
+
+  [ ] Puedo iniciar sesion con el usuario administrador
+  [ ] Puedo crear un nuevo usuario con rol DOCENTE
+  [ ] Puedo editar los datos de un usuario existente
+  [ ] Puedo activar y desactivar un usuario
+  [ ] Puedo filtrar usuarios por nombre, rol y estado
+  [ ] Puedo cargar una nueva normativa con PDF
+  [ ] Puedo visualizar el PDF de una normativa existente
+  [ ] Puedo editar una normativa y reemplazar el PDF
+  [ ] Puedo crear una vinculacion a catedra
+  [ ] La vinculacion queda en estado Pendiente al guardar
+  [ ] Ingresando como docente, recibo la vinculacion en la Bandeja
+  [ ] Puedo aprobar la vinculacion desde la Bandeja
+  [ ] Puedo rechazar una vinculacion con motivo
+  [ ] Tras aprobar, la materia aparece en Mi Ficha Docente (pestana 4)
+  [ ] Puedo editar y guardar datos en cada pestana de Mi Ficha
+  [ ] Puedo exportar la ficha en PDF
+  [ ] Los datos persisten al recargar la pagina
+  [ ] Los filtros de busqueda funcionan en Vinculacion a Catedra
+
+================================================================
+11. COMO REPORTAR UN ERROR
+================================================================
+
+Al encontrar un comportamiento inesperado, informarlo con el
+siguiente formato:
+
+  REPORTE DE ERROR
+
+  Usuario/Rol:
+    (ej: ADMINISTRADOR / DOCENTE)
+
+  Pantalla:
+    (ej: Bandeja de Aprobaciones / Mi Ficha Docente - Pestana 2)
+
+  Pasos para reproducir:
+    1.
+    2.
+    3.
+
+  Resultado esperado:
+    (que deberia haber ocurrido)
+
+  Resultado obtenido:
+    (que ocurrio realmente)
+
+  Captura de pantalla:
+    (adjuntar imagen si es posible)
+
+  Fecha y hora del error:
+    (ej: 04/09/2026 - 14:35 hs)
+
+ATENCION: Incluir siempre la captura de pantalla si el error
+produce un mensaje visible en pantalla.
+
+================================================================
+UDEMM Global - Sistema de Gestion Institucional
+Version de pruebas - Septiembre 2026
+================================================================

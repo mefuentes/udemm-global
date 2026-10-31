@@ -1339,7 +1339,7 @@ function TablroCarreraInner() {
   async function cargarHistorial() {
     setCargandoHist(true);
     try {
-      const res  = await apiFetch(`/autoevaluacion/analisis/carrera/${carreraId}/historial?pagina=${paginaHistorial}&porPagina=10`);
+      const res  = await apiFetch(`/autoevaluacion/analisis/carrera/${carreraId}/historial?pagina=${paginaHistorial}&porPagina=5`);
       const data = await res.json().catch(() => null);
       if (res.ok) setHistorial(data as HistorialAnalisis);
     } finally {
@@ -1777,7 +1777,7 @@ function TablroCarreraInner() {
                     ← Anterior
                   </button>
                   <span className="text-[10px] text-slate-400">
-                    {historial.porPagina * (paginaHistorial - 1) + 1}–{Math.min(historial.porPagina * paginaHistorial, historial.total)} de {historial.total}
+                    Pág.&nbsp;{paginaHistorial}&nbsp;de&nbsp;{Math.ceil(historial.total / historial.porPagina)}
                   </span>
                   <button
                     onClick={() => setPaginaHistorial((p) => p + 1)}

@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { ParametrosService } from '../../parametros/parametros.service';
 
 import { AnalisisService }   from '../analisis/analisis.service';
 import type { AmbitoAnalisis } from '../analisis/analisis.dto';
@@ -28,6 +29,7 @@ export class ExportacionesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly analisis: AnalisisService,
+    private readonly parametros: ParametrosService,
   ) {}
 
   // ── API pública ───────────────────────────────────────────────────────────────
@@ -204,13 +206,17 @@ export class ExportacionesService {
     const slug      = data.entidadNombre.replace(/[^a-z0-9]/gi, '_').slice(0, 40);
     const fechaSlug = new Date(data.fechaEjecucion).toISOString().slice(0, 10).replace(/-/g, '');
 
+    const [nombreInstitucion, logoDataUrl] = await Promise.all([
+      this.parametros.obtenerValor('nombreInstitucion', 'Universidad de la Marina Mercante'),
+      this.parametros.obtenerLogo(),
+    ]);
+
     if (formato === 'pdf') {
-      const buffer   = await generarPdfBuffer(data);
+      const buffer   = await generarPdfBuffer(data, nombreInstitucion, logoDataUrl);
       const filename = `autoevaluacion_${data.ambito.toLowerCase()}_${slug}_${fechaSlug}.pdf`;
       return { buffer, filename, mime: 'application/pdf' };
     }
-
-    const buffer   = await generarExcelBuffer(data);
+    const buffer   = await generarExcelBuffer(data, nombreInstitucion);
     const filename = `autoevaluacion_${data.ambito.toLowerCase()}_${slug}_${fechaSlug}.xlsx`;
     return {
       buffer,

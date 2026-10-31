@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, UnprocessableEntityException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ParametrosService } from '../parametros/parametros.service';
 import { CrearPlanDto } from './dto/crear-plan.dto';
 import { ActualizarPlanDto } from './dto/actualizar-plan.dto';
 import * as ExcelJS from 'exceljs';
@@ -21,7 +22,10 @@ type PlanExport = {
 
 @Injectable()
 export class PlanesEstudioService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly parametrosService: ParametrosService,
+  ) {}
 
   async obtenerCarreras() {
     return this.prisma.carrera.findMany({
@@ -156,6 +160,7 @@ export class PlanesEstudioService {
 
   async generarExcel(carreraId?: string, planId?: string): Promise<Buffer> {
     const datos = await this.obtenerDatosExportar(carreraId, planId);
+    const nombreInstitucion = await this.parametrosService.obtenerValor('nombreInstitucion', 'Universidad de la Marina Mercante');
 
     const carreraNombre = datos[0]?.carrera.nombre ?? '';
     const planNombre    = datos.length === 1 ? datos[0].nombre : '';
@@ -179,7 +184,7 @@ export class PlanesEstudioService {
 
       ws.mergeCells(span(1));
       const c1 = ws.getCell('A1');
-      c1.value = 'UNIVERSIDAD DE LA MARINA MERCANTE';
+      c1.value = nombreInstitucion.toUpperCase();
       c1.font  = { bold: true, size: 13, color: { argb: 'FF0F4C81' } };
       c1.alignment = { horizontal: 'center', vertical: 'middle' };
       ws.getRow(1).height = 26;
@@ -266,6 +271,11 @@ export class PlanesEstudioService {
 
   async generarPdf(carreraId?: string, planId?: string): Promise<Buffer> {
     const datos = await this.obtenerDatosExportar(carreraId, planId);
+    const [nombreInstitucion, logoDataUrl] = await Promise.all([
+      this.parametrosService.obtenerValor('nombreInstitucion', 'Universidad de la Marina Mercante'),
+      this.parametrosService.obtenerLogo(),
+    ]);
+    const logoBuffer = logoDataUrl ? Buffer.from(logoDataUrl.replace(/^data:image\/\w+;base64,/, ''), 'base64') : null;
 
     const carreraNombre = datos[0]?.carrera.nombre ?? '';
     const planNombre = datos.length === 1 ? datos[0].nombre : '';
@@ -295,7 +305,7 @@ export class PlanesEstudioService {
       function drawFooter() {
         sep(PAGE_H - MB + 4, BORD, 0.3);
         doc.fontSize(7).font('Helvetica').fillColor(GRAY)
-           .text('Universidad de la Marina Mercante  ·  Información de Planes de Estudio', ML, PAGE_H - MB + 9, { width: USABLE_W - 60 });
+           .text(`${nombreInstitucion}  ·  Información de Planes de Estudio`, ML, PAGE_H - MB + 9, { width: USABLE_W - 60 });
         doc.fontSize(7).font('Helvetica').fillColor(GRAY)
            .text(`Página ${pageNum}`, ML, PAGE_H - MB + 9, { width: USABLE_W, align: 'right' });
       }
@@ -304,9 +314,12 @@ export class PlanesEstudioService {
         if (pageNum > 0) drawFooter();
         pageNum++;
         doc.addPage();
+        if (logoBuffer) {
+          try { doc.image(logoBuffer, ML, isFirst ? MT - 8 : MT - 22, { fit: [52, 30] }); } catch { /* logo inválido: ignorar */ }
+        }
         if (isFirst) {
           doc.fontSize(11).font('Helvetica-Bold').fillColor(BLUE)
-             .text('UNIVERSIDAD DE LA MARINA MERCANTE', ML, MT, { width: USABLE_W, align: 'center' });
+             .text(nombreInstitucion.toUpperCase(), ML, MT, { width: USABLE_W, align: 'center' });
           doc.fontSize(10).font('Helvetica-Bold').fillColor(DARK)
              .text('Información de Planes de Estudio', ML, MT + 16, { width: USABLE_W, align: 'center' });
           doc.fontSize(8).font('Helvetica').fillColor(GRAY)
@@ -315,7 +328,7 @@ export class PlanesEstudioService {
           curY = MT + 56;
         } else {
           doc.fontSize(8).font('Helvetica').fillColor(GRAY)
-             .text('UNIVERSIDAD DE LA MARINA MERCANTE  ·  Información de Planes de Estudio', ML, MT - 14, { width: USABLE_W });
+             .text(`${nombreInstitucion.toUpperCase()}  ·  Información de Planes de Estudio`, ML, MT - 14, { width: USABLE_W });
           sep(MT - 2, BORD, 0.4);
           curY = MT + 10;
         }

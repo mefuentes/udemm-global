@@ -1353,7 +1353,7 @@ const SECCIONES_PROGRAMA: SeccionConfig[] = [
     campos: [
       { key: 'bibliografiaBasica',         label: 'Bibliografía obligatoria',        tipo: 'textarea', rows: 6, obligatorio: true,  placeholder: 'Autor, A. (año). Título. Editorial.\nAutor, B. (año). Título. Editorial.' },
       { key: 'bibliografiaComplementaria', label: 'Bibliografía de consulta',         tipo: 'textarea', rows: 6, obligatorio: false, placeholder: 'Autor, A. (año). Título. Editorial.\nRecursos en línea: URL' },
-      { key: 'fechaVigenciaPrograma',      label: 'Año de vigencia del programa',    tipo: 'year',   obligatorio: true },
+      { key: 'fechaVigenciaPrograma',      label: 'Año de vigencia del programa',    tipo: 'year',   obligatorio: true, digitosExactos: 4, placeholder: String(new Date().getFullYear()) },
       { key: 'fechaAprobacion',            label: 'Fecha de aprobación / revisión',  tipo: 'date',   obligatorio: true },
     ]
   },
@@ -1378,7 +1378,12 @@ const ACCION_PROG_CFG: Record<string, { label: string; cls: string }> = {
   REVERSION:     { label: 'En revisión',   cls: 'bg-amber-50 text-amber-700 border-amber-200' },
 };
 
-function exportarProgramaPDF(ficha: FichaCompleta, programa: ProgramaAsignatura) {
+async function exportarProgramaPDF(ficha: FichaCompleta, programa: ProgramaAsignatura) {
+  const [{ nombreInstitucion, siglaInstitucion }, logoDataUrl] = await Promise.all([
+    import('@/lib/parametros').then(m => m.obtenerParametrosPublicos())
+      .catch(() => ({ nombreInstitucion: 'Universidad de la Marina Mercante', siglaInstitucion: 'UDEMM' })),
+    import('@/lib/parametros').then(m => m.obtenerLogoInstitucion()).catch(() => null),
+  ]);
   const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
 
   // ── Mini helpers ─────────────────────────────────────────────────────────
@@ -1479,14 +1484,16 @@ function exportarProgramaPDF(ficha: FichaCompleta, programa: ProgramaAsignatura)
 @page {
   size: A4; margin: 15mm 20mm 22mm 20mm;
   @bottom-right { content: "Página " counter(page) " de " counter(pages); font-size:8pt; color:#94a3b8; }
-  @bottom-left  { content: "UDEMM — Programa de Asignatura"; font-size:8pt; color:#94a3b8; }
+  @bottom-left  { content: "${siglaInstitucion} — Programa de Asignatura"; font-size:8pt; color:#94a3b8; }
 }
 *{box-sizing:border-box}
 body{font-family:Arial,sans-serif;font-size:10pt;color:#1e293b;margin:0}
-.hdr{background:#0f4c81;color:white;padding:14px 18px 16px}
+.hdr{background:#0f4c81;color:white;padding:14px 18px 16px;display:flex;align-items:flex-start;justify-content:space-between}
+.hdr-info{flex:1}
 .hdr-univ{font-size:7.5pt;letter-spacing:.06em;text-transform:uppercase;opacity:.8}
 .hdr-fac{font-size:9.5pt;margin:3px 0 2px;opacity:.9}
 .hdr-mat{font-size:14pt;font-weight:bold;margin:6px 0 0}
+.hdr-logo{height:48px;width:auto;object-fit:contain;margin-left:12px;flex-shrink:0}
 .hdr-bar{height:3px;background:#f26b22}
 .meta-grid{display:flex;flex-wrap:wrap;gap:5px 22px;border:1px solid #e2e8f0;border-top:0;padding:9px 18px;background:#f8fafc;margin-bottom:22px}
 .mi{font-size:8.5pt;color:#475569}
@@ -1508,9 +1515,12 @@ tr{break-inside:avoid;page-break-inside:avoid}
 </head>
 <body>
 <div class="hdr">
-  <div class="hdr-univ">UDEMM — Universidad de la Marina Mercante</div>
-  <div class="hdr-fac">${esc(ficha.planEstudio.carrera.facultad.nombre)}</div>
-  <div class="hdr-mat">${esc(ficha.nombre)}</div>
+  <div class="hdr-info">
+    <div class="hdr-univ">${siglaInstitucion} — ${nombreInstitucion}</div>
+    <div class="hdr-fac">${esc(ficha.planEstudio.carrera.facultad.nombre)}</div>
+    <div class="hdr-mat">${esc(ficha.nombre)}</div>
+  </div>
+  ${logoDataUrl ? `<img src="${logoDataUrl}" alt="Logo institucional" class="hdr-logo">` : ''}
 </div>
 <div class="hdr-bar"></div>
 <div class="meta-grid">
@@ -1538,7 +1548,7 @@ ${sec(6,'Bibliografía y gestión', s6HTML)}
 
 <div class="footer">
   <span>Generado el ${fecha}</span>
-  <span>${esc(ficha.planEstudio.carrera.facultad.nombre)} · UDEMM</span>
+  <span>${esc(ficha.planEstudio.carrera.facultad.nombre)} · ${siglaInstitucion}</span>
 </div>
 </body>
 </html>`;
@@ -2515,17 +2525,17 @@ function ProgramaView({
                         className={edCls}
                       />
                     ) : campo.tipo === 'year' ? (
-                      <select
+                      <input
                         key={`${seccionActiva}-${campo.key}`}
                         ref={el => { fieldRefs.current[campo.key] = el; }}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={4}
                         defaultValue={String((programa as unknown as Record<string, unknown>)[campo.key] ?? '')}
+                        placeholder={campo.placeholder ?? String(new Date().getFullYear())}
+                        onChange={e => { e.target.value = soloDigitos(e.target.value).slice(0, 4); }}
                         className={edCls}
-                      >
-                        <option value="">-- Seleccionar año --</option>
-                        {Array.from({ length: 21 }, (_, i) => new Date().getFullYear() - 10 + i).map(y => (
-                          <option key={y} value={String(y)}>{y}</option>
-                        ))}
-                      </select>
+                      />
                     ) : (
                       <input
                         key={`${seccionActiva}-${campo.key}`}

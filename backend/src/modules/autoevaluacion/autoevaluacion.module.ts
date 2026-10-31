@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { ScopeModule } from '../scopes/scope.module';
+import { ParametrosModule } from '../parametros/parametros.module';
 import { AutoevaluacionController } from './autoevaluacion.controller';
 import { ConfigFacultadService } from './config/config-facultad.service';
 import { ConfigPlanService } from './config/config-plan.service';
@@ -35,7 +36,7 @@ import { TipoDedicacionConeauService } from './catalogo/tipo-dedicacion-coneau.s
 import { TipoPosgradoService } from './catalogo/tipo-posgrado.service';
 
 @Module({
-  imports: [PrismaModule, ScopeModule],
+  imports: [PrismaModule, ScopeModule, ParametrosModule],
   controllers: [AutoevaluacionController],
   providers: [
     ConfigFacultadService,

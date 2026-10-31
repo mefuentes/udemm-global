@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import * as ExcelJS from 'exceljs';
+import { ParametrosService } from '../parametros/parametros.service';
 
 export interface ExportOpts {
   tipoNombre:             string | null;
@@ -23,10 +24,16 @@ function fmtFecha(iso: string | Date | null | undefined): string {
 
 @Injectable()
 export class NormativasExportService {
+  constructor(private readonly parametrosService: ParametrosService) {}
 
   // ── PDF ──────────────────────────────────────────────────────────────────────
 
   async generarPdf(data: any[], opts: ExportOpts): Promise<Buffer> {
+    const [nombreInstitucion, logoDataUrl] = await Promise.all([
+      this.parametrosService.obtenerValor('nombreInstitucion', 'Universidad de la Marina Mercante'),
+      this.parametrosService.obtenerLogo(),
+    ]);
+    const logoBuffer = logoDataUrl ? Buffer.from(logoDataUrl.replace(/^data:image\/\w+;base64,/, ''), 'base64') : null;
     return new Promise<Buffer>((resolve, reject) => {
       const doc = new PDFDocument({
         size:          'A4',
@@ -149,8 +156,12 @@ export class NormativasExportService {
       // ── Encabezado del documento ───────────────────────────────────────────
       let y = 35;
 
+      if (logoBuffer) {
+        try { doc.image(logoBuffer, L_MARGIN, y - 4, { fit: [60, 32] }); } catch { /* logo inválido: ignorar */ }
+      }
+
       doc.font('Helvetica-Bold').fontSize(13).fillColor('#1b3a6b')
-        .text('UNIVERSIDAD DE LA MARINA MERCANTE', L_MARGIN, y, {
+        .text(nombreInstitucion.toUpperCase(), L_MARGIN, y, {
           width: TABLE_W, align: 'center',
         });
       y += 16;
@@ -269,6 +280,7 @@ export class NormativasExportService {
   // ── Excel ─────────────────────────────────────────────────────────────────────
 
   async generarExcel(data: any[], opts: ExportOpts): Promise<Buffer> {
+    const nombreInstitucion = await this.parametrosService.obtenerValor('nombreInstitucion', 'Universidad de la Marina Mercante');
     const wb = new ExcelJS.Workbook();
     wb.creator = 'UDEMM Global';
     wb.created = new Date();
@@ -337,7 +349,7 @@ export class NormativasExportService {
 
     // Fila 1 — Nombre de la universidad
     mrg(++r);
-    c1(r).value     = 'UNIVERSIDAD DE LA MARINA MERCANTE';
+    c1(r).value     = nombreInstitucion.toUpperCase();
     c1(r).font      = { bold: true, size: 14, color: { argb: 'FF1b3a6b' } };
     c1(r).alignment = { horizontal: 'center', vertical: 'middle' };
     h(r, 22);

@@ -288,11 +288,16 @@ export default function ProgramasAsignaturaPage() {
 
   // ── Exportar PDF ───────────────────────────────────────────────────────────
 
-  function exportarPdf() {
+  async function exportarPdf() {
     if (filtradas.length === 0) {
       alert('No hay registros para exportar con los filtros aplicados.');
       return;
     }
+
+    const [{ nombreInstitucion }, logoDataUrl] = await Promise.all([
+      import('@/lib/parametros').then(m => m.obtenerParametrosPublicos()).catch(() => ({ nombreInstitucion: 'Universidad de la Marina Mercante', siglaInstitucion: 'UDEMM', cicloLectivoActual: '' })),
+      import('@/lib/parametros').then(m => m.obtenerLogoInstitucion()).catch(() => null),
+    ]);
 
     const doc    = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
     const pageW  = doc.internal.pageSize.getWidth();   // 841.89
@@ -338,17 +343,21 @@ export default function ProgramasAsignaturaPage() {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7);
       doc.setTextColor(100, 116, 139);
-      doc.text('Universidad de la Marina Mercante  ·  Programas de Asignatura', ML, FOOTER_TOP);
+      doc.text(`${nombreInstitucion}  ·  Programas de Asignatura`, ML, FOOTER_TOP);
       doc.text(`Página ${pageNum}`, pageW - MR, FOOTER_TOP, { align: 'right' });
     }
 
     // ── Encabezado primera página ─────────────────────────────────────────────
     function drawFirstPageHeader() {
       // Título institucional
+      if (logoDataUrl) {
+        try { doc.addImage(logoDataUrl, ML, 12, 36, 36); } catch { /* logo inválido: ignorar */ }
+      }
+
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(13);
       doc.setTextColor(15, 76, 129);
-      doc.text('UNIVERSIDAD DE LA MARINA MERCANTE', pageW / 2, 34, { align: 'center' });
+      doc.text(nombreInstitucion.toUpperCase(), pageW / 2, 34, { align: 'center' });
 
       doc.setFontSize(10);
       doc.setTextColor(30, 41, 59);

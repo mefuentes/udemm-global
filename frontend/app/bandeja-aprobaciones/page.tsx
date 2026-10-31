@@ -186,6 +186,21 @@ const IcDoc = () => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
   </svg>
 );
+const IcUsers = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-5-3.87M9 20H4v-2a4 4 0 015-3.87m6-4.13a4 4 0 11-8 0 4 4 0 018 0zm6 0a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+const IcDots = () => (
+  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M12 5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 7a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 7a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+  </svg>
+);
+const IcClock = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
 const IcChat = () => (
   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -228,8 +243,14 @@ export default function BandejaAprobacionesPage() {
   const [accionandoSolicitudId, setAccionandoSolicitudId]     = useState<string | null>(null);
   const [correccionesTarget, setCorreccionesTarget]           = useState<SolicitudPrograma | null>(null);
   const [filtroProgramas, setFiltroProgramas]                 = useState('PENDIENTE_APROBACION');
+  const [buscarProgramas, setBuscarProgramas]                 = useState('');
   const [paginaSolicitudes, setPaginaSolicitudes]             = useState(1);
   const [paginaVinculaciones, setPaginaVinculaciones]         = useState(1);
+  const [tabActiva, setTabActiva]                             = useState<'programas' | 'vinculaciones'>('programas');
+  const [menuAbierto, setMenuAbierto] = useState<{
+    id: string; top: number; right: number;
+    items: Array<{ label: string; icon: React.ReactNode; onClick: () => void; color?: 'amber' | 'orange' | 'red' }>;
+  } | null>(null);
 
   // ── Estado DOCENTE ─────────────────────────────────────────────────────────
   const [notificaciones, setNotificaciones]   = useState<Notificacion[]>([]);
@@ -259,6 +280,16 @@ export default function BandejaAprobacionesPage() {
   function mostrarToast(msg: string, ok = true) {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3500);
+  }
+
+  function abrirMenu(
+    e: React.MouseEvent<HTMLButtonElement>,
+    id: string,
+    items: Array<{ label: string; icon: React.ReactNode; onClick: () => void; color?: 'amber' | 'orange' | 'red' }>,
+  ) {
+    if (menuAbierto?.id === id) { setMenuAbierto(null); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuAbierto({ id, top: rect.bottom + 4, right: window.innerWidth - rect.right, items });
   }
 
   // ── Carga de vinculaciones ─────────────────────────────────────────────────
@@ -300,17 +331,13 @@ export default function BandejaAprobacionesPage() {
 
   useEffect(() => { cargarSolicitudesPrograma(); }, [cargarSolicitudesPrograma]);
 
-  // Resetear a página 1 cuando cambia el filtro de programas
-  useEffect(() => { setPaginaSolicitudes(1); }, [filtroProgramas]);
-  // Clamp: evita página vacía cuando se resuelven solicitudes
+  // Clamp: evita página vacía cuando se resuelven solicitudes desde el servidor
   useEffect(() => {
     const max = Math.max(1, Math.ceil(solicitudesPrograma.length / ITEMS_PAG));
     setPaginaSolicitudes(p => (p > max ? max : p));
   }, [solicitudesPrograma]);
 
-  // Resetear a página 1 cuando cambian filtros de vinculaciones
-  useEffect(() => { setPaginaVinculaciones(1); }, [buscar, estado]);
-  // Clamp vinculaciones
+  // Clamp vinculaciones cuando cambia la lista desde el servidor
   useEffect(() => {
     const max = Math.max(1, Math.ceil(vinculaciones.length / ITEMS_PAG));
     setPaginaVinculaciones(p => (p > max ? max : p));
@@ -445,16 +472,30 @@ export default function BandejaAprobacionesPage() {
 
   const solicitudasFiltradas = solicitudesPrograma
     .filter(s => !filtroProgramas || s.estado === filtroProgramas)
+    .filter(s => {
+      if (!buscarProgramas.trim()) return true;
+      const q = buscarProgramas.toLowerCase();
+      const m = s.programa?.materia;
+      if (!m) return false;
+      return (
+        m.nombre.toLowerCase().includes(q) ||
+        (m.codigo ?? '').toLowerCase().includes(q) ||
+        (m.planEstudio?.carrera?.nombre ?? '').toLowerCase().includes(q) ||
+        (m.planEstudio?.nombre ?? '').toLowerCase().includes(q)
+      );
+    })
     .sort((a, b) => new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime());
 
-  const totalPagsSolicitudes = Math.max(1, Math.ceil(solicitudasFiltradas.length / ITEMS_PAG));
-  const solicitudesPagina    = solicitudasFiltradas.slice(
-    (paginaSolicitudes - 1) * ITEMS_PAG, paginaSolicitudes * ITEMS_PAG
+  const totalPagsSolicitudes  = Math.max(1, Math.ceil(solicitudasFiltradas.length / ITEMS_PAG));
+  const pagSolicitudesActual  = Math.min(paginaSolicitudes, totalPagsSolicitudes);
+  const solicitudesPagina     = solicitudasFiltradas.slice(
+    (pagSolicitudesActual - 1) * ITEMS_PAG, pagSolicitudesActual * ITEMS_PAG
   );
 
-  const totalPagsVinc     = Math.max(1, Math.ceil(filtradas.length / ITEMS_PAG));
-  const vinculacionesPagina = filtradas.slice(
-    (paginaVinculaciones - 1) * ITEMS_PAG, paginaVinculaciones * ITEMS_PAG
+  const totalPagsVinc       = Math.max(1, Math.ceil(filtradas.length / ITEMS_PAG));
+  const pagVincActual        = Math.min(paginaVinculaciones, totalPagsVinc);
+  const vinculacionesPagina  = filtradas.slice(
+    (pagVincActual - 1) * ITEMS_PAG, pagVincActual * ITEMS_PAG
   );
 
   const pendientes     = vinculaciones.filter(v => v.estado === 'PENDIENTE_DE_APROBACION');
@@ -825,25 +866,64 @@ export default function BandejaAprobacionesPage() {
         </p>
       </div>
 
-      {/* ══ SECCIÓN PROGRAMAS (solo aprobadores: SEC, DC, DECANO, RECTORADO) ══ */}
+      {/* ══ PESTAÑAS (solo para roles directivos con ambas secciones) ══ */}
       {esProgramaAprobador && (
+        <div className="flex gap-0 mb-6 border-b border-slate-200 dark:border-slate-700">
+          <button
+            onClick={() => setTabActiva('programas')}
+            className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${tabActiva === 'programas' ? 'border-[#0f4c81] text-[#0f4c81] dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+          >
+            <IcDoc />
+            Programas de Asignatura
+            {solicitudesPrograma.filter(s => s.estado === 'PENDIENTE_APROBACION').length > 0 && (
+              <span className="text-[10px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded-full">
+                {solicitudesPrograma.filter(s => s.estado === 'PENDIENTE_APROBACION').length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setTabActiva('vinculaciones')}
+            className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${tabActiva === 'vinculaciones' ? 'border-[#0f4c81] text-[#0f4c81] dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+          >
+            <IcUsers />
+            Vinculaciones a Cátedra
+            {pendientes.length > 0 && (
+              <span className="text-[10px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded-full">
+                {pendientes.length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* ══ CONTENIDO PROGRAMAS ══ */}
+      {esProgramaAprobador && tabActiva === 'programas' && (
         <section className="mb-8">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <div>
-              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <IcDoc />
-                Programas de Asignatura
-                {solicitudesPrograma.filter(s => s.estado === 'PENDIENTE_APROBACION').length > 0 && (
-                  <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">
-                    {solicitudesPrograma.filter(s => s.estado === 'PENDIENTE_APROBACION').length} pendiente{solicitudesPrograma.filter(s => s.estado === 'PENDIENTE_APROBACION').length !== 1 ? 's' : ''}
-                  </span>
-                )}
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Programas completados al 100% pendientes de aprobación.</p>
+          <div className="mb-4">
+            <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <IcDoc />
+              Programas de Asignatura
+              {solicitudesPrograma.filter(s => s.estado === 'PENDIENTE_APROBACION').length > 0 && (
+                <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                  {solicitudesPrograma.filter(s => s.estado === 'PENDIENTE_APROBACION').length} pendiente{solicitudesPrograma.filter(s => s.estado === 'PENDIENTE_APROBACION').length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Programas completados al 100% pendientes de aprobación.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <div className="relative flex-1 min-w-[200px] max-w-xs">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <input
+                value={buscarProgramas}
+                onChange={e => { setBuscarProgramas(e.target.value); setPaginaSolicitudes(1); }}
+                placeholder="Buscar asignatura o carrera…"
+                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/15 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+              />
             </div>
             <select
               value={filtroProgramas}
-              onChange={e => setFiltroProgramas(e.target.value)}
+              onChange={e => { setFiltroProgramas(e.target.value); setPaginaSolicitudes(1); }}
               className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:border-blue-400 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300"
             >
               <option value="">Todos los estados</option>
@@ -868,9 +948,11 @@ export default function BandejaAprobacionesPage() {
               <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-2">
                 <IcDoc />
                 <p className="text-sm">
-                  {filtroProgramas === 'PENDIENTE_APROBACION'
-                    ? 'No hay programas pendientes de aprobación.'
-                    : 'No hay solicitudes para mostrar.'}
+                  {buscarProgramas.trim()
+                    ? `Sin resultados para "${buscarProgramas}".`
+                    : filtroProgramas === 'PENDIENTE_APROBACION'
+                      ? 'No hay programas pendientes de aprobación.'
+                      : 'No hay solicitudes para mostrar.'}
                 </p>
               </div>
             ) : (
@@ -878,13 +960,13 @@ export default function BandejaAprobacionesPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-[#0f4c81] text-white text-xs font-semibold uppercase tracking-wider">
-                      <th className="text-left px-4 py-3">Tipo</th>
-                      <th className="text-left px-4 py-3">Asignatura</th>
-                      <th className="text-left px-4 py-3">Carrera</th>
-                      <th className="text-left px-4 py-3">Plan</th>
-                      <th className="text-left px-4 py-3">Fecha solicitud</th>
-                      <th className="text-left px-4 py-3">Estado</th>
-                      <th className="text-right px-4 py-3">Acciones</th>
+                      <th className="text-left px-3 py-3">Tipo</th>
+                      <th className="text-left px-3 py-3">Asignatura</th>
+                      <th className="text-left px-3 py-3">Carrera</th>
+                      <th className="text-left px-3 py-3">Plan</th>
+                      <th className="text-left px-3 py-3">Fecha solicitud</th>
+                      <th className="text-left px-3 py-3">Estado</th>
+                      <th className="text-right px-3 py-3">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
@@ -918,55 +1000,52 @@ export default function BandejaAprobacionesPage() {
                               </p>
                             )}
                           </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {/* Ver programa — abre directamente la ficha en modo lectura */}
+                          <td className="px-3 py-3">
+                            <div className="flex items-center justify-end gap-1">
                               <a
                                 href={`/plan-estudios/ficha-asignatura?id=${materia.id}&tab=programa&modo=ver`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                title="Ver programa de asignatura"
-                                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#0f4c81] dark:text-blue-400 border border-[#0f4c81]/30 dark:border-blue-500/30 bg-[#0f4c81]/5 dark:bg-blue-500/10 rounded-lg hover:bg-[#0f4c81]/10 dark:hover:bg-blue-500/20 transition-colors"
+                                title="Ver programa"
+                                className="p-1.5 rounded-lg text-[#0f4c81] dark:text-blue-400 hover:bg-[#0f4c81]/10 dark:hover:bg-blue-500/20 transition-colors"
                               >
-                                <IcDoc /><span className="hidden sm:inline">Ver</span>
+                                <IcDoc />
                               </a>
-                              <button
-                                onClick={() => setHistorialTarget({ materiaId: s.programa.materiaId, materiaNombre: materia.nombre })}
-                                title="Ver historial completo del programa"
-                                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span className="hidden sm:inline">Historial</span>
-                              </button>
                               {esPendiente && (
-                                <>
-                                  <button
-                                    onClick={() => aprobarPrograma(s)}
-                                    disabled={accionandoSolicitudId === s.id}
-                                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 border border-emerald-200 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-50"
-                                  >
-                                    {accionandoSolicitudId === s.id ? <IcSpinner /> : <IcCheck />}
-                                    <span className="hidden sm:inline">Aprobar</span>
-                                  </button>
-                                  <button
-                                    onClick={() => setCorreccionesTarget(s)}
-                                    disabled={accionandoSolicitudId === s.id}
-                                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-amber-700 border border-amber-200 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50"
-                                  >
-                                    <IcX /><span className="hidden sm:inline">Correcciones</span>
-                                  </button>
-                                </>
-                              )}
-                              {s.estado === 'CORRECCIONES_SOLICITADAS' && (
                                 <button
-                                  onClick={() => setConversacionTarget(s)}
-                                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-orange-700 border border-orange-200 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors"
+                                  onClick={() => aprobarPrograma(s)}
+                                  disabled={accionandoSolicitudId === s.id}
+                                  title="Aprobar programa"
+                                  className="p-1.5 rounded-lg text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors disabled:opacity-50"
                                 >
-                                  <IcChat /><span className="hidden sm:inline">Conversación</span>
+                                  {accionandoSolicitudId === s.id ? <IcSpinner /> : <IcCheck />}
                                 </button>
                               )}
+                              <button
+                                onClick={e => abrirMenu(e, s.id, [
+                                  {
+                                    label: 'Ver historial',
+                                    icon: <IcClock />,
+                                    onClick: () => { setHistorialTarget({ materiaId: s.programa.materiaId, materiaNombre: materia.nombre }); setMenuAbierto(null); },
+                                  },
+                                  ...(esPendiente ? [{
+                                    label: 'Solicitar correcciones',
+                                    icon: <IcX />,
+                                    onClick: () => { setCorreccionesTarget(s); setMenuAbierto(null); },
+                                    color: 'amber' as const,
+                                  }] : []),
+                                  ...(s.estado === 'CORRECCIONES_SOLICITADAS' ? [{
+                                    label: 'Ver conversación',
+                                    icon: <IcChat />,
+                                    onClick: () => { setConversacionTarget(s); setMenuAbierto(null); },
+                                    color: 'orange' as const,
+                                  }] : []),
+                                ])}
+                                title="Más acciones"
+                                className={`p-1.5 rounded-lg transition-colors ${menuAbierto?.id === s.id ? 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                              >
+                                <IcDots />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -979,17 +1058,17 @@ export default function BandejaAprobacionesPage() {
             {totalPagsSolicitudes > 1 && (
               <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
                 <span className="text-xs text-slate-400">
-                  Página {paginaSolicitudes} de {totalPagsSolicitudes} · {solicitudasFiltradas.length} registro{solicitudasFiltradas.length !== 1 ? 's' : ''}
+                  Página {pagSolicitudesActual} de {totalPagsSolicitudes} · {solicitudasFiltradas.length} registro{solicitudasFiltradas.length !== 1 ? 's' : ''}
                 </span>
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => setPaginaSolicitudes(p => Math.max(1, p - 1))}
-                    disabled={paginaSolicitudes === 1}
+                    disabled={pagSolicitudesActual === 1}
                     className="px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >← Anterior</button>
                   <button
                     onClick={() => setPaginaSolicitudes(p => Math.min(totalPagsSolicitudes, p + 1))}
-                    disabled={paginaSolicitudes === totalPagsSolicitudes}
+                    disabled={pagSolicitudesActual === totalPagsSolicitudes}
                     className="px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >Siguiente →</button>
                 </div>
@@ -999,7 +1078,8 @@ export default function BandejaAprobacionesPage() {
         </section>
       )}
 
-      {/* ══ SECCIÓN VINCULACIONES ══ */}
+      {/* ══ CONTENIDO VINCULACIONES ══ */}
+      {(!esProgramaAprobador || tabActiva === 'vinculaciones') && (
       <section>
         <div className="mb-4">
           <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">Vinculaciones a Cátedra</h2>
@@ -1013,14 +1093,14 @@ export default function BandejaAprobacionesPage() {
             </svg>
             <input
               value={buscar}
-              onChange={e => setBuscar(e.target.value)}
+              onChange={e => { setBuscar(e.target.value); setPaginaVinculaciones(1); }}
               placeholder="Buscar…"
               className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/15 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
             />
           </div>
           <select
             value={estado}
-            onChange={e => setEstado(e.target.value)}
+            onChange={e => { setEstado(e.target.value); setPaginaVinculaciones(1); }}
             className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:border-blue-400 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300"
           >
             <option value="">Todos los estados</option>
@@ -1049,7 +1129,11 @@ export default function BandejaAprobacionesPage() {
               <svg className="w-10 h-10 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.25}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              <p className="text-sm">No hay vinculaciones para mostrar.</p>
+              <p className="text-sm">
+                {buscar.trim() || estado
+                  ? `Sin resultados para los filtros aplicados.`
+                  : 'No hay vinculaciones para mostrar.'}
+              </p>
             </div>
           ) : (
             <>
@@ -1057,50 +1141,74 @@ export default function BandejaAprobacionesPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-[#0f4c81] text-white text-xs font-semibold uppercase tracking-wider">
-                    <th className="text-left px-4 py-3">Docente</th>
-                    <th className="text-left px-4 py-3">Asignatura</th>
-                    <th className="text-left px-4 py-3">Carrera</th>
-                    <th className="text-left px-4 py-3">Cátedra</th>
-                    <th className="text-left px-4 py-3">Cargo</th>
-                    <th className="text-left px-4 py-3 hidden lg:table-cell">H/SEM · Año</th>
-                    <th className="text-left px-4 py-3">Estado</th>
-                    <th className="text-left px-4 py-3">Fecha solicitud</th>
-                    <th className="text-right px-4 py-3">Acciones</th>
+                    <th className="text-left px-3 py-3">Docente</th>
+                    <th className="text-left px-3 py-3">Asignatura</th>
+                    <th className="text-left px-3 py-3">Carrera</th>
+                    <th className="text-left px-3 py-3">Cátedra</th>
+                    <th className="text-left px-3 py-3">Cargo</th>
+                    <th className="text-left px-3 py-3 hidden lg:table-cell">H/SEM · Año</th>
+                    <th className="text-left px-3 py-3">Estado</th>
+                    <th className="text-left px-3 py-3 hidden xl:table-cell">Fecha solicitud</th>
+                    <th className="text-right px-3 py-3">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
                   {vinculacionesPagina.map(v => (
                     <tr key={v.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors">
-                      <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap">{v.docente.apellido}, {v.docente.nombre}</td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300 max-w-[200px]">
-                        <span className="truncate block">{v.materia.nombre}</span>
+                      <td className="px-3 py-3">
+                        <p className="font-semibold text-slate-700 dark:text-slate-200 text-sm leading-snug"><span className="block max-w-[84px] truncate">{v.docente.apellido}</span></p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 leading-snug"><span className="block max-w-[84px] truncate">{v.docente.nombre}</span></p>
+                      </td>
+                      <td className="px-3 py-3 text-slate-600 dark:text-slate-300">
+                        <span className="truncate block max-w-[148px]">{v.materia.nombre}</span>
                         {v.materia.codigo && <span className="text-[10px] text-slate-400">{v.materia.codigo}</span>}
                       </td>
-                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400 max-w-[160px]">
-                        <span className="truncate block text-xs">{v.carrera.nombre}</span>
-                        <span className="text-[10px] text-slate-400">{v.facultad.nombre}</span>
+                      <td className="px-3 py-3 text-slate-500 dark:text-slate-400">
+                        <span className="truncate block text-xs max-w-[118px]">{v.carrera.nombre}</span>
+                        <span className="text-[10px] text-slate-400 block max-w-[118px] truncate">{v.facultad.nombre}</span>
                       </td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300 text-xs whitespace-nowrap">{v.catedra.nombre}</td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300 text-xs whitespace-nowrap">{v.cargo.nombre}</td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
+                      <td className="px-3 py-3 text-xs text-slate-600 dark:text-slate-300">
+                        <span className="block max-w-[84px] truncate">{v.catedra.nombre}</span>
+                      </td>
+                      <td className="px-3 py-3 text-xs text-slate-600 dark:text-slate-300">
+                        <span className="block max-w-[78px] truncate">{v.cargo.nombre}</span>
+                      </td>
+                      <td className="px-3 py-3 hidden lg:table-cell">
                         <span className="text-slate-700 dark:text-slate-200 font-medium text-xs">{v.horasSemana != null ? `${v.horasSemana} h/sem` : <span className="text-slate-400 italic">—</span>}</span>
                         <span className="block text-[10px] text-slate-400">{v.anioInicio ?? '—'}</span>
                       </td>
-                      <td className="px-4 py-3"><BadgeEstado estado={v.estado} /></td>
-                      <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{formatFecha(v.fechaCreacion)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button onClick={() => setDetalle(v)} title="Ver detalle" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                            <IcEye /><span className="hidden sm:inline">Ver</span>
+                      <td className="px-3 py-3"><BadgeEstado estado={v.estado} /></td>
+                      <td className="px-3 py-3 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap hidden xl:table-cell">{formatFecha(v.fechaCreacion)}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => setDetalle(v)}
+                            title="Ver detalle"
+                            className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                          >
+                            <IcEye />
                           </button>
                           {v.estado === 'PENDIENTE_DE_APROBACION' && (
                             <>
-                              <button onClick={() => aprobar(v)} disabled={accionandoId === v.id} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 border border-emerald-200 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-50">
+                              <button
+                                onClick={() => aprobar(v)}
+                                disabled={accionandoId === v.id}
+                                title="Aprobar vinculación"
+                                className="p-1.5 rounded-lg text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors disabled:opacity-50"
+                              >
                                 {accionandoId === v.id ? <IcSpinner /> : <IcCheck />}
-                                <span className="hidden sm:inline">Aprobar</span>
                               </button>
-                              <button onClick={() => setRechazarTarget(v)} disabled={accionandoId === v.id} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-700 border border-red-200 bg-red-50 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50">
-                                <IcX /><span className="hidden sm:inline">Rechazar</span>
+                              <button
+                                onClick={e => abrirMenu(e, v.id, [{
+                                  label: 'Rechazar',
+                                  icon: <IcX />,
+                                  onClick: () => { setRechazarTarget(v); setMenuAbierto(null); },
+                                  color: 'red' as const,
+                                }])}
+                                title="Más acciones"
+                                className={`p-1.5 rounded-lg transition-colors ${menuAbierto?.id === v.id ? 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                              >
+                                <IcDots />
                               </button>
                             </>
                           )}
@@ -1114,17 +1222,17 @@ export default function BandejaAprobacionesPage() {
             {totalPagsVinc > 1 && (
               <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
                 <span className="text-xs text-slate-400">
-                  Página {paginaVinculaciones} de {totalPagsVinc} · {filtradas.length} registro{filtradas.length !== 1 ? 's' : ''}
+                  Página {pagVincActual} de {totalPagsVinc} · {filtradas.length} registro{filtradas.length !== 1 ? 's' : ''}
                 </span>
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => setPaginaVinculaciones(p => Math.max(1, p - 1))}
-                    disabled={paginaVinculaciones === 1}
+                    disabled={pagVincActual === 1}
                     className="px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >← Anterior</button>
                   <button
                     onClick={() => setPaginaVinculaciones(p => Math.min(totalPagsVinc, p + 1))}
-                    disabled={paginaVinculaciones === totalPagsVinc}
+                    disabled={pagVincActual === totalPagsVinc}
                     className="px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >Siguiente →</button>
                 </div>
@@ -1134,6 +1242,7 @@ export default function BandejaAprobacionesPage() {
           )}
         </div>
       </section>
+      )}
 
       {/* Modales */}
       {detalle && <ModalDetalle vinculacion={detalle} onCerrar={() => setDetalle(null)} />}
@@ -1171,6 +1280,33 @@ export default function BandejaAprobacionesPage() {
           materiaNombre={historialTarget.materiaNombre}
           onCerrar={() => setHistorialTarget(null)}
         />
+      )}
+
+      {/* ── Menú flotante de acciones secundarias ── */}
+      {menuAbierto && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setMenuAbierto(null)} />
+          <div
+            className="fixed z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg py-1 min-w-[168px]"
+            style={{ top: menuAbierto.top, right: menuAbierto.right }}
+          >
+            {menuAbierto.items.map((item, i) => (
+              <button
+                key={i}
+                onClick={item.onClick}
+                className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-left transition-colors ${
+                  item.color === 'amber'  ? 'text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20' :
+                  item.color === 'orange' ? 'text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20' :
+                  item.color === 'red'    ? 'text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20' :
+                  'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                }`}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Toast */}

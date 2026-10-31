@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>UDEMM Global · MOD-AUT Autoevaluaciones</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',system-ui,sans-serif;background:#EFF3F8;color:#1E2F3E;height:100vh;display:flex;flex-direction:column;overflow:hidden;font-size:13px}
+button,input,textarea,select{font-family:inherit;font-size:inherit}
+/* Topbar */
+.topbar{height:52px;background:#0E2438;display:flex;align-items:center;padding:0 18px;gap:14px;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,.07)}
+.logo{width:30px;height:30px;background:#103254;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#3D9BE9;font-size:14px}
+.brand{font-size:14px;font-weight:600;color:#E8EEF4;line-height:1.1}.brand span{color:#3D9BE9}
+.ver{font-size:9px;color:#5C7089;letter-spacing:1px;margin-top:2px}
+.sepv{width:1px;height:24px;background:rgba(255,255,255,.1)}
+.crumb{font-size:12px;color:#6E8398;display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap}
+.crumb a{color:#9DB1C4;cursor:pointer}.crumb a:hover{color:#fff;text-decoration:underline}.crumb b{color:#DCE6F0;font-weight:500}
+.uchip{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);border:.5px solid rgba(255,255,255,.12);border-radius:8px;padding:4px 10px}
+.uav{width:22px;height:22px;background:#1A6BB0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#fff}
+.un{font-size:12px;color:#E0EAF4;font-weight:500}.ur{font-size:10px;color:#5C7089}
+/* Layout */
+.app{display:flex;flex:1;overflow:hidden}
+.nav{width:236px;background:#0A1C2E;border-right:1px solid rgba(255,255,255,.06);padding:12px 10px;flex-shrink:0;overflow-y:auto}
+.nav h6{font-size:9px;color:#3D5268;letter-spacing:1.2px;text-transform:uppercase;padding:14px 10px 6px;font-weight:600}
+.ni{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:#8CA5B9;font-size:13px;cursor:pointer;margin-bottom:2px;user-select:none}
+.ni:hover{background:#0F2A42;color:#cbdae6}.ni.act{background:#16395C;color:#5BB0F0}
+.ni .num{width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.07);color:#8CA5B9;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ni.act .num{background:#1A6BB0;color:#fff}
+.ni .bd{margin-left:auto;background:#E24B4A;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px}
+.navhelp{margin:16px 6px 4px;padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.04);font-size:11px;color:#6E8398;line-height:1.5}
+.main{flex:1;overflow-y:auto}
+.page{padding:22px 26px 48px;max-width:1240px;margin:0 auto}
+.ph{margin-bottom:16px}.ph h1{font-size:21px;font-weight:700;color:#16344F}
+.ph p{font-size:13px;color:#6B7B8C;margin-top:4px;max-width:760px;line-height:1.55}
+/* Comunes */
+.card{background:#fff;border:.5px solid #E1E6EC;border-radius:14px}
+.cp{padding:16px 18px}
+.g{display:grid;gap:14px}
+.h2{font-size:12px;font-weight:600;color:#4A6580;letter-spacing:.5px;text-transform:uppercase;margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+.h2 small{font-weight:400;text-transform:none;letter-spacing:0;color:#8A9BB0;font-size:12px}
+.muted{color:#8A9BB0}.small{font-size:11px}
+.btn{background:#1A6BB0;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-weight:500;cursor:pointer}
+.btn:hover{background:#155A94}.btn.sm{padding:5px 12px;font-size:12px}
+.btn.ghost{background:#fff;color:#4A6580;border:.5px solid #D5DCE4}.btn.ghost:hover{background:#F4F8FC;color:#1A6BB0;border-color:#BDD6EF}
+.back{display:inline-flex;align-items:center;gap:6px;background:none;border:none;color:#1A6BB0;font-weight:500;cursor:pointer;padding:0;margin-bottom:12px}
+.back:hover{text-decoration:underline}
+.note{border-radius:10px;padding:10px 14px;font-size:12px;line-height:1.55;display:flex;gap:8px;margin-bottom:14px}
+.note.info{background:#EBF4FF;border:.5px solid #BDD6EF;color:#1E507A}
+.note.warn{background:#FFF1E0;border:.5px solid #F0C98C;color:#7A4E0D}
+.tag{font-size:10px;font-weight:500;background:#EEF2F6;color:#4A6580;padding:2px 8px;border-radius:10px;margin-left:6px;white-space:nowrap}
+/* Semáforo (siempre color + texto) */
+.sem{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;white-space:nowrap}
+.sem i{width:8px;height:8px;border-radius:50%;display:inline-block;background:currentColor}
+.sem.r{background:#FDE8E8;color:#B93635}.sem.a{background:#FFF1E0;color:#8A5A0B}.sem.v{background:#e9f4e9;color:#1E7A56}.sem.i{background:#EBF4FF;color:#1A6BB0}
+.pill{font-size:11px;font-weight:500;padding:2px 9px;border-radius:20px;display:inline-block;white-space:nowrap}
+.pill.r{background:#FDE8E8;color:#B93635}.pill.a{background:#FFF1E0;color:#8A5A0B}.pill.v{background:#e9f4e9;color:#1E7A56}.pill.g{background:#EEF2F6;color:#4A6580}
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{background:#fff;border:.5px solid #E1E6EC;border-radius:14px;padding:14px 16px}
+.kpi .l{font-size:12px;color:#6B7B8C}.kpi>.v{font-size:26px;font-weight:600;color:#16344F;margin-top:4px;line-height:1.1}
+.kpi>.v small{font-size:12px;font-weight:400;color:#8A9BB0;margin-left:4px}.kpi .s{font-size:11px;color:#8A9BB0;margin-top:4px;line-height:1.4}
+.trio{display:flex;gap:18px;margin-top:6px}.trio div b{display:block;font-size:22px;font-weight:600;color:#16344F}.trio div span{font-size:11px;color:#8A9BB0}
+/* Tiles resumen */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.tile{background:#fff;border:.5px solid #E1E6EC;border-radius:14px;padding:16px 18px;cursor:pointer;transition:.15s;display:flex;flex-direction:column;gap:8px;border-top:4px solid #C0CEDD}
+.tile:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.08)}
+.tile.r{border-top-color:#E24B4A}.tile.a{border-top-color:#EF9F27}.tile.v{border-top-color:#1E9E73}
+.tile .sem{align-self:flex-start}
+.tile .tt{font-size:11px;color:#8A9BB0;text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.tile .tn{font-size:15px;font-weight:600;color:#16344F;line-height:1.3}
+.tile .ts{font-size:12px;color:#6B7B8C;line-height:1.5}
+.tile .tl{font-size:12px;color:#1A6BB0;font-weight:500;margin-top:auto;padding-top:6px}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.step{display:flex;gap:10px;font-size:12px;color:#4A6580;line-height:1.45}
+.step b{width:22px;height:22px;border-radius:50%;background:#1A6BB0;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.step strong{color:#16344F;display:block}
+/* Alertas */
+.al{display:flex;gap:12px;align-items:flex-start;background:#fff;border:.5px solid #E1E6EC;border-left:4px solid #C0CEDD;border-radius:12px;padding:12px 14px;margin-bottom:8px}
+.al.alta{border-left-color:#E24B4A}.al.media{border-left-color:#EF9F27}.al.info{border-left-color:#3D9BE9}
+.al .ai{width:22px;height:22px;border-radius:50%;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;color:#fff}
+.al.alta .ai{background:#E24B4A}.al.media .ai{background:#EF9F27}.al.info .ai{background:#3D9BE9}
+.al .ab{flex:1;min-width:0}.al .at{font-size:13px;font-weight:600;color:#16344F}
+.al .ad{font-size:12px;color:#4A6580;margin-top:3px;line-height:1.5}.al .ae{font-size:11px;color:#8A9BB0;margin-top:4px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.chip{background:#fff;border:.5px solid #D5DCE4;border-radius:20px;padding:6px 14px;font-size:12px;color:#4A6580;cursor:pointer;user-select:none}
+.chip:hover{border-color:#1A6BB0;color:#1A6BB0}.chip.on{background:#1A6BB0;border-color:#1A6BB0;color:#fff}
+.chip b{font-weight:700;margin-left:4px}
+/* Tablas */
+.tbl{background:#fff;border:.5px solid #E1E6EC;border-radius:14px;overflow:hidden}
+.th,.tr{display:grid;gap:10px;padding:10px 16px;align-items:center;font-size:12.5px}
+.th{background:#EEF2F6;font-size:11px;font-weight:600;color:#6B7B8C}
+.tr{border-top:.5px solid #EEF2F6;color:#2C3E50}.tr.click{cursor:pointer}.tr.click:hover{background:#F6FAFE}
+.obs{font-size:11px;color:#8A5A0B;margin-top:3px;line-height:1.45}
+.lnk{color:#1A6BB0;cursor:pointer;font-weight:500}.lnk:hover{text-decoration:underline}
+/* Barras */
+.bar{height:8px;background:#EEF2F6;border-radius:5px;overflow:hidden}.bar i{display:block;height:100%;border-radius:5px}
+.bl{display:grid;grid-template-columns:140px 1fr 44px;gap:10px;align-items:center;margin-bottom:9px;font-size:12px;color:#4A6580}
+.bl b{text-align:right;color:#16344F}
+.hb{display:grid;grid-template-columns:190px 1fr 230px;gap:12px;align-items:center;margin-bottom:14px;font-size:12px}
+.hbt{position:relative;height:14px;background:#EEF2F6;border-radius:7px}
+.hbt i{position:absolute;left:0;top:0;bottom:0;border-radius:7px}
+.hbt u{position:absolute;top:-4px;bottom:-4px;width:2px;background:#16344F;text-decoration:none}
+/* Tarjetas de carrera */
+.cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.ccard{background:#fff;border:.5px solid #E1E6EC;border-radius:14px;padding:18px;cursor:pointer;border-top:4px solid #C0CEDD;transition:.15s;display:flex;flex-direction:column;gap:12px}
+.ccard:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.08)}
+.ccard.r{border-top-color:#E24B4A}.ccard.a{border-top-color:#EF9F27}.ccard.v{border-top-color:#1E9E73}
+.ccard h3{font-size:16px;color:#16344F}.ccard .pl{font-size:12px;color:#8A9BB0;margin-top:2px}
+.mini{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mini div{background:#F6F9FC;border-radius:10px;padding:9px 11px}.mini span{display:block;font-size:11px;color:#8A9BB0}.mini b{font-size:15px;color:#16344F}
+.mini b.bad{color:#B93635}.mini b.ok{color:#1E7A56}
+/* Modal */
+.mbg{position:fixed;inset:0;background:rgba(10,28,46,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.mdl{background:#fff;border-radius:16px;width:760px;max-width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.mh{padding:16px 22px;border-bottom:.5px solid #EEF2F6;display:flex;align-items:center;gap:12px;position:sticky;top:0;background:#fff;z-index:1}
+.mh h3{font-size:16px;color:#16344F}.mh .x{margin-left:auto;background:none;border:none;font-size:20px;cursor:pointer;color:#8A9BB0;line-height:1}
+.mb{padding:18px 22px 22px}
+.kv{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.kv span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#8A9BB0}.kv b{font-size:13px;color:#16344F}
+.stack{display:flex;height:14px;border-radius:7px;overflow:hidden;background:#EEF2F6;margin:6px 0}
+.stack i{display:block;height:100%}
+.leg{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#6B7B8C}.leg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+.ck{display:flex;gap:16px;flex-wrap:wrap;font-size:12px}.ck .y{color:#1E7A56}.ck .n{color:#B93635;font-weight:600}
+/* Formulario */
+.dtabs{display:flex;gap:6px;border-bottom:1px solid #E1E6EC;margin-bottom:16px}
+.dtab{padding:10px 18px;font-size:13px;font-weight:500;color:#6B7B8C;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.dtab.on{color:#1A6BB0;border-bottom-color:#1A6BB0}.dtab:hover{color:#1A6BB0}
+.crit{margin-bottom:14px;overflow:hidden}
+.crit>.hd{padding:13px 18px;background:#F9FBFD;border-bottom:.5px solid #EEF2F6;display:flex;gap:12px;align-items:center}
+.crit .id{background:#16395C;color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:8px}
+.crit .q{font-size:12px;color:#6B7B8C;margin-top:2px}
+.crit .bd{padding:16px 18px;display:grid;grid-template-columns:270px 1fr;gap:20px}
+.dato{background:#F6F9FC;border-radius:10px;padding:12px 14px;align-self:start}
+.dato .dl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#8A9BB0;font-weight:600}
+.dato .dv{font-size:14px;font-weight:600;color:#16344F;margin:6px 0;line-height:1.35}
+.dato .dn{font-size:11px;color:#6B7B8C;margin-top:6px;line-height:1.45}
+.lvl{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.lvl label{display:flex;align-items:center;gap:6px;border:.5px solid #D5DCE4;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;color:#4A6580}
+.lvl label:has(input:checked){border-color:#1A6BB0;background:#EBF4FF;color:#1A6BB0;font-weight:600}
+.fl{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#8A9BB0;display:block;margin:10px 0 4px}
+textarea,input[type=text]{width:100%;border:.5px solid #D5DCE4;border-radius:8px;padding:8px 10px;color:#1E2F3E;background:#fff;outline:none}
+textarea{min-height:64px;resize:vertical;line-height:1.5}textarea:focus,input[type=text]:focus{border-color:#1A6BB0}
+.pg{height:8px;background:#EEF2F6;border-radius:5px;overflow:hidden;margin-top:6px}.pg i{display:block;height:100%;background:#1E9E73}
+/* Umbrales */
+details.umb{margin-top:10px}details.umb summary{cursor:pointer;font-weight:600;color:#1A6BB0;padding:10px 0}
+.ug{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px}
+.ug label{font-size:11px;color:#6B7B8C;display:block;margin-bottom:3px}
+.ug input{width:100%;border:.5px solid #D5DCE4;border-radius:8px;padding:6px 9px}
+.ug .rg{display:flex;gap:6px}
+/* Indicadores de completitud y consistencia */
+.ind{display:grid;grid-template-columns:88px 1fr 38px;gap:8px;align-items:center;font-size:11.5px;color:#4A6580;margin-top:5px}
+.ind b{text-align:right;font-size:12px}.ind b.v{color:#1E7A56}.ind b.a{color:#8A5A0B}.ind b.r{color:#B93635}
+.kpis.k3{grid-template-columns:repeat(3,1fr)}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+/* Bienvenida y tableros */
+.wcards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.wc{background:#fff;border:.5px solid #E1E6EC;border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:14px}
+.wc .wi{width:44px;height:44px;border-radius:12px;background:#EBF4FF;color:#1A6BB0;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+.wc h3{font-size:16px;color:#16344F}.wc .wd{font-size:12px;color:#6B7B8C;line-height:1.5;margin-top:2px}
+.rchips{display:flex;gap:6px;flex-wrap:wrap}
+.rchip{font-size:10.5px;font-weight:600;font-family:ui-monospace,monospace;background:#EEF2F6;color:#4A6580;border-radius:6px;padding:2px 7px;cursor:help}
+.wsel{display:grid;gap:10px;min-height:58px}
+.wsel label,.csel label{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#8A9BB0;display:block;margin-bottom:4px}
+.wsel select,.csel select{width:100%;border:.5px solid #D5DCE4;border-radius:8px;padding:7px 10px;background:#fff;color:#1E2F3E}
+.wfix{font-size:12px;color:#4A6580;background:#F6F9FC;border-radius:8px;padding:9px 11px}
+.wrun{font-size:12px;color:#6B7B8C;background:#F6F9FC;border-radius:10px;padding:10px 12px;line-height:1.5;min-height:58px}.wrun b{color:#16344F}
+.wact{display:flex;gap:8px;flex-wrap:wrap}.wact .btn{flex:1;white-space:nowrap;text-align:center}
+.wact.top{margin-top:auto}
+.runbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:.5px solid #E1E6EC;border-radius:12px;padding:10px 14px;margin-bottom:16px}
+.runbar .rt{flex:1;min-width:220px;font-size:12px;color:#6B7B8C;line-height:1.5}.runbar .rt b{color:#16344F}
+.csel{min-width:240px}
+/* Informe imprimible (solo visible al generar el PDF) */
+#rep{display:none}
+@page{size:A4;margin:16mm 14mm 18mm;@bottom-right{content:"Página " counter(page) " de " counter(pages);font:9px Inter,sans-serif;color:#8A9BB0}}
+@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ body.printing{height:auto;overflow:visible;background:#fff;display:block;font-size:11px}
+ body.printing .topbar,body.printing .app{display:none!important}
+ body.printing #rep{display:block}
+ .rh{display:flex;justify-content:space-between;gap:16px;border-bottom:2px solid #16344F;padding-bottom:10px}
+ .rbr{font-size:10px;font-weight:600;color:#16344F;letter-spacing:.5px}.rbr span{color:#1A6BB0}
+ .rty{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#8A9BB0;margin-top:8px}
+ .rh h1{font-size:20px;color:#16344F;margin:2px 0}.rst{text-align:right}.rdt{font-size:10px;color:#6B7B8C;margin-top:6px}
+ .rind{max-width:330px;margin:10px 0 4px}
+ #rep h2{font-size:12px;color:#16344F;text-transform:uppercase;letter-spacing:.5px;margin:18px 0 8px;padding-bottom:4px;border-bottom:.5px solid #D5DCE4;break-after:avoid}
+ .rkv{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 14px;margin-bottom:8px}
+ .rkv span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:#8A9BB0}.rkv b{font-size:11px;color:#16344F}
+ .rck{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 4px}.rck .y{color:#1E7A56}.rck .n{color:#B93635;font-weight:600}
+ table.rt{width:100%;border-collapse:collapse;margin:6px 0 4px;font-size:10.5px}
+ .rt th{background:#EEF2F6;color:#4A6580;text-align:left;font-weight:600;padding:5px 7px;font-size:9.5px}
+ .rt td{padding:5px 7px;border-bottom:.5px solid #E1E6EC;vertical-align:top;color:#2C3E50;line-height:1.4}
+ .rt tr{break-inside:avoid}
+ .rft{margin-top:22px;padding-top:6px;border-top:.5px solid #D5DCE4;font-size:9px;color:#8A9BB0}}
+@media(max-width:1000px){.wcards{grid-template-columns:1fr}.kpis.k3,.kpis,.tiles,.steps{grid-template-columns:repeat(2,1fr)}.cards3{grid-template-columns:1fr}.crit .bd{grid-template-columns:1fr}.kv{grid-template-columns:repeat(2,1fr)}.ug{grid-template-columns:1fr}}
+@media(max-width:760px){.app{flex-direction:column}.nav{width:100%;display:flex;overflow-x:auto;padding:6px;gap:4px}.nav h6,.navhelp{display:none}.ni{white-space:nowrap}.kpis,.tiles,.steps{grid-template-columns:1fr}.page{padding:16px 14px 40px}.uchip{display:none}.th{display:none}.tr{grid-template-columns:1fr!important}.hb{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="logo"><i class="fas fa-chart-pie"></i></div>
+  <div><div class="brand">UDEMM <span>GLOBAL</span></div><div class="ver">MOD-AUT · AUTOEVALUACIONES</div></div>
+  <div class="sepv"></div>
+  <div class="crumb" id="crumb"></div>
+  <div class="uchip"><div class="uav">SA</div><div><div class="un">Sec. Académica</div><div class="ur">Administrador</div></div></div>
+</header>
+<div id="rep"></div>
+<div class="app">
+  <nav class="nav" id="nav"></nav>
+  <main class="main" id="main"></main>
+</div>
+<script>
+'use strict';
+/* ==========================================================================
+   MOD-AUT · Autoevaluaciones (módulo aislado)
+   Los datos de abajo son SIMULADOS. En la plataforma se reemplazan por lo que
+   entreguen MOD-DOC (docentes) y MOD-PDE (planes de estudio).
+   ========================================================================== */
+
+/* ---------- Umbrales de la Facultad (comunes a todos los docentes) ---------- */
+const CFG={
+  tope:60,          // docencia + gestión + desempeño no académico > este valor => supera el tope (instructivo CONEAU Global)
+  bajaCarga:20,     // dedicación total < este valor => baja carga (informativo)
+  maxMaterias:3     // más materias vigentes que esto => sobre-asignado
+};
+/* ---------- Umbrales del plan de estudios (propios de cada plan; se cargan en MOD-ADM › Umbrales › carrera › plan) ----------
+   minTotal = horas mínimas totales · minBloque = horas mínimas por tipo de bloque · minFP = horas mínimas de formación práctica */
+const UMB=(minTotal,cb,tb,ta,ctc,minFP)=>({minTotal,minBloque:{CB:cb,TB:tb,TA:ta,CTC:ctc},minFP});
+const BQ={CB:'Ciencias Básicas',TB:'Tecnologías Básicas',TA:'Tecnologías Aplicadas',CTC:'Cs. y Tecnologías Complementarias'};
+/* Completitud de la ficha (MOD-DOC v8.1): 4 ítems exigibles a cualquier docente */
+const FICHA={personales:'Datos personales (campos obligatorios)',formacionGrado:'Formación: título de grado',areaDesempeno:'Área de desempeño',docencia:'Docencia: cargo vigente con vinculación aprobada'};
+/* Secciones 5 a 10: no restan completitud, se informan como "con datos" / "sin datos" */
+const SECOPC={5:'Gestión académica',6:'Desempeño no académico',7:'Investigación',8:'Reuniones científicas',9:'Comités y jurados',10:'Otra información'};
+
+/* ---------- Docentes (simulado MOD-DOC) ---------- */
+const A_=(car,mat,resp,cat)=>({car,mat,resp:!!resp,cat:cat||'Única'});
+const F_=(p,g,a,d)=>({personales:p,formacionGrado:g,areaDesempeno:a,docencia:d});
+const DOC=[
+ {id:1,nombre:'Pérez, Ana',cat:'Exclusiva',dec:40,posgrado:'Doctorado',invest:true,
+  cargos:[{cargo:'Prof. Adjunto',desig:'Regular',hs:10,asig:[A_('ind','Organización Industrial',1,'Cátedra 1')]},
+          {cargo:'Prof. Adjunto',desig:'Regular',hs:8,asig:[A_('ind','Trabajo Colaborativo I',1)]}],
+  gestion:[{fn:'Secretaria de Investigación',hs:20}],tiempos:{doc:12,inv:6,ext:2,ges:20},ficha:F_(1,1,1,1)},
+ {id:2,nombre:'García, Juan',cat:'Semiexclusiva',dec:24,posgrado:'Maestría',invest:true,
+  cargos:[{cargo:'Prof. Adjunto',desig:'Interino',hs:8,asig:[A_('ind','Investigación Operativa',1)]},
+          {cargo:'Prof. Titular',desig:'Interino',hs:8,asig:[]}],
+  gestion:[],tiempos:{doc:12,inv:5,ext:2,ges:0},ficha:F_(1,0,1,1)},
+ {id:3,nombre:'López, María',cat:'Exclusiva',dec:40,posgrado:'Doctorado',invest:true,
+  cargos:[{cargo:'Prof. Titular',desig:'Regular',hs:8,asig:[A_('ind','Gestión de Operaciones',1,'Cátedra 1')]}],
+  gestion:[{fn:'Directora de Carrera',hs:20}],tiempos:{doc:8,inv:8,ext:4,ges:20},ficha:F_(1,1,1,1)},
+ {id:4,nombre:'Fernández, Lucía',cat:'Exclusiva',dec:45,posgrado:'Maestría',invest:false,
+  cargos:[{cargo:'Prof. Titular',desig:'Regular',hs:8,asig:[A_('ind','Gestión de Operaciones',1,'Cátedra 1')]}],
+  gestion:[{fn:'Secretaria Académica',hs:40}],noac:15,tiempos:{doc:5,inv:0,ext:0,ges:40},ficha:F_(1,1,1,1)},
+ {id:5,nombre:'Rodríguez, Pablo',cat:'Semiexclusiva',dec:20,posgrado:null,invest:false,
+  cargos:[{cargo:'JTP',desig:'Interino',hs:8,asig:[A_('ind','Higiene y Seguridad Industrial',1)]},
+          {cargo:'JTP',desig:'Interino',hs:6,vigente:false,asig:[A_('ind','Procesos Industriales I',1)]}],
+  gestion:[],tiempos:{doc:8,inv:0,ext:0,ges:0},ficha:F_(1,1,0,1)},
+ {id:6,nombre:'Torres, Valeria',cat:'Semiexclusiva',dec:24,posgrado:'Doctorado',invest:true,
+  cargos:[{cargo:'Prof. Asociado',desig:'Regular',hs:6,asig:[A_('ind','Análisis Matemático II',1)]},
+          {cargo:'Prof. Asociado',desig:'Regular',hs:6,asig:[A_('ind','Física II',1)]},
+          {cargo:'Prof. Asociado',desig:'Regular',hs:6,asig:[A_('ind','Química I',1)]},
+          {cargo:'Prof. Asociado',desig:'Regular',hs:6,asig:[A_('ind','Probabilidad y Estadística',1)]}],
+  gestion:[],tiempos:{doc:17,inv:4,ext:3,ges:0},ficha:F_(1,1,1,1)},
+ {id:7,nombre:'Sosa, Martín',cat:'Simple',dec:18,posgrado:null,invest:false,
+  cargos:[{cargo:'Prof. Adjunto',desig:'Interino',hs:4,asig:[A_('ind','Análisis Matemático I',1)]},
+          {cargo:'JTP',desig:'Interino',hs:4,asig:[A_('ind','Álgebra y Geometría Analítica',0)]}],
+  gestion:[{fn:'Coordinador de Ingreso',hs:10}],tiempos:{doc:8,inv:0,ext:0,ges:10},ficha:F_(0,1,1,1)},
+ {id:8,nombre:'Álvarez, Carla',cat:'Simple',dec:10,posgrado:'Especialización',invest:false,
+  cargos:[{cargo:'Prof. Adjunto',desig:'Interino',hs:6,asig:[A_('ind','Física I',1)]},
+          {cargo:'Prof. Adjunto',desig:'Interino',hs:4,asig:[A_('ind','Química II',1)]}],
+  gestion:[],tiempos:{doc:10,inv:0,ext:0,ges:0},ficha:F_(1,1,1,1)},
+ {id:9,nombre:'Medina, Nicolás',cat:'Semiexclusiva',dec:24,posgrado:'Maestría',invest:true,
+  cargos:[{cargo:'Prof. Titular',desig:'Regular',hs:5,asig:[A_('mec','Termodinámica',1)]},
+          {cargo:'Prof. Titular',desig:'Regular',hs:5,asig:[A_('mec','Mecánica de los Fluidos',1)]},
+          {cargo:'Prof. Titular',desig:'Regular',hs:4,asig:[A_('mec','Máquinas Térmicas',1)]}],
+  gestion:[{fn:'Secretario Técnico',hs:10}],tiempos:{doc:14,inv:0,ext:0,ges:10},ficha:F_(1,1,1,1)},
+ {id:10,nombre:'Ibáñez, Roberto',cat:'Parcial',dec:4,posgrado:null,invest:false,
+  cargos:[{cargo:'Ayudante Graduado',desig:'Interino',hs:4,asig:[A_('ind','Álgebra y Geometría Analítica',0)]}],
+  gestion:[],tiempos:{doc:4,inv:0,ext:0,ges:0},ficha:F_(1,1,1,0)},
+ {id:11,nombre:'Castro, Laura',cat:'Exclusiva',dec:40,posgrado:'Doctorado',invest:true,
+  cargos:[{cargo:'Prof. Asociado',desig:'Regular',hs:10,asig:[A_('inf','Programación I',1)]},
+          {cargo:'Prof. Asociado',desig:'Regular',hs:10,asig:[A_('inf','Algoritmos y Estructuras de Datos',1)]},
+          {cargo:'Prof. Asociado',desig:'Regular',hs:8,asig:[A_('inf','Bases de Datos',1)]}],
+  gestion:[{fn:'Coordinadora de Carrera',hs:12}],tiempos:{doc:22,inv:6,ext:0,ges:12},ficha:F_(1,1,1,1)},
+ {id:12,nombre:'Bianchi, Diego',cat:'Semiexclusiva',dec:20,posgrado:'Maestría',invest:false,
+  cargos:[{cargo:'Prof. Adjunto',desig:'Regular',hs:10,asig:[A_('inf','Sistemas Operativos',1)]},
+          {cargo:'Prof. Adjunto',desig:'Regular',hs:10,asig:[A_('inf','Redes de Datos',1)]}],
+  gestion:[],tiempos:{doc:20,inv:0,ext:0,ges:0},ficha:F_(1,1,1,1)},
+ {id:13,nombre:'Molina, Sergio',cat:'Exclusiva',dec:40,posgrado:'Doctorado',invest:true,
+  cargos:[{cargo:'Prof. Titular',desig:'Regular',hs:12,asig:[A_('mec','Elementos de Máquinas',1)]},
+          {cargo:'Prof. Titular',desig:'Regular',hs:12,asig:[A_('mec','Mecánica Racional',1)]}],
+  gestion:[{fn:'Director de Departamento',hs:16}],tiempos:{doc:20,inv:4,ext:0,ges:16},ficha:F_(1,1,1,1)},
+ {id:14,nombre:'Herrera, Julián',cat:'Simple',dec:12,posgrado:null,invest:false,
+  cargos:[{cargo:'JTP',desig:'Interino',hs:4,asig:[A_('inf','Análisis Matemático I',1)]},
+          {cargo:'JTP',desig:'Interino',hs:4,asig:[A_('inf','Álgebra y Geometría Analítica',1)]},
+          {cargo:'JTP',desig:'Interino',hs:4,asig:[A_('inf','Inglés Técnico',1)]}],
+  gestion:[],tiempos:{doc:12,inv:0,ext:0,ges:0},ficha:F_(1,1,1,1)}
+];
+
+/* ---------- Planes de estudio (simulado MOD-PDE) ----------
+   bloques = horas cargadas en el plan por tipo de bloque; total = horas totales del plan.
+   asig: m=nombre, b=bloque, a=año, av=% de avance del programa, pr=observaciones del programa,
+         hp=horas de formación práctica (campo 7; 0 = marca «Sin formación práctica»; null = sin cargar), ht=horas totales.
+   pps / pi = horas totales de la PPS y del Proyecto Integrador; el = electivas [nombre, hp] (el alumno cursa una sola). */
+const S_=(m,b,a,av,pr,hp,ht)=>({m,b,a,av,pr:pr||[],hp,ht});
+const PLANES=[
+ {id:'ind',carrera:'Ingeniería Industrial',plan:'2025',umb:UMB(3600,710,545,545,365,750),total:3800,bloques:{CB:850,TB:600,TA:640,CTC:390},
+  pps:200,pi:120,el:[['Robótica',32],['Domótica',16]],asig:[
+   S_('Análisis Matemático I','CB',1,100,[],30,96),
+   S_('Álgebra y Geometría Analítica','CB',1,90,['Falta completar: Bibliografía de consulta'],24,96),
+   S_('Física I','CB',1,100,[],48,96),S_('Química I','CB',1,100,[],40,80),
+   S_('Análisis Matemático II','CB',2,100,[],30,96),S_('Física II','CB',2,100,[],48,96),
+   S_('Probabilidad y Estadística','CB',2,100,[],32,64),S_('Química II','CB',2,100,[],40,64),
+   S_('Procesos Industriales I','TB',3,45,['Unidad didáctica "Unidad 3" repetida dos veces','Falta completar: Evaluación'],60,80),
+   S_('Organización Industrial','TA',3,88,['Falta completar: Bibliografía de consulta'],40,64),
+   S_('Investigación Operativa','TA',4,62,['Falta completar: Bibliografía obligatoria','Falta completar: Requisitos de aprobación'],48,80),
+   S_('Gestión de Operaciones','TA',4,100,[],40,64),
+   S_('Higiene y Seguridad Industrial','TA',4,70,['Resultados de aprendizaje repetidos en la competencia "Gestión y certificación"'],32,64),
+   S_('Trabajo Colaborativo I','CTC',1,100,[],24,48)]},
+ {id:'mec',carrera:'Ingeniería Mecánica',plan:'2024',umb:UMB(3600,710,545,545,365,750),total:3560,bloques:{CB:720,TB:520,TA:700,CTC:380},
+  pps:200,pi:100,el:[['Robótica',24],['Energías Renovables',20]],asig:[
+   S_('Análisis Matemático I','CB',1,100,[],30,96),
+   S_('Mecánica Racional','TB',2,100,[],40,80),
+   S_('Termodinámica','TB',3,100,[],32,80),S_('Mecánica de los Fluidos','TB',3,100,[],40,72),
+   S_('Resistencia de Materiales','TB',3,15,['Programa sin iniciar — faltan la mayoría de los campos obligatorios'],null,80),
+   S_('Elementos de Máquinas','TA',4,100,[],60,48),S_('Máquinas Térmicas','TA',5,100,[],40,64)]},
+ {id:'inf',carrera:'Ingeniería en Informática',plan:'2023',umb:UMB(3600,710,545,545,365,750),total:3660,bloques:{CB:740,TB:580,TA:600,CTC:380},
+  pps:200,pi:0,el:[['Inteligencia Artificial',32],['Seguridad Informática',24]],asig:[
+   S_('Análisis Matemático I','CB',1,100,[],30,96),S_('Álgebra y Geometría Analítica','CB',1,100,[],24,96),
+   S_('Programación I','TB',1,100,[],48,96),S_('Algoritmos y Estructuras de Datos','TB',2,100,[],48,96),
+   S_('Bases de Datos','TA',3,100,[],40,80),
+   S_('Sistemas Operativos','TA',3,78,['Ítem repetido en Bibliografía: "Tanenbaum"'],40,80),
+   S_('Redes de Datos','TA',4,100,[],40,80),S_('Inglés Técnico','CTC',2,100,[],0,48)]}
+];
+
+/* ---------- Cálculos base ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>(Math.round(n*10)/10).toString().replace('.',',');
+const pct=(a,b)=>b?Math.round(a/b*100):0;
+const mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+const median=a=>{if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2};
+const vig=d=>d.cargos.filter(c=>c.vigente!==false);
+const hsDoc=d=>vig(d).reduce((s,c)=>s+c.hs,0);
+const hsGes=d=>d.gestion.reduce((s,g)=>s+g.hs,0);
+const carga=d=>hsDoc(d)+hsGes(d);
+const asigs=d=>{const m=new Map();vig(d).forEach(c=>c.asig.forEach(a=>m.set(a.car+'|'+a.mat+'|'+a.cat,a)));return [...m.values()]};
+const nMat=d=>asigs(d).length;
+/* Dedicación calculada (MOD-DOC v8.1 no la declara): docencia de las vinculaciones + gestión + investigación + vinculación.
+   En el simulado: tiempos.inv = horas de investigación, tiempos.ext = horas de vinculación, noac = desempeño no académico. */
+const fun=d=>({doc:hsDoc(d),ges:hsGes(d),inv:d.tiempos.inv,vin:d.tiempos.ext,noac:d.noac||0});
+const dedTot=d=>{const f=fun(d);return f.doc+f.ges+f.inv+f.vin};
+const tope60=d=>{const f=fun(d);return f.doc+f.ges+f.noac};
+const rangoDed=d=>{const h=dedTot(d);return h>=40?'≥ 40 h':h>=30?'30–39 h':h>=20?'20–29 h':'< 20 h'};
+const RANGOS=['≥ 40 h','30–39 h','20–29 h','< 20 h'];
+const RCOL=['#16395C','#1A6BB0','#6FA8DC','#C9DDF0'];
+const fichaOk=(d,k)=>k==='docencia'?vig(d).some(c=>c.asig.length):!!d.ficha[k];
+const fichaFalta=d=>Object.keys(FICHA).filter(k=>!fichaOk(d,k));
+const secDatos=d=>({5:d.gestion.length>0,6:(d.noac||0)>0,7:d.invest,8:d.invest,9:d.posgrado==='Doctorado',10:!!d.posgrado}); // simulado
+const planOf=id=>PLANES.find(p=>p.id===id);
+const docOf=id=>DOC.find(d=>d.id===id);
+/* Docentes de una carrera: al menos una asignación vigente a una materia de esa carrera */
+const docsCar=id=>DOC.filter(d=>vig(d).some(c=>c.asig.some(a=>a.car===id)));
+const matsCar=(d,id)=>asigs(d).filter(a=>a.car===id).length;
+function responsables(car,mat){
+  const r=[];
+  DOC.forEach(d=>vig(d).forEach(c=>c.asig.forEach(a=>{if(a.car===car&&a.mat===mat&&a.resp)r.push({d,cat:a.cat})})));
+  return r;
+}
+/* Formación práctica del plan (R-13 · IPL-08): obligatorias + PPS + Proyecto Integrador + la electiva de menor hp.
+   est: ok = cumple · bajo = por debajo del mínimo · nv = no verificable (asignaturas sin campo 7) */
+function fpPlan(p){
+  const falt=[...p.asig.filter(a=>a.hp==null).map(a=>a.m),...p.el.filter(e=>e[1]==null).map(e=>e[0])];
+  const el=p.el.length?Math.min(...p.el.map(e=>e[1]||0)):0;
+  const h=p.asig.reduce((s,a)=>s+(a.hp||0),0)+p.pps+p.pi+el;
+  return {h,falt,est:falt.length?'nv':h>=p.umb.minFP?'ok':'bajo'};
+}
+const fpTxt=f=>f.est==='ok'?'Cumple el mínimo':f.est==='bajo'?'Por debajo del mínimo':`No verificable (${f.falt.length} asignatura${f.falt.length>1?'s':''} sin datos: ${f.falt.join(', ')})`;
+
+/* ---------- Motor de reglas (las reglas 1 y 5 se eliminaron: MOD-DOC v8.1 no declara dedicación ni categoría) ---------- */
+const REGLAS=[
+ {r:2,t:'Una asignatura no puede tener dos responsables de cátedra activos al mismo tiempo.',sev:'Alta',tipo:'Alerta',amb:'Cruzada DOC↔PDE'},
+ {r:3,t:'Docencia + gestión + desempeño no académico superan el tope semanal de 60 h (instructivo CONEAU Global).',sev:'Alta',tipo:'Alerta',amb:'Docentes'},
+ {r:4,t:'Cargo docente vigente sin ninguna asignación a cátedra: "cargo sin actividad curricular".',sev:'Alta',tipo:'Alerta',amb:'Cruzada DOC↔PDE'},
+ {r:6,t:'Materias por docente de la Facultad: mediana, promedio y máximo sobre todos los docentes vigentes.',sev:'—',tipo:'Indicador',amb:'Docentes'},
+ {r:7,t:'Listado de docentes sobre-asignados (más materias vigentes que el máximo definido).',sev:'Media',tipo:'Alerta',amb:'Docentes'},
+ {r:8,t:'Listado de materias sin responsable de cátedra.',sev:'Alta',tipo:'Alerta',amb:'Cruzada DOC↔PDE'},
+ {r:9,t:'El plan de estudios debe superar las horas mínimas totales y las de cada tipo de bloque.',sev:'Alta',tipo:'Alerta',amb:'Planes'},
+ {r:10,t:'Docentes con dedicación total menor a 20 h semanales.',sev:'Informativa',tipo:'Detalle',amb:'Docentes'},
+ {r:11,t:'Inconsistencias en programas de asignatura: campos incompletos o ítems repetidos.',sev:'Media (Alta si el avance es menor a 50%)',tipo:'Alerta',amb:'Planes'},
+ {r:12,t:'Ficha docente incompleta: campos obligatorios de datos personales, título de grado, área de desempeño o cargo vigente con vinculación.',sev:'Media',tipo:'Alerta',amb:'Docentes'},
+ {r:13,t:'El plan debe sumar las horas mínimas de formación práctica (Anexo III) e incluir PPS y Proyecto Integrador con horas cargadas.',sev:'Alta',tipo:'Alerta',amb:'Planes'},
+ {r:14,t:'Las horas de formación práctica de una asignatura no pueden superar sus horas totales.',sev:'Media',tipo:'Alerta',amb:'Planes'},
+ {r:15,t:'Materias por docente de la carrera: mediana, promedio y máximo sobre los docentes con al menos una materia vigente de la carrera (cuenta solo las materias de esa carrera).',sev:'—',tipo:'Indicador',amb:'Docentes'}
+];
+const AMB={docentes:'Docentes',planes:'Planes de estudio',cruzadas:'Cruzadas DOC↔PDE'};
+/* Grupos de análisis: cada uno corre sus reglas con un solo botón */
+const GRUPOS={
+ fac:{t:'Docentes de la Facultad',d:'Estadísticos de todo el plantel y reglas por docente.',ic:'fa-university',s:'facultad',r:[6,3,4,7,10,12]},
+ car:{t:'Docentes de la carrera',d:'Plantel de la carrera seleccionada y reglas por docente.',ic:'fa-user-graduate',s:'plantel',r:[15,3,4,7,10,12]},
+ plan:{t:'Plan de estudios',d:'Carga horaria, formación práctica, programas y responsables.',ic:'fa-book-open',s:'carrera',r:[2,8,9,11,13,14]}};
+const regla=n=>REGLAS.find(x=>x.r===n);
+const rcod=n=>'R-'+String(n).padStart(2,'0');
+
+function motor(){
+  const A=[];
+  const add=o=>{o.id=A.length+1;o.docIds=o.docIds||[];A.push(o)};
+  DOC.forEach(d=>{
+    const f=fun(d),t6=tope60(d),dt=dedTot(d);
+    if(t6>CFG.tope)
+      add({r:3,sev:'alta',amb:'docentes',titulo:'Docente supera el tope de 60 h',detalle:`Docencia (${fmt(f.doc)} h) + gestión (${fmt(f.ges)} h) + desempeño no académico (${fmt(f.noac)} h) suman ${fmt(t6)} h semanales; el tope es ${CFG.tope} h.`,docIds:[d.id]});
+    if(dt<CFG.bajaCarga)
+      add({r:10,sev:'info',amb:'docentes',titulo:'Docente con baja dedicación',detalle:`Su dedicación total calculada es ${fmt(dt)} h semanales (menos de ${CFG.bajaCarga} h).`,docIds:[d.id]});
+    vig(d).filter(c=>!c.asig.length).forEach(c=>
+      add({r:4,sev:'alta',amb:'cruzadas',titulo:'Cargo sin actividad curricular',detalle:`El cargo de ${c.cargo} (${c.desig}, ${fmt(c.hs)} h) está vigente pero no tiene ninguna asignación a cátedra.`,docIds:[d.id]}));
+    if(nMat(d)>CFG.maxMaterias)
+      add({r:7,sev:'media',amb:'docentes',titulo:'Docente sobre-asignado',detalle:`Tiene ${nMat(d)} materias vigentes (máximo definido: ${CFG.maxMaterias}): ${asigs(d).map(a=>a.mat).join(', ')}.`,docIds:[d.id]});
+    const fl=fichaFalta(d).filter(k=>k!=='docencia'); // el ítem 4 lo informa la regla 4
+    if(fl.length)
+      add({r:12,sev:'media',amb:'docentes',titulo:'Ficha docente incompleta',detalle:`Falta: ${fl.map(k=>FICHA[k]).join(' · ')}.`,docIds:[d.id]});
+  });
+  PLANES.forEach(p=>{
+    Object.keys(p.umb.minBloque).forEach(k=>{
+      if(p.bloques[k]<p.umb.minBloque[k])
+        add({r:9,sev:'alta',amb:'planes',carrera:p.id,titulo:'Bloque por debajo de las horas mínimas',detalle:`${BQ[k]}: ${p.bloques[k]} h cargadas de ${p.umb.minBloque[k]} h mínimas (faltan ${p.umb.minBloque[k]-p.bloques[k]} h).`});
+    });
+    if(p.total<p.umb.minTotal)
+      add({r:9,sev:'alta',amb:'planes',carrera:p.id,titulo:'Plan por debajo de las horas mínimas totales',detalle:`El plan suma ${p.total} h de ${p.umb.minTotal} h mínimas (faltan ${p.umb.minTotal-p.total} h).`});
+    const fp=fpPlan(p); // R-13 (a) solo si la formación práctica es verificable
+    if(fp.est==='bajo')
+      add({r:13,sev:'alta',amb:'planes',carrera:p.id,titulo:'Formación práctica por debajo del mínimo',detalle:`El plan suma ${fp.h} h de formación práctica de ${p.umb.minFP} h mínimas (faltan ${p.umb.minFP-fp.h} h).`});
+    if(!p.pps)
+      add({r:13,sev:'alta',amb:'planes',carrera:p.id,titulo:'Plan sin PPS',detalle:'El plan no tiene Práctica Profesional Supervisada con horas cargadas.'});
+    if(!p.pi)
+      add({r:13,sev:'alta',amb:'planes',carrera:p.id,titulo:'Plan sin Proyecto Integrador',detalle:'El plan no tiene Proyecto Integrador con horas cargadas.'});
+    p.asig.forEach(a=>{
+      const rs=responsables(p.id,a.m);
+      if(!rs.length)
+        add({r:8,sev:'alta',amb:'cruzadas',carrera:p.id,asig:a.m,titulo:'Materia sin responsable de cátedra',detalle:`${a.m} no tiene ningún responsable de cátedra vigente.`});
+      const por={};rs.forEach(x=>(por[x.cat]=por[x.cat]||[]).push(x.d));
+      Object.keys(por).forEach(cat=>{
+        if(por[cat].length>1)
+          add({r:2,sev:'alta',amb:'cruzadas',carrera:p.id,asig:a.m,docIds:por[cat].map(d=>d.id),titulo:'Doble responsable de cátedra',detalle:`${a.m} (${cat}) tiene ${por[cat].length} responsables vigentes a la vez: ${por[cat].map(d=>d.nombre).join(' y ')}.`});
+      });
+      if(a.pr.length)
+        add({r:11,sev:a.av<50?'alta':'media',amb:'planes',carrera:p.id,asig:a.m,titulo:'Inconsistencia en el programa de la asignatura',detalle:`${a.m} (${a.av}% de avance): ${a.pr.join(' · ')}.`});
+      if(a.hp>a.ht)
+        add({r:14,sev:'media',amb:'planes',carrera:p.id,asig:a.m,titulo:'Horas prácticas mayores que la carga de la asignatura',detalle:`Declara ${a.hp} h de formación práctica sobre ${a.ht} h de la asignatura.`});
+    });
+  });
+  const ord={alta:0,media:1,info:2};
+  const ent=a=>a.carrera?(a.asig||planOf(a.carrera).carrera):docOf(a.docIds[0]).nombre;
+  return A.sort((x,y)=>ord[x.sev]-ord[y.sev]||x.r-y.r||ent(x).localeCompare(ent(y),'es'));
+}
+
+const semOf=al=>al.some(a=>a.sev==='alta')?'r':al.some(a=>a.sev==='media')?'a':'v';
+const SEMT={r:'Requiere acción',a:'A revisar',v:'En orden',i:'Sin umbral'};
+const semB=s=>`<span class="sem ${s}"><i></i>${SEMT[s]}</span>`;
+const SEVI={alta:'!',media:'!',info:'i'};
+const SEVT={alta:'Alta',media:'Media',info:'Informativa'};
+
+function statC(A,p){
+  const al=A.filter(a=>a.carrera===p.id);
+  const docs=new Set();
+  DOC.forEach(d=>vig(d).forEach(c=>c.asig.forEach(a=>{if(a.car===p.id)docs.add(d.id)})));
+  return {al,sem:indPlan(p).sem,
+    blOk:Object.keys(p.umb.minBloque).filter(k=>p.bloques[k]>=p.umb.minBloque[k]).length,
+    totOk:p.total>=p.umb.minTotal,
+    sinR:al.filter(a=>a.r===8).length,
+    prog:p.asig.filter(a=>a.pr.length).length,
+    fp:fpPlan(p),
+    nd:docs.size};
+}
+
+/* ---------- Indicadores: Completitud (qué falta cargar) y Consistencia (qué está mal cargado) ----------
+   Completitud docente = ítems cumplidos / 4 (datos personales obligatorios · título de grado · área de desempeño · cargo vigente con vinculación)
+   Completitud plan    = (avance promedio de programas + % asignaturas con responsable) / 2
+   Consistencia        = 100 − 25 × alertas altas − 10 × alertas medias (mínimo 0)
+     docente: reglas 3, 4, 7 · plan: reglas 2, 9, 13, 14 y 11 (solo ítems repetidos, −10 c/u)
+   Colores: verde ≥ 90 · amarillo 60–89 · rojo < 60. El semáforo toma el menor de los dos. */
+const band=v=>v>=90?'v':v>=60?'a':'r';
+const BCOL={v:'#1E9E73',a:'#EF9F27',r:'#E24B4A'};
+const penal=al=>Math.max(0,100-25*al.filter(a=>a.sev==='alta').length-10*al.filter(a=>a.sev==='media').length);
+function indDoc(d){
+  const it=Object.keys(FICHA).map(k=>fichaOk(d,k));
+  const comp=pct(it.filter(Boolean).length,it.length);
+  // si no tiene ninguna asignación aprobada (ítem 4 sin cumplir), la regla 4 no resta: el hecho ya resta en completitud
+  const cons=penal(A.filter(a=>[3,4,7].includes(a.r)&&a.docIds.includes(d.id)&&!(a.r===4&&!fichaOk(d,'docencia'))));
+  return {comp,cons,sem:band(Math.min(comp,cons))};
+}
+function indPlan(p){
+  const av=mean(p.asig.map(a=>a.av)),cr=100*p.asig.filter(a=>responsables(p.id,a.m).length).length/p.asig.length;
+  const comp=Math.round((av+cr)/2);
+  const rep=p.asig.filter(a=>a.pr.some(x=>/repetid/i.test(x))).length;
+  const cons=Math.max(0,penal(A.filter(a=>a.carrera===p.id&&[2,9,13,14].includes(a.r)))-10*rep);
+  return {comp,cons,sem:band(Math.min(comp,cons)),av:Math.round(av),cr:Math.round(cr)};
+}
+function indPlantel(L=DOC){
+  const xs=L.map(indDoc),comp=Math.round(mean(xs.map(x=>x.comp))),cons=Math.round(mean(xs.map(x=>x.cons)));
+  return {comp,cons,sem:band(pct(xs.filter(x=>x.sem==='v').length,xs.length)),xs}; // semáforo del plantel = % de docentes en orden
+}
+const indBar=(l,v)=>`<div class="ind"><span>${l}</span><div class="bar"><i style="width:${v}%;background:${BCOL[band(v)]}"></i></div><b class="${band(v)}">${v}%</b></div>`;
+const indHTML=x=>indBar('Completitud',x.comp)+indBar('Consistencia',x.cons);
+const pdfBtn=(k,id)=>`<button class="btn ghost noprint" data-act="pdf" data-k="${k}" data-v="${id}"><i class="fas fa-file-pdf"></i> Descargar informe (PDF)</button>`;
+
+/* ---------- Informes PDF (docente · carrera · plantel) ----------
+   Estructura común: 1 Encabezado · 2 Datos principales · 3 Detalle · 4 Alertas con acción sugerida · 5 Pie */
+const ACCION={2:'Dejar un único responsable de cátedra vigente.',
+  3:'Revisar cargos, gestión y desempeño no académico para no superar el tope.',4:'Asignar el cargo a una cátedra o darlo de baja.',
+  7:'Redistribuir materias dentro del plantel.',
+  8:'Designar un responsable de cátedra.',9:'Revisar la carga horaria del plan en MOD-PDE.',
+  10:'Verificar que la ficha registre todas las funciones del docente.',11:'Completar o corregir el programa en MOD-PDE.',
+  12:'Completar en MOD-DOC lo indicado como faltante.',
+  13:'Revisar la intensidad práctica de los programas o cargar PPS / Proyecto Integrador en MOD-PDE.',
+  14:'Corregir la intensidad de la formación práctica o la carga horaria en MOD-PDE.'};
+const rT=(heads,rows,w)=>`<table class="rt"><thead><tr>${heads.map((h,i)=>`<th${w&&w[i]?` style="width:${w[i]}"`:''}>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${heads.length}">Sin registros.</td></tr>`}</tbody></table>`;
+const rKV=l=>`<div class="rkv">${l.map(([k,v])=>`<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>`;
+const rAl=al=>al.length?rT(['Prioridad','Alerta','Detalle','Acción sugerida'],al.map(a=>[`<span class="pill ${a.sev==='alta'?'r':a.sev==='media'?'a':'g'}">${SEVT[a.sev]}</span>`,`<b>${esc(a.titulo)}</b>${a.asig?`<br><span class="muted">${esc(a.asig)}</span>`:a.docIds.length&&!a.carrera?'':''}`,esc(a.detalle),ACCION[a.r]||'—']),['10%','22%','40%','28%']):'<p class="muted">No se registran alertas.</p>';
+function repHead(tipo,nombre,sub,x){
+  return `<div class="rh"><div><div class="rbr">UDEMM <span>GLOBAL</span> · Universidad de la Marina Mercante</div><div class="rty">${tipo}</div><h1>${esc(nombre)}</h1><div class="muted">${sub}</div></div>
+    <div class="rst">${semB(x.sem)}<div class="rdt">Emitido el ${new Date().toLocaleDateString('es-AR')}</div></div></div>
+    <div class="rind">${indHTML(x)}</div>`;
+}
+const repFoot=()=>`<div class="rft">Generado por UDEMM Global · MOD-AUT Autoevaluaciones · ${new Date().toLocaleString('es-AR')} · Datos simulados de ejemplo</div>`;
+const rH2=(n,t)=>`<h2>${n}. ${t}</h2>`;
+const fichaHTML=(d,cls)=>`<div class="${cls}">${Object.keys(FICHA).map(k=>`<span class="${fichaOk(d,k)?'y':'n'}">${fichaOk(d,k)?'✓':'✗'} ${FICHA[k]}</span>`).join('')}</div>
+  <div class="small muted" style="margin-top:6px">Secciones sin exigencia: ${Object.keys(SECOPC).map(n=>`${n}. ${SECOPC[n]} <b>${secDatos(d)[n]?'con datos':'sin datos'}</b>`).join(' · ')}</div>`;
+function repDocente(d){
+  const x=indDoc(d),al=A.filter(a=>a.docIds.includes(d.id)),f=fun(d);
+  return repHead('Informe de docente',d.nombre,`${fmt(dedTot(d))} h de dedicación total · rango ${rangoDed(d)}`,x)+
+  rH2(1,'Datos principales')+rKV([['Dedicación total',fmt(dedTot(d))+' h'],['Rango de dedicación',rangoDed(d)],['Tope 60 h (doc. + gest. + no acad.)',`${fmt(tope60(d))} h de ${CFG.tope} h`],['Materias vigentes',nMat(d)],
+    ['Posgrado',d.posgrado||'—'],['Investigación',d.invest?'Sí':'No'],['Ficha completa',`${4-fichaFalta(d).length} de 4 ítems`],['Gestión',d.gestion.length?d.gestion.map(g=>esc(g.fn)+' ('+fmt(g.hs)+' h)').join(', '):'—']])+
+  fichaHTML(d,'rck')+
+  rH2(2,'Cargos y asignaturas')+rT(['Cargo','Designación','Horas','Asignaturas'],d.cargos.map(c=>[`<b>${c.cargo}</b>${c.vigente===false?' (no vigente)':''}`,c.desig,fmt(c.hs)+' h',
+    c.asig.length?c.asig.map(a=>`${esc(a.mat)} <span class="muted">(${esc(planOf(a.car).carrera)}${a.cat!=='Única'?', '+a.cat:''})</span>${a.resp?' — Responsable':''}`).join('<br>'):'<b style="color:#B93635">Sin asignación a cátedra</b>']),['18%','14%','10%','58%'])+
+  rT(['Docencia','Gestión','Investigación','Vinculación','Dedicación total','No académico'],[[fmt(f.doc)+' h',fmt(f.ges)+' h',fmt(f.inv)+' h',fmt(f.vin)+' h',`<b>${fmt(dedTot(d))} h</b>`,fmt(f.noac)+' h']])+
+  rH2(3,`Alertas (${al.length})`)+rAl(al);
+}
+function repCarrera(p){
+  const x=indPlan(p),s=statC(A,p);
+  return repHead('Informe de carrera',p.carrera,`Plan ${p.plan} · ${p.asig.length} asignaturas · ${s.nd} docentes`,x)+
+  rH2(1,'Datos principales')+rKV([['Horas totales',`${p.total} h (mín. ${p.umb.minTotal})`],['Bloques que cumplen',`${s.blOk} de 4`],['Formación práctica',`${s.fp.h} h (mín. ${p.umb.minFP}) · ${esc(fpTxt(s.fp))}`],['Materias sin responsable',s.sinR],['Programas con observaciones',`${s.prog} de ${p.asig.length}`],
+    ['Avance promedio de programas',x.av+'%'],['Asignaturas con responsable',x.cr+'%']])+
+  rT(['Bloque','Horas cargadas','Mínimo','Estado'],[...Object.keys(BQ).map(k=>[BQ[k],p.bloques[k]+' h',p.umb.minBloque[k]+' h',p.bloques[k]>=p.umb.minBloque[k]?'Cumple':`<b style="color:#B93635">Faltan ${p.umb.minBloque[k]-p.bloques[k]} h</b>`]),
+    ['<b>Total del plan</b>',`<b>${p.total} h</b>`,p.umb.minTotal+' h',p.total>=p.umb.minTotal?'Cumple':`<b style="color:#B93635">Faltan ${p.umb.minTotal-p.total} h</b>`]])+
+  rH2(2,'Asignaturas')+rT(['Asignatura','Año','Bloque','Responsable de cátedra','Programa'],p.asig.map(a=>{const rs=responsables(p.id,a.m);
+    return [`<b>${esc(a.m)}</b>`,a.a+'°',a.b,rs.length?rs.map(r=>esc(r.d.nombre)+(r.cat!=='Única'?` (${r.cat})`:'')).join('<br>'):'<b style="color:#B93635">Sin responsable</b>',a.av+'%']}),['36%','7%','9%','34%','14%'])+
+  rH2(3,`Alertas (${s.al.length})`)+rAl(s.al);
+}
+function repPlantel(L=DOC,car=null){
+  const st=plantelStats(L,car),ids=new Set(L.map(d=>d.id)),al=A.filter(a=>a.docIds.some(id=>ids.has(id)));
+  return repHead('Informe de plantel docente',car?'Docentes de '+planOf(car).carrera:'Plantel docente',`${st.N} docentes vigentes · ${st.cargosV} cargos`,st.I)+
+  rH2(1,'Indicadores del plantel')+rT(['Grupo','Indicador','Valor'],[
+    ['Dimensión','Docentes vigentes',st.N],['','Cargos vigentes',st.cargosV],['','Materias cubiertas',`${st.matCub} de ${st.matTot}`],['',car?'Materias por docente de la carrera (R-15)':'Materias por docente (R-06)',`Mediana ${fmt(st.mMed)} · promedio ${fmt(st.mProm)} · máximo ${st.mMax}`],
+    ['Condiciones (CONEAU)','Con posgrado',`${pct(st.pos,st.N)}% (Doct. ${st.pg('Doctorado')} · Maest. ${st.pg('Maestría')} · Esp. ${st.pg('Especialización')})`],
+    ['','Dedicación total por rangos',st.rdTxt],['','Con actividad de investigación',`${pct(st.inv,st.N)}% (${st.inv} de ${st.N})`],
+    ['','Relación profesores / auxiliares',st.na?`${fmt(st.np/st.na)} : 1 (${st.np} / ${st.na})`:'—'],
+    ['','Con designación regular',`${pct(st.reg,st.N)}% (${st.reg} de ${st.N}) · cargos vigentes: ${st.cReg} regulares · ${st.cInt} interinos`],
+    ['Estado de la información','Completitud promedio',st.I.comp+'%'],['','Consistencia promedio',st.I.cons+'%'],['','Docentes por estado',`${st.dist.v} en orden · ${st.dist.a} a revisar · ${st.dist.r} requieren acción`],
+    ['Acción requerida','Con alertas altas',`${st.altas.length}${st.altas.length?' — '+esc(st.altas.map(d=>d.nombre).join(', ')):''}`],['','Sobre-asignados',`${st.sob.length} — ${esc(st.nomb(st.sob))}`],
+    ['','Cargos sin actividad curricular',`${st.sinAct.length} — ${esc(st.nomb(st.sinAct))}`],['','Dedicación menor a 20 h',`${st.baja.length} — ${esc(st.nomb(st.baja))}`]],['24%','36%','40%'])+
+  rH2(2,'Listado de docentes')+rT(['Docente','Dedicación','Materias','Completitud','Consistencia','Estado'],L.map(d=>{const x=indDoc(d);
+    return [`<b>${esc(d.nombre)}</b>`,fmt(dedTot(d))+' h',esc(asigs(d).map(a=>a.mat).join(', '))||'—',x.comp+'%',x.cons+'%',SEMT[x.sem]]}),['18%','12%','38%','10%','10%','12%'])+
+  rH2(3,`Alertas del plantel (${al.length})`)+rT(['Docente','Prioridad','Alerta','Acción sugerida'],al.map(a=>[esc(a.docIds.map(id=>docOf(id).nombre).join(', ')),SEVT[a.sev],`<b>${esc(a.titulo)}.</b> ${esc(a.detalle)}`,ACCION[a.r]||'—']),['16%','9%','47%','28%']);
+}
+const reglasRep=(g,r)=>rT(['Regla','Descripción','Casos'],GRUPOS[g].r.map(n=>[rcod(n),esc(regla(n).t),regla(n).tipo==='Indicador'?'—':r.al.filter(a=>a.r===n).length]),['10%','75%','15%']);
+function repFacultad(){
+  const st=plantelStats(DOC,null),r=resGrupo('fac');
+  return `<div class="rh"><div><div class="rbr">UDEMM <span>GLOBAL</span> · Universidad de la Marina Mercante</div><div class="rty">Informe de autoevaluación</div><h1>Docentes de la Facultad</h1><div class="muted">Facultad de Ingeniería · ${st.N} docentes vigentes</div></div>
+    <div class="rst"><div class="rdt">Análisis ejecutado el ${runOf('fac').toLocaleString('es-AR')}</div><div class="rdt">Emitido el ${new Date().toLocaleDateString('es-AR')}</div></div></div>`+
+  rH2(1,'Estadísticos del plantel (MOD-DOC)')+rT(['Grupo','Indicador','Valor'],facRows(st),['24%','36%','40%'])+
+  rH2(2,'Reglas ejecutadas')+reglasRep('fac',r)+
+  rH2(3,`Alertas (${r.al.length})`)+rT(['Docente','Prioridad','Alerta','Acción sugerida'],r.al.map(a=>[esc(a.docIds.map(id=>docOf(id).nombre).join(', ')),SEVT[a.sev],`<b>${esc(a.titulo)}.</b> ${esc(a.detalle)}`,ACCION[a.r]||'—']),['16%','9%','47%','28%']);
+}
+function xlsGrupo(g){
+  if(!runOf(g))correr(g,true);
+  const r=resGrupo(g),G=GRUPOS[g];
+  const T=(h,rows)=>`<table border="1"><tr>${h.map(x=>`<th style="background:#E9EDF2">${x}</th>`).join('')}</tr>${rows.map(x=>`<tr>${x.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${h.length}">Sin registros</td></tr>`}</table><br>`;
+  let ind;
+  if(g==='fac')ind=facRows(plantelStats(DOC,null)).map(([a,b,c])=>[a,b,c]);
+  else if(g==='car'){const st=plantelStats(r.docs,S.carD);ind=[['Dimensión','Docentes de la carrera',st.N],['','Cargos vigentes',st.cargosV],['','Materias cubiertas',`${st.matCub} de ${st.matTot}`],['','Materias por docente de la carrera (R-15)',`Mediana ${fmt(st.mMed)} · promedio ${fmt(st.mProm)} · máximo ${st.mMax}`],
+    ['Condiciones','Con posgrado',`${pct(st.pos,st.N)}%`],['','Dedicación por rangos',st.rdTxt],['','Con investigación',`${pct(st.inv,st.N)}%`],['','Relación profesores / auxiliares',st.na?`${fmt(st.np/st.na)} : 1`:'—'],['','Con designación regular',`${pct(st.reg,st.N)}%`],
+    ['Estado de la información','Completitud promedio',st.I.comp+'%'],['','Consistencia promedio',st.I.cons+'%']];}
+  else{const p=planOf(S.carP),s=statC(A,p);ind=[['Plan','Horas totales',`${p.total} h (mín. ${p.umb.minTotal})`],['','Bloques que cumplen',`${s.blOk} de 4`],['','Formación práctica',`${s.fp.h} h (mín. ${p.umb.minFP}) · ${fpTxt(s.fp)}`],['','Materias sin responsable',s.sinR],['','Programas con observaciones',`${s.prog} de ${p.asig.length}`]];}
+  const ent=a=>a.carrera?(a.asig||planOf(a.carrera).carrera):a.docIds.map(id=>docOf(id).nombre).join(', ');
+  const html=`<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body>
+    <h3>${G.t} — ${esc(ctxLabel(g))}</h3><p>Análisis ejecutado: ${runOf(g).toLocaleString('es-AR')} · Generado por UDEMM Global · MOD-AUT</p>
+    ${T(['Grupo','Indicador','Valor'],ind.map(x=>x.map(c=>String(c))))}
+    ${T(['Regla','Descripción','Tipo','Casos'],G.r.map(n=>{const x=regla(n);return [rcod(n),esc(x.t),x.tipo,x.tipo==='Indicador'?'—':r.al.filter(a=>a.r===n).length]}))}
+    ${T(['Prioridad','Regla','Entidad','Alerta','Detalle','Acción sugerida'],r.al.map(a=>[SEVT[a.sev],rcod(a.r),esc(ent(a)),esc(a.titulo),esc(a.detalle),esc(ACCION[a.r]||'—')]))}
+  </body></html>`;
+  const b=new Blob(['﻿'+html],{type:'application/vnd.ms-excel'}),u=document.createElement('a');
+  u.href=URL.createObjectURL(b);u.download=`Autoevaluacion_${G.t}_${ctxLabel(g)}.xls`.replace(/[^\wÁÉÍÓÚáéíóúñÑ.]+/g,'_');u.click();URL.revokeObjectURL(u.href);
+  render();
+}
+function imprimir(k,v){
+  let html,nom;
+  if(k==='grp'){
+    if(!runOf(v))correr(v,true);
+    const r=resGrupo(v);
+    html=v==='fac'?repFacultad():(v==='car'?repPlantel(r.docs,S.carD):repCarrera(planOf(S.carP)))+rH2(4,'Reglas ejecutadas')+reglasRep(v,r);
+    nom=GRUPOS[v].t+' - '+ctxLabel(v);
+  }else{html=repDocente(docOf(+v));nom=docOf(+v).nombre;}
+  $('#rep').innerHTML=html+repFoot();
+  const tt=document.title;document.title='Informe - '+nom+' - '+new Date().toISOString().slice(0,10);
+  document.body.classList.add('printing');window.print();
+  document.body.classList.remove('printing');document.title=tt;$('#rep').innerHTML='';
+  if(k==='grp')render();
+}
+
+/* ==========================================================================
+   Estado, navegación y pantallas
+   ========================================================================== */
+let A=[];
+const S={s:'inicio',carD:'ind',carP:'ind',carU:'ind',back:'plantel',doc:null,fd:'todos',fsev:'todas',famb:'todas',fasig:false,umb:false};
+const NAVS=[
+ {g:'Inicio',items:[['inicio','fa-home','Bienvenida']]},
+ {g:'Tableros',items:[['facultad','fa-university','Docentes de la Facultad'],['plantel','fa-user-graduate','Docentes de la carrera'],['carrera','fa-book-open','Plan de estudios']]},
+ {g:'Controlar',items:[['alertas','fa-exclamation-triangle','Alertas']]},
+ {g:'Configurar',items:[['reglas','fa-sliders-h','Reglas de validación']]}
+];
+const TITULOS={inicio:'Bienvenida',facultad:'Docentes de la Facultad',plantel:'Docentes de la carrera',carrera:'Plan de estudios',alertas:'Alertas',reglas:'Reglas de validación'};
+
+/* ---------- Ejecución de los grupos de análisis ---------- */
+const RUN={fac:null,car:{},plan:{}};
+const ctxOf=g=>g==='car'?S.carD:g==='plan'?S.carP:'fac';
+const runOf=g=>g==='fac'?RUN.fac:RUN[g][ctxOf(g)];
+const ctxLabel=g=>g==='fac'?'Facultad de Ingeniería':g==='car'?planOf(S.carD).carrera:`${planOf(S.carP).carrera} · Plan ${planOf(S.carP).plan}`;
+function correr(g,silent){const t=new Date();if(g==='fac')RUN.fac=t;else RUN[g][ctxOf(g)]=t;if(!silent)render();}
+function resGrupo(g){
+  const c=ctxOf(g),R=GRUPOS[g].r;
+  if(g==='plan')return {al:A.filter(a=>a.carrera===c&&R.includes(a.r))};
+  const L=g==='fac'?DOC:docsCar(c),ids=new Set(L.map(d=>d.id));
+  return {docs:L,al:A.filter(a=>R.includes(a.r)&&!a.carrera&&a.docIds.some(id=>ids.has(id)))};
+}
+function runTxt(g){
+  const t=runOf(g);
+  if(!t)return `<b>Sin ejecutar</b> · ${GRUPOS[g].r.length} reglas sobre ${esc(ctxLabel(g))}`;
+  const r=resGrupo(g),c=k=>r.al.filter(a=>a.sev===k).length;
+  return `Última ejecución: <b>${t.toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})}</b> · ${esc(ctxLabel(g))}<br><b>${r.al.length}</b> resultado${r.al.length===1?'':'s'}: ${c('alta')} de prioridad alta · ${c('media')} media · ${c('info')} informativa${c('info')===1?'':'s'}`;
+}
+const btnsGrupo=g=>`<button class="btn ghost sm" data-act="xpdf" data-g="${g}"><i class="fas fa-file-pdf"></i> PDF</button><button class="btn ghost sm" data-act="xxls" data-g="${g}"><i class="fas fa-file-excel"></i> Excel</button>`;
+const runBar=g=>`<div class="runbar"><div class="rt">${runTxt(g)}</div><button class="btn sm" data-act="run" data-g="${g}"><i class="fas fa-play"></i> Correr análisis</button>${btnsGrupo(g)}</div>`;
+const carSel=k=>`<div class="csel"><label>Carrera</label><select data-sel="${k}">${PLANES.map(p=>`<option value="${p.id}"${p.id===S[k]?' selected':''}>${esc(p.carrera)}</option>`).join('')}</select></div>`;
+function resHTML(g){
+  const h=`<div class="h2">Resultado del análisis <small>— reglas ${GRUPOS[g].r.map(rcod).join(' · ')}</small></div>`;
+  if(!runOf(g))return h+`<div class="note info"><i class="fas fa-info-circle" style="margin-top:2px"></i><div>El análisis de este grupo todavía no se ejecutó. Usá «Correr análisis».</div></div>`;
+  const r=resGrupo(g);
+  return h+(r.al.map(a=>alertRow(a,true)).join('')||'<div class="note info">El análisis no encontró alertas.</div>');
+}
+
+function navHTML(){
+  let n=0;const act=S.s==='docente'?S.back:S.s;
+  const alta=A.filter(a=>a.sev==='alta').length;
+  return NAVS.map(g=>`<h6>${g.g}</h6>`+g.items.map(([k,ic,l])=>{n++;
+    return `<div class="ni${k===act?' act':''}" data-act="go" data-s="${k}"><span class="num">${n}</span>${l}${k==='alertas'&&alta?`<span class="bd" title="Alertas de prioridad alta">${alta}</span>`:''}</div>`}).join('')).join('');
+}
+function crumbHTML(){
+  const base=`<a data-act="go" data-s="inicio">Autoevaluaciones</a>`;
+  if(S.s==='inicio')return `${base} › <b>Bienvenida</b>`;
+  if(S.s==='docente')return `${base} › <a data-act="go" data-s="${S.back}">${TITULOS[S.back]}</a> › <b>${esc(docOf(S.doc).nombre)}</b>`;
+  if(S.s==='plantel'||S.s==='carrera')return `${base} › <b>${TITULOS[S.s]} · ${esc(planOf(S.s==='plantel'?S.carD:S.carP).carrera)}</b>`;
+  return `${base} › <b>${TITULOS[S.s]}</b>`;
+}
+function render(){
+  A=motor();
+  $('#nav').innerHTML=navHTML();
+  $('#crumb').innerHTML=crumbHTML();
+  const fn={inicio:vInicio,facultad:vFacultad,plantel:vPlantel,docente:vDocente,carrera:vCarrera,alertas:vAlertas,reglas:vReglas}[S.s];
+  $('#main').innerHTML=`<div class="page">${fn()}</div>`;
+}
+function go(s,v){if(s==='docente'){if(S.s!=='docente')S.back=S.s;S.doc=+v}if(s==='carrera'&&v)S.carP=v;if(s==='plantel'&&v)S.carD=v;S.s=s;render();$('#main').scrollTop=0}
+
+/* ---------- Helpers de UI ---------- */
+const ph=(t,sub)=>`<div class="ph"><h1>${t}</h1><p>${sub}</p></div>`;
+const simNote=()=>`<div class="note info"><i class="fas fa-info-circle" style="margin-top:2px"></i><div><b>Datos simulados de ejemplo.</b> En la plataforma, docentes y planes de estudio llegan desde MOD-DOC y MOD-PDE; las reglas y umbrales se ajustan en «Reglas de validación».</div></div>`;
+const barList=(items,total)=>items.map(([l,v])=>`<div class="bl"><span>${l}</span><div class="bar"><i style="width:${pct(v,total)}%;background:#1A6BB0"></i></div><b>${v}</b></div>`).join('');
+const cnt=rs=>A.filter(a=>rs.includes(a.r));
+
+function alertRow(a,btn){
+  const p=a.carrera?planOf(a.carrera):null;
+  const ent=p?(a.asig||p.carrera):a.docIds.map(id=>docOf(id).nombre).join(' · ');
+  const ctx=p&&a.asig?`<span class="tag">${esc(p.carrera)}</span>`:'';
+  const target=p?`data-act="go" data-s="carrera" data-v="${p.id}"`:`data-act="go" data-s="docente" data-v="${a.docIds[0]}"`;
+  return `<div class="al ${a.sev}"><div class="ai" aria-hidden="true">${SEVI[a.sev]}</div><div class="ab">
+    <div class="at">${esc(ent)} ${ctx}<span class="tag">${SEVT[a.sev]}</span></div>
+    <div class="ad"><b>${esc(a.titulo)}.</b> ${esc(a.detalle)}</div></div>
+    ${btn?`<button class="btn sm ghost noprint" ${target}>${p?'Ver carrera':'Ver docente'}</button>`:''}</div>`;
+}
+
+/* ---------- 1 · Bienvenida ---------- */
+function vInicio(){
+  const sel=(k,l,val,opts)=>`<div><label>${l}</label><select data-sel="${k}">${opts.map(([v,t])=>`<option value="${v}"${v===val?' selected':''}>${esc(t)}</option>`).join('')}</select></div>`;
+  const carOpts=PLANES.map(p=>[p.id,p.carrera]),pp=planOf(S.carP);
+  const card=(g,ctx)=>{const G=GRUPOS[g];
+    return `<div class="wc">
+      <div style="display:flex;gap:12px;align-items:center"><div class="wi"><i class="fas ${G.ic}"></i></div><div><h3>${G.t}</h3><div class="wd">${G.d}</div></div></div>
+      <div class="rchips">${G.r.map(n=>`<span class="rchip" title="${esc(regla(n).t)}">${rcod(n)}</span>`).join('')}</div>
+      <div class="wsel">${ctx}</div>
+      <div class="wrun">${runTxt(g)}</div>
+      <div class="wact top"><button class="btn" data-act="run" data-g="${g}"><i class="fas fa-play"></i> Correr análisis</button></div>
+      <div class="wact">${btnsGrupo(g)}<button class="btn ghost sm" data-act="go" data-s="${G.s}">Ver tablero →</button></div></div>`};
+  return ph('Autoevaluación','Elegí el grupo, corré el análisis de sus reglas y exportá el resultado.')+
+  `<div class="wcards">
+    ${card('fac',`<div><label class="small muted" style="display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Alcance</label><div class="wfix">Todos los docentes de la Facultad de Ingeniería</div></div>`)}
+    ${card('car',sel('carD','Carrera',S.carD,carOpts))}
+    ${card('plan',sel('carP','Carrera',S.carP,carOpts)+sel('planP','Plan de estudios',pp.plan,[[pp.plan,'Plan '+pp.plan]]))}
+  </div>`;
+}
+
+/* ---------- 2 · Plantel docente ---------- */
+function plantelStats(L=DOC,car=null){
+  const N=L.length,I=indPlantel(L),ids=new Set(L.map(d=>d.id));
+  const cargosV=L.reduce((s,d)=>s+vig(d).length,0);
+  const asg=new Set();L.forEach(d=>asigs(d).forEach(a=>asg.add(a.car+'|'+a.mat)));
+  const PP=car?[planOf(car)]:PLANES;
+  const matTot=PP.reduce((s,p)=>s+p.asig.length,0),matCub=PP.reduce((s,p)=>s+p.asig.filter(a=>asg.has(p.id+'|'+a.m)).length,0);
+  const pos=L.filter(d=>d.posgrado).length,inv=L.filter(d=>d.invest).length,pg=k=>L.filter(d=>d.posgrado===k).length;
+  const rd=RANGOS.map(r=>L.filter(d=>rangoDed(d)===r).length),rdTxt=RANGOS.map((r,i)=>`${r}: ${rd[i]} (${pct(rd[i],N)}%)`).join(' · ');
+  let np=0,na=0;L.forEach(d=>vig(d).forEach(c=>/^Prof\./.test(c.cargo)?np++:na++));
+  // IP-16: docente regular = al menos un cargo vigente con designación Regular (Rentado o Ad Honorem)
+  const reg=L.filter(d=>vig(d).some(c=>/^Regular/.test(c.desig))).length;
+  let cReg=0,cInt=0;L.forEach(d=>vig(d).forEach(c=>{if(/^Regular/.test(c.desig))cReg++;else if(/^Interino/.test(c.desig))cInt++;}));
+  const dist={v:0,a:0,r:0};I.xs.forEach(x=>dist[x.sem]++);
+  const mine=al=>al.filter(a=>a.docIds.some(id=>ids.has(id)));
+  const altas=L.filter(d=>A.some(a=>a.sev==='alta'&&a.docIds.includes(d.id)));
+  const sob=mine(cnt([7])),baja=mine(cnt([10])),sinAct=mine(cnt([4]));
+  const nomb=l=>l.length?[...new Set(l.map(a=>docOf(a.docIds[0]).nombre))].join(', '):'Ninguno';
+  // R-06 (Facultad): todas las materias del docente · R-15 (carrera): solo las materias de esa carrera
+  const mats=car?L.map(d=>matsCar(d,car)):L.map(nMat),mMed=median(mats),mProm=mean(mats),mMax=mats.length?Math.max(...mats):0;
+  const vin=L.filter(d=>d.tiempos.ext>0).length,dprom=mean(L.map(dedTot)),tope=L.filter(d=>tope60(d)>CFG.tope).length;
+  const resp=L.filter(d=>vig(d).some(c=>c.asig.some(a=>a.resp))).length;
+  return {mMed,mProm,mMax,N,I,cargosV,matTot,matCub,pos,inv,pg,rd,rdTxt,np,na,reg,cReg,cInt,dist,altas,sob,baja,sinAct,nomb,vin,dprom,tope,resp};
+}
+function vPlantel(){
+  const L=docsCar(S.carD),{mMed,mProm,mMax,N,I,cargosV,matTot,matCub,pos,inv,pg,rd,rdTxt,np,na,reg,cReg,cInt,dist,altas,sob,baja,sinAct,nomb}=plantelStats(L,S.carD);
+  const K=(l,v,s)=>`<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div>${s?`<div class="s">${s}</div>`:''}</div>`;
+  const FIL={todos:()=>true,alertas:d=>A.some(a=>a.docIds.includes(d.id)&&a.sev!=='info'),
+    sobre:d=>A.some(a=>a.r===7&&a.docIds.includes(d.id)),baja:d=>A.some(a=>a.r===10&&a.docIds.includes(d.id)),
+    ficha:d=>A.some(a=>a.r===12&&a.docIds.includes(d.id))};
+  const LAB={todos:'Todos',alertas:'Con alertas',sobre:'Sobre-asignados',baja:'Dedicación < 20 h',ficha:'Ficha incompleta'};
+  const cols='1.4fr 2.8fr .9fr .5fr 1.4fr';
+  const rows=L.filter(FIL[S.fd]).map(d=>{
+    const al=A.filter(a=>a.docIds.includes(d.id)),n=al.filter(a=>a.sev!=='info').length,ms=asigs(d),over=ms.length>CFG.maxMaterias;
+    return `<div class="tr click" style="grid-template-columns:${cols};align-items:start" data-act="go" data-s="docente" data-v="${d.id}"><span><b>${esc(d.nombre)}</b></span>
+      <span><span class="pill ${over?'r':'g'}">${ms.length}</span> ${ms.length?esc(ms.map(a=>a.mat).join(', ')):'<span class="muted">Sin materias</span>'}</span>
+      <span>${fmt(dedTot(d))} h</span><span>${4-fichaFalta(d).length}/4</span>
+      <span>${semB(indDoc(d).sem)}${n?` <span class="small muted">${n} alerta${n>1?'s':''}</span>`:''}</span></div>`}).join('');
+  return `<div class="hdr"><div class="ph"><h1>Docentes de la carrera <span style="margin-left:8px;vertical-align:middle">${semB(I.sem)}</span></h1><p>${esc(planOf(S.carD).carrera)} · ${N} docentes con al menos una materia vigente de la carrera.</p></div>${carSel('carD')}</div>`+runBar('car')+simNote()+
+  `<div class="h2" style="margin-top:0">Dimensión <small>— ¿cuántos son?</small></div>
+  <div class="kpis">${K('Docentes vigentes',N)}${K('Cargos vigentes',cargosV)}${K('Materias cubiertas',`${matCub}<small>de ${matTot}</small>`,'Con al menos un docente asignado')}${K('Materias por docente (mediana) · R-15',fmt(mMed),`Promedio ${fmt(mProm)} · máximo ${mMax} · solo materias de la carrera`)}</div>
+  <div class="h2">Condiciones del plantel <small>— ¿qué capacidad tiene? (criterios CONEAU)</small></div>
+  <div class="kpis k3">${K('Con posgrado',`${pct(pos,N)}%<small>${pos} de ${N}</small>`,`Doctorado ${pg('Doctorado')} · Maestría ${pg('Maestría')} · Especialización ${pg('Especialización')}`)}
+    ${K('Dedicación total por rangos',`<div class="stack" style="height:18px;margin:8px 0 6px" role="img" aria-label="Docentes por rango de dedicación">${rd.map((v,i)=>v?`<i style="width:${v/N*100}%;background:${RCOL[i]}" title="${RANGOS[i]}: ${v}"></i>`:'').join('')}</div>`,`<div class="leg" style="gap:2px 10px;line-height:1.5">${RANGOS.map((r,i)=>`<span><i style="background:${RCOL[i]}"></i>${r}: <b>${rd[i]}</b></span>`).join('')}</div>`)}
+    ${K('Con actividad de investigación',`${pct(inv,N)}%<small>${inv} de ${N}</small>`)}
+    ${K('Relación profesores / auxiliares',na?`${fmt(np/na)} : 1`:'—',`${np} cargos de profesor · ${na} de auxiliar`)}
+    ${K('Con designación regular',`${pct(reg,N)}%<small>${reg} de ${N}</small>`,`Cargos vigentes: ${cReg} regulares · ${cInt} interinos`)}</div>
+  <div class="h2">Estado de la información <small>— ¿los datos son confiables?</small></div>
+  <div class="kpis k3">${[['Completitud promedio',I.comp],['Consistencia promedio',I.cons]].map(([l,v])=>K(l,`<span style="color:${BCOL[band(v)]}">${v}%</span>`,`<div class="bar" style="margin-top:4px"><i style="width:${v}%;background:${BCOL[band(v)]}"></i></div>`)).join('')}
+    ${K('Docentes por estado',N,`<span style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px"><span class="pill v">${dist.v} en orden</span><span class="pill a">${dist.a} a revisar</span><span class="pill r">${dist.r} requieren acción</span></span>`)}</div>
+  <div class="h2">Acción requerida <small>— ¿qué hay que resolver?</small></div>
+  <div class="kpis">${K('Con alertas altas',altas.length,esc(altas.map(d=>d.nombre).join(', ')||'Ninguno'))}${K('Sobre-asignados',sob.length,esc(nomb(sob)))}
+    ${K('Cargos sin actividad curricular',sinAct.length,esc(nomb(sinAct)))}${K('Dedicación menor a 20 h',baja.length,esc(nomb(baja)))}</div>
+  <div class="h2">Listado de docentes</div>
+  <div class="chips">${Object.keys(LAB).map(k=>`<span class="chip${S.fd===k?' on':''}" data-act="fd" data-v="${k}">${LAB[k]}<b>${L.filter(FIL[k]).length}</b></span>`).join('')}</div>
+  <div class="tbl"><div class="th" style="grid-template-columns:${cols}"><span>Docente</span><span>Materias</span><span>Dedicación total</span><span>Ficha</span><span>Estado</span></div>
+  ${rows||'<div class="tr" style="grid-template-columns:1fr;color:#8A9BB0">Ningún docente coincide con este filtro.</div>'}</div>`+resHTML('car');
+}
+
+/* ---------- 2b · Ficha del docente ---------- */
+function vDocente(){
+  const d=docOf(S.doc),x=indDoc(d);
+  const al=A.filter(a=>a.docIds.includes(d.id)),f=fun(d),tot=Math.max(dedTot(d),1);
+  const seg=(v,c)=>v?`<i style="width:${v/tot*100}%;background:${c}" title="${v} h"></i>`:'';
+  const cols='1.2fr .8fr .5fr 2.5fr';
+  const filas=d.cargos.map(c=>{
+    const nv=c.vigente===false;
+    return `<div class="tr" style="grid-template-columns:${cols}${nv?';color:#8A9BB0':''}"><span><b>${c.cargo}</b></span><span>${c.desig}${nv?' <span class="pill g">No vigente</span>':''}</span><span>${fmt(c.hs)} h</span>
+      <span>${c.asig.length?c.asig.map(a=>`${esc(a.mat)} <span class="small muted">(${esc(planOf(a.car).carrera)}${a.cat!=='Única'?', '+a.cat:''})</span>${a.resp?' <span class="pill v">Responsable</span>':''}`).join('<br>'):'<span class="pill r">Sin asignación a cátedra</span>'}</span></div>`}).join('');
+  return `<button class="back" data-act="go" data-s="${S.back}">← Volver a ${TITULOS[S.back]}</button>
+  <div class="hdr"><div class="ph"><h1>${esc(d.nombre)} <span style="margin-left:8px;vertical-align:middle">${semB(x.sem)}</span></h1><p>${fmt(dedTot(d))} h de dedicación total · rango ${rangoDed(d)}</p></div>${pdfBtn('doc',d.id)}</div>`+simNote()+
+  `<div class="g" style="grid-template-columns:1fr 2fr">
+    <div class="card cp"><div class="h2" style="margin-top:0">Estado de la información</div>${indHTML(x)}</div>
+    <div class="card cp"><div class="kv"><div><span>Dedicación total</span><b>${fmt(dedTot(d))} h</b></div><div><span>Rango</span><b>${rangoDed(d)}</b></div><div><span>Tope 60 h</span><b style="color:${tope60(d)>CFG.tope?'#B93635':'#16344F'}">${fmt(tope60(d))} h de ${CFG.tope} h</b></div><div><span>Materias vigentes</span><b>${nMat(d)}</b></div></div>
+    <div class="kv" style="margin-bottom:0"><div><span>Posgrado</span><b>${d.posgrado||'—'}</b></div><div><span>Investigación</span><b>${d.invest?'Sí':'No'}</b></div><div><span>Ficha completa</span><b>${4-fichaFalta(d).length} de 4 ítems</b></div><div><span>Gestión</span><b>${d.gestion.length?d.gestion.map(g=>esc(g.fn)+' ('+fmt(g.hs)+' h)').join(', '):'—'}</b></div></div></div></div>
+  <div class="h2">Cargos y asignaturas</div>
+  <div class="tbl"><div class="th" style="grid-template-columns:${cols}"><span>Cargo</span><span>Designación</span><span>Horas</span><span>Asignaturas</span></div>${filas}</div>
+  <div class="h2">Dedicación por función <small>— calculada desde la ficha · ${fmt(dedTot(d))} h en total</small></div>
+  <div class="card cp"><div class="stack" role="img" aria-label="Dedicación por función">${seg(f.doc,'#1A6BB0')}${seg(f.ges,'#EF9F27')}${seg(f.inv,'#7B5EA7')}${seg(f.vin,'#1E9E73')}</div>
+  <div class="leg"><span><i style="background:#1A6BB0"></i>Docencia ${fmt(f.doc)} h</span><span><i style="background:#EF9F27"></i>Gestión ${fmt(f.ges)} h</span><span><i style="background:#7B5EA7"></i>Investigación ${fmt(f.inv)} h</span><span><i style="background:#1E9E73"></i>Vinculación ${fmt(f.vin)} h</span><span>Desempeño no académico ${fmt(f.noac)} h (cuenta solo para el tope)</span></div></div>
+  <div class="h2">Ficha docente</div><div class="card cp">${fichaHTML(d,'ck')}</div>
+  <div class="h2">Alertas <small>— ${al.length}</small></div>${al.map(a=>alertRow(a,false)).join('')||'<div class="note info">Este docente no tiene alertas.</div>'}`;
+}
+
+/* ---------- Tablero · Docentes de la Facultad (estadísticos de MOD-DOC) ---------- */
+const facRows=st=>[
+ ['Composición','Docentes vigentes',st.N],['','Cargos vigentes',st.cargosV],
+ ['','Relación profesores / auxiliares',st.na?`${fmt(st.np/st.na)} : 1 (${st.np} / ${st.na})`:'—'],
+ ['','Con designación regular',`${pct(st.reg,st.N)}% · cargos vigentes: ${st.cReg} regulares · ${st.cInt} interinos`],
+ ['','Docentes por carrera',PLANES.map(p=>`${esc(p.carrera)}: ${docsCar(p.id).length}`).join(' · ')],
+ ['Formación','Con posgrado',`${pct(st.pos,st.N)}% (${st.pos} de ${st.N})`],
+ ['','Por máximo nivel',`Doctorado ${st.pg('Doctorado')} · Maestría ${st.pg('Maestría')} · Especialización ${st.pg('Especialización')} · Sin posgrado ${st.N-st.pos}`],
+ ['Investigación y vinculación','Con actividad de investigación',`${pct(st.inv,st.N)}% (${st.inv} de ${st.N})`],
+ ['','Con actividad de vinculación',`${pct(st.vin,st.N)}% (${st.vin} de ${st.N})`],
+ ['Dedicaciones','Dedicación total promedio',fmt(st.dprom)+' h'],['','Por rangos',st.rdTxt],['',`Superan el tope de ${CFG.tope} h`,st.tope],
+ ['Carga académica','Materias por docente (R-06)',`Mediana ${fmt(st.mMed)} · promedio ${fmt(st.mProm)} · máximo ${st.mMax}`],
+ ['','Responsables de cátedra',`${st.resp} docentes`],['','Materias cubiertas',`${st.matCub} de ${st.matTot}`]];
+function vFacultad(){
+  const st=plantelStats(DOC,null);
+  const K=(l,v,s)=>`<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div>${s?`<div class="s">${s}</div>`:''}</div>`;
+  const nv=[['Doctorado',st.pg('Doctorado')],['Maestría',st.pg('Maestría')],['Especialización',st.pg('Especialización')],['Sin posgrado',st.N-st.pos]];
+  return `<div class="hdr"><div class="ph"><h1>Docentes de la Facultad</h1><p>Facultad de Ingeniería · ${st.N} docentes vigentes · estadísticos de MOD-DOC.</p></div></div>`+runBar('fac')+simNote()+
+  `<div class="h2" style="margin-top:0">Composición</div>
+  <div class="kpis">${K('Docentes vigentes',st.N)}${K('Cargos vigentes',st.cargosV)}${K('Relación profesores / auxiliares',st.na?`${fmt(st.np/st.na)} : 1`:'—',`${st.np} cargos de profesor · ${st.na} de auxiliar`)}${K('Con designación regular',`${pct(st.reg,st.N)}%<small>${st.reg} de ${st.N}</small>`,`Cargos vigentes: ${st.cReg} regulares · ${st.cInt} interinos`)}</div>
+  <div class="g" style="grid-template-columns:1fr 1fr;margin-top:14px">
+    <div class="card cp"><div class="h2" style="margin-top:0">Docentes por carrera <small>— un docente puede dictar en varias</small></div>${barList(PLANES.map(p=>[esc(p.carrera),docsCar(p.id).length]),st.N)}</div>
+    <div class="card cp"><div class="h2" style="margin-top:0">Formación <small>— máximo nivel alcanzado</small></div>${barList(nv,st.N)}</div></div>
+  <div class="h2">Investigación, vinculación y dedicaciones</div>
+  <div class="kpis">${K('Con posgrado',`${pct(st.pos,st.N)}%<small>${st.pos} de ${st.N}</small>`)}${K('Con actividad de investigación',`${pct(st.inv,st.N)}%<small>${st.inv} de ${st.N}</small>`)}${K('Con actividad de vinculación',`${pct(st.vin,st.N)}%<small>${st.vin} de ${st.N}</small>`)}${K('Dedicación total promedio',`${fmt(st.dprom)}<small>h</small>`,`${st.tope} docente${st.tope===1?'':'s'} supera${st.tope===1?'':'n'} el tope de ${CFG.tope} h`)}</div>
+  <div class="card cp" style="margin-top:14px"><div class="l small muted">Dedicación total por rangos</div>
+    <div class="stack" style="height:18px;margin:8px 0" role="img" aria-label="Docentes por rango de dedicación">${st.rd.map((v,i)=>v?`<i style="width:${v/st.N*100}%;background:${RCOL[i]}" title="${RANGOS[i]}: ${v}"></i>`:'').join('')}</div>
+    <div class="leg">${RANGOS.map((r,i)=>`<span><i style="background:${RCOL[i]}"></i>${r}: <b>${st.rd[i]}</b></span>`).join('')}</div></div>
+  <div class="h2">Carga académica</div>
+  <div class="kpis k3">${K('Materias por docente (mediana) · R-06',fmt(st.mMed),`Promedio ${fmt(st.mProm)} · máximo ${st.mMax}`)}${K('Responsables de cátedra',st.resp,'Docentes con al menos una cátedra a cargo')}${K('Materias cubiertas',`${st.matCub}<small>de ${st.matTot}</small>`,'Todas las carreras')}</div>`+resHTML('fac');
+}
+
+function hbRow(label,h,min){
+  const sc=Math.max(h,min)*1.12,ok=h>=min;
+  return `<div class="hb"><span><b>${label}</b></span><div class="hbt"><i style="width:${h/sc*100}%;background:${ok?'#1E9E73':'#E24B4A'}"></i><u style="left:${min/sc*100}%" title="Mínimo ${min} h"></u></div>
+    <span>${h} h de ${min} h mínimas · ${ok?'<span class="pill v">Cumple</span>':`<span class="pill r">Faltan ${min-h} h</span>`}</span></div>`;
+}
+function vCarrera(){
+  const p=planOf(S.carP),s=statC(A,p),x=indPlan(p);
+  const cols='2.3fr .4fr .6fr 1.9fr 1.1fr';
+  const lista=p.asig.filter(a=>!S.fasig||A.some(z=>z.carrera===p.id&&z.asig===a.m));
+  const rows=lista.map(a=>{
+    const rs=responsables(p.id,a.m);
+    const resp=rs.length?rs.map(r=>`<span class="lnk" data-act="go" data-s="docente" data-v="${r.d.id}">${esc(r.d.nombre)}</span>${r.cat!=='Única'?` <span class="small muted">(${r.cat})</span>`:''}`).join('<br>'):'<span class="muted">—</span>';
+    const col=a.av<50?'#E24B4A':a.av<100?'#EF9F27':'#1E9E73';
+    return `<div class="tr" style="grid-template-columns:${cols};align-items:start"><span><b>${esc(a.m)}</b></span><span>${a.a}°</span><span>${a.b}</span><span>${resp}</span>
+      <span><div class="bar"><i style="width:${a.av}%;background:${col}"></i></div><span class="small muted">${a.av}% completo</span></span></div>`}).join('');
+  return `<div class="hdr"><div class="ph"><h1>Plan de estudios <span style="margin-left:8px;vertical-align:middle">${semB(s.sem)}</span></h1><p>${esc(p.carrera)} · Plan ${p.plan} · horas, asignaturas, responsables y programas.</p></div>${carSel('carP')}</div>`+runBar('plan')+simNote()+
+  `<div class="g" style="grid-template-columns:1fr 2fr;align-items:stretch">
+    <div class="card cp"><div class="h2" style="margin-top:0">Estado de la información</div>${indHTML(x)}
+      <div class="small muted" style="margin-top:8px">Avance promedio de programas ${x.av}% · ${x.cr}% de asignaturas con responsable</div></div>
+    <div class="kpis" style="grid-template-columns:repeat(2,1fr)">
+    <div class="kpi"><div class="l">Horas totales del plan</div><div class="v">${p.total}<small>mín. ${p.umb.minTotal} h</small></div><div class="s">${s.totOk?'Cumple el mínimo':'Por debajo del mínimo'}</div></div>
+    <div class="kpi"><div class="l">Bloques que cumplen</div><div class="v">${s.blOk} de 4</div></div>
+    <div class="kpi"><div class="l">Materias sin responsable</div><div class="v">${s.sinR}</div></div>
+    <div class="kpi"><div class="l">Programas con observaciones</div><div class="v">${s.prog}<small>de ${p.asig.length}</small></div></div>
+    <div class="kpi" style="grid-column:1/-1"><div class="l">Formación práctica</div><div class="v" style="color:${s.fp.est==='ok'?'#1E9E73':s.fp.est==='bajo'?'#E24B4A':'#8A9BB0'}">${s.fp.h}<small>mín. ${p.umb.minFP} h${s.fp.est==='nv'?' · total parcial':''}</small></div><div class="s">${esc(fpTxt(s.fp))}</div></div></div></div>
+  <div class="h2">Horas por tipo de bloque <small>— la línea oscura marca el mínimo</small></div>
+  <div class="card cp">${Object.keys(BQ).map(k=>hbRow(BQ[k],p.bloques[k],p.umb.minBloque[k])).join('')}${hbRow('Total del plan',p.total,p.umb.minTotal)}</div>
+  <div class="h2">Asignaturas <small>— ${lista.length} de ${p.asig.length}</small></div>
+  <div class="chips"><span class="chip${S.fasig?' on':''}" data-act="fasig">Mostrar solo asignaturas con alertas</span></div>
+  <div class="tbl"><div class="th" style="grid-template-columns:${cols}"><span>Asignatura</span><span>Año</span><span>Bloque</span><span>Responsable de cátedra</span><span>Programa</span></div>${rows||'<div class="tr" style="grid-template-columns:1fr;color:#8A9BB0">No hay asignaturas con alertas.</div>'}</div>
+  `+resHTML('plan');
+}
+
+/* ---------- 4 · Alertas (bandeja de pendientes) ---------- */
+function vAlertas(){
+  const c={alta:A.filter(a=>a.sev==='alta').length,media:A.filter(a=>a.sev==='media').length,info:A.filter(a=>a.sev==='info').length};
+  const lista=A.filter(a=>(S.fsev==='todas'||a.sev===S.fsev)&&(S.famb==='todas'||a.amb===S.famb));
+  const chipS=[['todas','Todas',A.length],['alta','Alta',c.alta],['media','Media',c.media],['info','Informativa',c.info]];
+  const chipA=[['todas','Todos los ámbitos',A.length],...Object.keys(AMB).map(k=>[k,AMB[k],A.filter(a=>a.amb===k).length])];
+  return ph('Alertas','Pendientes de toda la institución, ordenados por prioridad. Cada alerta lleva al docente o a la carrera de origen.')+simNote()+
+  `<div class="chips"><b style="color:#4A6580;margin-right:4px">Prioridad:</b>${chipS.map(([k,l,n])=>`<span class="chip${S.fsev===k?' on':''}" data-act="fsev" data-v="${k}">${l}<b>${n}</b></span>`).join('')}</div>
+  <div class="chips"><b style="color:#4A6580;margin-right:4px">Ámbito:</b>${chipA.map(([k,l,n])=>`<span class="chip${S.famb===k?' on':''}" data-act="famb" data-v="${k}">${l}<b>${n}</b></span>`).join('')}</div>
+  ${lista.map(a=>alertRow(a,true)).join('')||'<div class="note info">No hay alertas con estos filtros.</div>'}`;
+}
+
+/* ---------- 5 · Reglas de validación (a integrar luego en un módulo de configuración) ---------- */
+function setCfg(path,val,base=CFG){
+  const ks=path.split('.');let o=base;
+  for(let i=0;i<ks.length-1;i++)o=o[ks[i]];
+  o[ks[ks.length-1]]=val;
+}
+function vReglas(){
+  const inp=(path,label,val)=>`<div><label>${label}</label><input type="number" min="0" step="0.5" value="${val}" data-cfg="${path}"></div>`;
+  const pu=planOf(S.carU),inpU=(path,label,val)=>`<div><label>${label}</label><input type="number" min="0" step="0.5" value="${val}" data-umb="${path}"></div>`;
+  const cc='.3fr 3.4fr .8fr 1.2fr 1.3fr .5fr';
+  return ph('Reglas de validación','Reglas que usa el sistema para detectar alertas y sus umbrales. Al modificar un umbral, todo se recalcula al instante.')+
+  `<div class="tbl"><div class="th" style="grid-template-columns:${cc}"><span>N°</span><span>Regla</span><span>Tipo</span><span>Prioridad</span><span>Grupo de análisis</span><span>Casos</span></div>
+   ${REGLAS.map(r=>`<div class="tr" style="grid-template-columns:${cc}"><b>${r.r}</b><span>${esc(r.t)}</span><span>${r.tipo}</span><span>${r.sev}</span><span>${Object.values(GRUPOS).filter(G=>G.r.includes(r.r)).map(G=>G.t).join('<br>')}</span><b>${r.tipo==='Indicador'?'—':A.filter(a=>a.r===r.r).length}</b></div>`).join('')}</div>
+  <div class="card cp" style="margin-top:14px"><details class="umb"${S.umb?' open':''}><summary>Editar umbrales</summary>
+     <div class="h2">Umbrales de la Facultad <small>— comunes a todos los docentes</small></div>
+     <div class="ug">${inp('tope','Tope semanal: más de (h, doc. + gest. + no acad.)',CFG.tope)}${inp('bajaCarga','Baja dedicación: menos de (h totales)',CFG.bajaCarga)}${inp('maxMaterias','Sobre-asignación: más de (materias)',CFG.maxMaterias)}</div>
+     <div class="h2">Umbrales del plan de estudios <small>— propios de cada plan</small></div>
+     <div style="display:flex;gap:12px;flex-wrap:wrap">${carSel('carU')}<div class="csel"><label>Plan de estudios</label><select><option>Plan ${pu.plan}</option></select></div></div>
+     <div class="ug">${inpU('minTotal','Horas mínimas totales del plan',pu.umb.minTotal)}${Object.keys(BQ).map(k=>inpU('minBloque.'+k,'Mínimo bloque '+k,pu.umb.minBloque[k])).join('')}
+     ${inpU('minFP','Horas mínimas de formación práctica del plan',pu.umb.minFP)}</div></details></div>`;
+}
+
+/* ---------- Eventos ---------- */
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]');if(!t)return;
+  e.stopPropagation();
+  const v=t.dataset.v;
+  switch(t.dataset.act){
+    case 'go':go(t.dataset.s,v);break;
+    case 'doc':go('docente',v);break;
+    case 'fd':S.fd=v;render();break;
+    case 'fsev':S.fsev=v;render();break;
+    case 'famb':S.famb=v;render();break;
+    case 'fasig':S.fasig=!S.fasig;render();break;
+    case 'pdf':imprimir(t.dataset.k,v);break;
+    case 'run':correr(t.dataset.g);break;
+    case 'xpdf':imprimir('grp',t.dataset.g);break;
+    case 'xxls':xlsGrupo(t.dataset.g);break;
+  }
+});
+document.addEventListener('change',e=>{
+  const el=e.target;
+  if(el.dataset&&el.dataset.sel){if(el.dataset.sel==='carD')S.carD=el.value;if(el.dataset.sel==='carP')S.carP=el.value;if(el.dataset.sel==='carU')S.carU=el.value;render();return}
+  if(el.dataset&&el.dataset.umb){const n=parseFloat(el.value);if(!isNaN(n)&&n>=0){setCfg(el.dataset.umb,n,planOf(S.carU).umb);setTimeout(render)}return}
+  if(el.dataset&&el.dataset.cfg){const n=parseFloat(el.value);if(!isNaN(n)&&n>=0){setCfg(el.dataset.cfg,n);setTimeout(render)}}
+});
+document.addEventListener('toggle',e=>{if(e.target.matches&&e.target.matches('details.umb'))S.umb=e.target.open},true);
+
+render();
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-import { IsDateString, IsInt, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ActualizarProgramaDto {
@@ -48,7 +48,7 @@ export class ActualizarProgramaDto {
   @IsOptional() @IsString() condicionesAprobacion?: string;
 
   // S6
-  @IsOptional() @IsInt() @Type(() => Number) fechaVigenciaPrograma?: number;
+  @IsOptional() @IsInt() @Min(1000) @Max(9999) @Type(() => Number) fechaVigenciaPrograma?: number;
   @IsOptional() @IsString() anioAprobacionRevision?: string;
   @IsOptional() @IsString() profesorACargo?: string;
   @IsOptional() @IsString() competenciasVinculadas?: string;

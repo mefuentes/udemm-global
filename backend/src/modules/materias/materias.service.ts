@@ -2,7 +2,6 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CrearMateriaDto } from './dto/crear-materia.dto';
@@ -40,25 +39,6 @@ function buildDiff(antes: Record<string, unknown>, despues: Record<string, unkno
 @Injectable()
 export class MateriasService {
   constructor(private readonly prisma: PrismaService) {}
-
-  // ── Ownership ─────────────────────────────────────────────────────────────
-
-  private async verificarOwnershipDocente(materiaId: string, usuarioId: string): Promise<void> {
-    const docente = await this.prisma.docente.findUnique({ where: { usuarioId } });
-    if (!docente) {
-      throw new ForbiddenException('Sin acceso: sin perfil docente asociado');
-    }
-    const vinculacion = await this.prisma.vinculacionCatedra.findFirst({
-      where: {
-        docenteId: docente.id,
-        materiaId,
-        estado: 'APROBADA',
-      },
-    });
-    if (!vinculacion) {
-      throw new ForbiddenException('Sin acceso: no tenés una vinculación aprobada con esta asignatura');
-    }
-  }
 
   // ── Historial ─────────────────────────────────────────────────────────────
 
@@ -171,10 +151,7 @@ export class MateriasService {
     return materia;
   }
 
-  async actualizar(id: string, dto: ActualizarMateriaDto, usuarioId: string, rolNombre: string) {
-    if (rolNombre === 'DOCENTE') {
-      await this.verificarOwnershipDocente(id, usuarioId);
-    }
+  async actualizar(id: string, dto: ActualizarMateriaDto, usuarioId: string) {
     const antes = await this.obtenerPorId(id);
 
     // Construir objeto plano para evitar problemas con instancias de clase y Prisma
