@@ -433,6 +433,26 @@ export interface CondicionesPlantellDto {
 /**
  * Respuesta del endpoint POST /autoevaluacion/tablero/carrera/:carreraId.
  *
+// ── FP resumen por plan (D07) ─────────────────────────────────────────────────
+
+/** Sumatoria de Formación Práctica por plan de estudios (D07). */
+export interface FpResumenPlan {
+  planEstudioId: string;
+  planNombre: string;
+  totalMaterias: number;
+  /** Materias con hsFormacionPractica cargado (nuevo campo D07) */
+  conDatosNuevos: number;
+  /** Suma de hsFormacionPractica de esas materias */
+  sumaHsNuevo: number;
+  /** Materias con solo formacionPracticaJson (histórico, sin campo D07) */
+  conDatosHistoricos: number;
+  /** Suma de horasClase del JSON histórico de esas materias */
+  sumaHsHistorico: number;
+  /** Materias sin ningún dato de FP */
+  sinDatos: number;
+}
+
+/**
  * estadoGeneralCalculo refleja el estado más restrictivo entre IP-01, IP-02,
  * IP-03, IP-04, IP-08, IP-09, IP-10, IP-13, R-10 y R-12.
  */
@@ -463,5 +483,10 @@ export interface TablroCarreraResponseDto {
    * Presente en ejecuciones ≥ v2.1. Ausente en snapshots históricos anteriores.
    */
   condicionesPlantell?: CondicionesPlantellDto;
+  /**
+   * Sumatoria de Formación Práctica por plan (D07).
+   * Presente en ejecuciones ≥ v2.2. Diferencia datos nuevos (D07), históricos (JSON) y faltantes.
+   */
+  fpPorPlan?: FpResumenPlan[];
   estadoGeneralCalculo: EstadoCalculo;
 }

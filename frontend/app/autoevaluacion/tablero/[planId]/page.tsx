@@ -232,11 +232,12 @@ function TarjetaR13({ r13 }: { r13: ResultadoR13 }) {
     );
   }
   const tipoEntradas = Object.entries(r13.porTipo).filter(([, v]) => v > 0);
+  const horasMin = r13.configuracionPlan?.horasMinFormacionPractica ?? null;
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
       <div className="flex items-center gap-2 mb-3">
         <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10">R-13</span>
-        <span className="text-xs font-semibold text-slate-700">Distribución por tipo de asignatura</span>
+        <span className="text-xs font-semibold text-slate-700">Formación práctica</span>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         <Metrica label="Total materias" valor={r13.totalMaterias} />
@@ -246,22 +247,34 @@ function TarjetaR13({ r13 }: { r13: ResultadoR13 }) {
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <div className="rounded-lg px-3 py-2 border border-slate-200 bg-slate-50">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-0.5">PPS</p>
-          <p className="text-sm font-bold text-slate-700">{r13.tienePPS ? `${r13.horasPPS ?? '—'} h` : 'Ausente'}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-0.5">Hs. FP totales</p>
+          <p className="text-sm font-bold text-slate-700">{r13.totalHorasFormacionPractica} h</p>
         </div>
         <div className="rounded-lg px-3 py-2 border border-slate-200 bg-slate-50">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-0.5">PI</p>
-          <p className="text-sm font-bold text-slate-700">{r13.tienePI ? `${r13.horasPI ?? '—'} h` : 'Ausente'}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-0.5">Mínimo requerido</p>
+          <p className="text-sm font-bold text-slate-700">{horasMin != null ? `${horasMin} h` : '—'}</p>
         </div>
       </div>
+      {r13.sinDatosFP > 0 && (
+        <div className="mt-2 p-2 rounded-lg bg-slate-50 border border-slate-200">
+          <p className="text-[11px] text-slate-600">{r13.sinDatosFP} materia(s) sin datos de formación práctica.</p>
+        </div>
+      )}
       {!r13.tienePPS && !r13.tienePI && (
         <div className="mt-2 p-2 rounded-lg bg-amber-50 border border-amber-200">
           <p className="text-[11px] text-amber-700">El plan no tiene materias de tipo PPS ni PI.</p>
         </div>
       )}
+      {r13.violacionesFormacion.length > 0 && (
+        <div className="mt-2 p-2 rounded-lg bg-red-50 border border-red-200">
+          {r13.violacionesFormacion.map((v, i) => (
+            <p key={i} className="text-[11px] text-red-700">{v}</p>
+          ))}
+        </div>
+      )}
       {ec === 'PARCIAL' && (
         <div className="mt-2 p-2 rounded-lg bg-amber-50 border border-amber-200">
-          <p className="text-[11px] text-amber-700">Hay materias PPS o PI sin carga horaria registrada — horas parciales.</p>
+          <p className="text-[11px] text-amber-700">Hay materias sin datos de formación práctica — la suma total puede estar subestimada.</p>
         </div>
       )}
       <div className="flex justify-end mt-2">
@@ -504,7 +517,7 @@ function TableroPlanInner() {
         <span>/</span>
         <Link href="/autoevaluacion" className="hover:text-slate-600 transition-colors">Autoevaluación</Link>
         <span>/</span>
-        <span className="text-slate-600 font-medium">Tablero por plan</span>
+        <span className="text-slate-600 font-medium">Plan de Estudios</span>
       </nav>
 
       {/* Header */}
@@ -553,6 +566,60 @@ function TableroPlanInner() {
           </span>
         </div>
       )}
+
+      {/* ── Panel: Correr análisis ─────────────────────────────────────── */}
+      <div className="mt-6 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <div className="flex items-center justify-between gap-4 mb-3">
+          <div>
+            <p className="text-xs font-bold text-slate-700">Análisis explícito del plan</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Ejecuta y guarda una evaluación completa. Los resultados quedan disponibles en el historial.
+            </p>
+          </div>
+          <button
+            onClick={correrAnalisis}
+            disabled={corriendo || !dato}
+            className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold bg-[#0f4c81] text-white hover:bg-[#0f4c81]/90 active:bg-[#0f4c81]/80 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {corriendo ? <IcSpinner sm /> : null}
+            {corriendo ? 'Ejecutando...' : 'Correr análisis'}
+          </button>
+        </div>
+
+        {errorAnalisis && (
+          <div className="p-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 mb-3">
+            {errorAnalisis}
+          </div>
+        )}
+
+        {ultimaEjecucion && (
+          <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs space-y-1 mb-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-emerald-600 font-bold text-[11px]">✓ Guardado</span>
+              <EstadoBadge ec={ultimaEjecucion.estadoCalculo} />
+              <span className="text-[10px] font-mono text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                {ultimaEjecucion.ejecucionId.slice(0, 8)}…
+              </span>
+            </div>
+            <p className="text-slate-500">{formatFecha(ultimaEjecucion.fechaEjecucion)}</p>
+          </div>
+        )}
+
+        {/* Exportar plan */}
+        <div className="border-t border-slate-100 pt-3 mb-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">Exportar última ejecución</p>
+          {errorExport && <p className="text-[11px] text-red-600 mb-2">{errorExport}</p>}
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => exportar('pdf')} disabled={!!exportando} className="flex items-center gap-1 text-[11px] font-semibold text-white bg-[#0f4c81] hover:bg-[#0f4c81]/90 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+              {exportando === 'pdf' ? <IcSpinner sm /> : null} PDF
+            </button>
+            <button onClick={() => exportar('xlsx')} disabled={!!exportando} className="flex items-center gap-1 text-[11px] font-semibold text-[#0f4c81] bg-white border border-[#0f4c81]/30 hover:bg-[#0f4c81]/5 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+              {exportando === 'xlsx' ? <IcSpinner sm /> : null} Excel
+            </button>
+          </div>
+        </div>
+
+      </div>
 
       {/* Loading inicial */}
       {cargando && !dato && (
@@ -760,110 +827,57 @@ function TableroPlanInner() {
         </div>
       )}
 
-      {/* ── Panel: Correr análisis ─────────────────────────────────────── */}
-      <div className="mt-6 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-        <div className="flex items-center justify-between gap-4 mb-3">
-          <div>
-            <p className="text-xs font-bold text-slate-700">Análisis explícito del plan</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Ejecuta y guarda una evaluación completa. Los resultados quedan disponibles en el historial.
-            </p>
-          </div>
-          <button
-            onClick={correrAnalisis}
-            disabled={corriendo || !dato}
-            className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold bg-[#0f4c81] text-white hover:bg-[#0f4c81]/90 active:bg-[#0f4c81]/80 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
-          >
-            {corriendo ? <IcSpinner sm /> : null}
-            {corriendo ? 'Ejecutando...' : 'Correr análisis'}
-          </button>
+      {/* ── Historial de ejecuciones ─────────────────────────────────────── */}
+      <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Historial de ejecuciones</p>
+          {cargandoHist && <IcSpinner sm />}
         </div>
-
-        {errorAnalisis && (
-          <div className="p-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 mb-3">
-            {errorAnalisis}
+        {historial && historial.items.length === 0 && !cargandoHist && (
+          <p className="text-[11px] text-slate-400 italic">Sin ejecuciones registradas para este plan.</p>
+        )}
+        {historial && historial.items.length > 0 && (
+          <div className="space-y-1.5">
+            {historial.items.map((item: ItemHistorial) => (
+              <div key={item.ejecucionId} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 border border-slate-100 text-xs flex-wrap">
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${item.estadoEjecucion === 'COMPLETADO' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                  {item.estadoEjecucion}
+                </span>
+                {item.estadoCalculo && <EstadoBadge ec={item.estadoCalculo} />}
+                <span className="text-slate-500 text-[11px]">{formatFecha(item.fechaInicio)}</span>
+                <span className="font-mono text-[10px] text-slate-300">{item.ejecucionId.slice(0, 8)}…</span>
+                {item.errores && <span className="text-red-500 text-[10px]">{item.errores}</span>}
+                {item.estadoEjecucion === 'COMPLETADO' && (
+                  <div className="ml-auto flex gap-1">
+                    <button onClick={() => exportar('pdf', item.ejecucionId)} disabled={!!exportando} className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40">PDF</button>
+                    <button onClick={() => exportar('xlsx', item.ejecucionId)} disabled={!!exportando} className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40">XLS</button>
+                  </div>
+                )}
+              </div>
+            ))}
+            {historial.total > historial.porPagina && (
+              <div className="flex items-center justify-between mt-1">
+                <button
+                  onClick={() => setPaginaHistorial((p) => Math.max(1, p - 1))}
+                  disabled={paginaHistorial <= 1 || cargandoHist}
+                  className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  ← Anterior
+                </button>
+                <span className="text-[10px] text-slate-400">
+                  Pág.&nbsp;{paginaHistorial}&nbsp;de&nbsp;{Math.ceil(historial.total / historial.porPagina)}
+                </span>
+                <button
+                  onClick={() => setPaginaHistorial((p) => p + 1)}
+                  disabled={paginaHistorial * historial.porPagina >= historial.total || cargandoHist}
+                  className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Siguiente →
+                </button>
+              </div>
+            )}
           </div>
         )}
-
-        {ultimaEjecucion && (
-          <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs space-y-1 mb-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-emerald-600 font-bold text-[11px]">✓ Guardado</span>
-              <EstadoBadge ec={ultimaEjecucion.estadoCalculo} />
-              <span className="text-[10px] font-mono text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                {ultimaEjecucion.ejecucionId.slice(0, 8)}…
-              </span>
-            </div>
-            <p className="text-slate-500">{formatFecha(ultimaEjecucion.fechaEjecucion)}</p>
-          </div>
-        )}
-
-        {/* Exportar plan */}
-        <div className="border-t border-slate-100 pt-3 mb-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">Exportar última ejecución</p>
-          {errorExport && <p className="text-[11px] text-red-600 mb-2">{errorExport}</p>}
-          <div className="flex gap-2 flex-wrap">
-            <button onClick={() => exportar('pdf')} disabled={!!exportando} className="flex items-center gap-1 text-[11px] font-semibold text-white bg-[#0f4c81] hover:bg-[#0f4c81]/90 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
-              {exportando === 'pdf' ? <IcSpinner sm /> : null} PDF
-            </button>
-            <button onClick={() => exportar('xlsx')} disabled={!!exportando} className="flex items-center gap-1 text-[11px] font-semibold text-[#0f4c81] bg-white border border-[#0f4c81]/30 hover:bg-[#0f4c81]/5 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
-              {exportando === 'xlsx' ? <IcSpinner sm /> : null} Excel
-            </button>
-          </div>
-        </div>
-
-        {/* Historial */}
-        <div className="border-t border-slate-100 pt-3">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Historial de ejecuciones</p>
-            {cargandoHist && <IcSpinner sm />}
-          </div>
-          {historial && historial.items.length === 0 && !cargandoHist && (
-            <p className="text-[11px] text-slate-400 italic">Sin ejecuciones registradas para este plan.</p>
-          )}
-          {historial && historial.items.length > 0 && (
-            <div className="space-y-1.5">
-              {historial.items.map((item: ItemHistorial) => (
-                <div key={item.ejecucionId} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 border border-slate-100 text-xs flex-wrap">
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${item.estadoEjecucion === 'COMPLETADO' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                    {item.estadoEjecucion}
-                  </span>
-                  {item.estadoCalculo && <EstadoBadge ec={item.estadoCalculo} />}
-                  <span className="text-slate-500 text-[11px]">{formatFecha(item.fechaInicio)}</span>
-                  <span className="font-mono text-[10px] text-slate-300">{item.ejecucionId.slice(0, 8)}…</span>
-                  {item.errores && <span className="text-red-500 text-[10px]">{item.errores}</span>}
-                  {item.estadoEjecucion === 'COMPLETADO' && (
-                    <div className="ml-auto flex gap-1">
-                      <button onClick={() => exportar('pdf', item.ejecucionId)} disabled={!!exportando} className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40">PDF</button>
-                      <button onClick={() => exportar('xlsx', item.ejecucionId)} disabled={!!exportando} className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40">XLS</button>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {historial.total > historial.porPagina && (
-                <div className="flex items-center justify-between mt-1">
-                  <button
-                    onClick={() => setPaginaHistorial((p) => Math.max(1, p - 1))}
-                    disabled={paginaHistorial <= 1 || cargandoHist}
-                    className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    ← Anterior
-                  </button>
-                  <span className="text-[10px] text-slate-400">
-                    Pág.&nbsp;{paginaHistorial}&nbsp;de&nbsp;{Math.ceil(historial.total / historial.porPagina)}
-                  </span>
-                  <button
-                    onClick={() => setPaginaHistorial((p) => p + 1)}
-                    disabled={paginaHistorial * historial.porPagina >= historial.total || cargandoHist}
-                    className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    Siguiente →
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
       </div>
 
     </div>

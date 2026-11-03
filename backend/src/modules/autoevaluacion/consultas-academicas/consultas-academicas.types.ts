@@ -192,8 +192,10 @@ export interface ConfigFormacionPracticaAut {
   requierePPS: boolean | null;
   /** null = no configurado; true = requerido; false = explícitamente no requerido */
   requierePI: boolean | null;
-  /** null = no configurado; 0–100 = porcentaje mínimo de horas prácticas sobre total del plan */
+  /** @deprecated Usar horasMinFormacionPractica. Conservado para compatibilidad. */
   porcentajeMinFormacion: number | null;
+  /** null = no configurado; >= 0 = horas mínimas de formación práctica del plan */
+  horasMinFormacionPractica: number | null;
 }
 
 // ── R-12: ficha de docente ────────────────────────────────────────────────────
@@ -467,7 +469,19 @@ export interface MateriaProgramaAut {
    * JSON raw de ProgramaAsignatura.formacionPracticaJson.
    * Estructura: Array<{ intensidad: string; horasClase: number }>.
    * null cuando no hay programa o el campo no fue cargado.
-   * Usado por R-14 para derivar horasFormacionPractica.
+   * Usado por R-14 como fallback cuando hsFormacionPractica es null.
    */
   formacionPracticaJson: string | null;
+  /** Nuevo campo estructurado (D07). null cuando no fue cargado o es anterior a D07. */
+  hsSincronicas: number | null;
+  /** Nuevo campo estructurado (D07). null cuando no fue cargado o es anterior a D07. */
+  hsAsincronicas: number | null;
+  /** Nuevo campo estructurado (D07). null cuando no fue cargado o es anterior a D07. */
+  hsPresenciales: number | null;
+  /**
+   * Total de FP calculado por el servicio (hsSincronicas + hsAsincronicas + hsPresenciales).
+   * null cuando no fue cargado o es anterior a D07.
+   * Usado por R-14 como fuente primaria; si es null se usa formacionPracticaJson.
+   */
+  hsFormacionPractica: number | null;
 }

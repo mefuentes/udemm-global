@@ -59,6 +59,7 @@ export class ActualizarMateriaDto {
 
   @IsOptional()
   @IsString()
+  @IsIn(['Cuatrimestral', 'Anual'])
   regimenCursado?: string;
 
   @IsOptional()

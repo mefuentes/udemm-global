@@ -70,9 +70,10 @@ model PlanEstudio {
   horasMinTA            Int?
   horasMinCTX           Int?
   // MOD-AUT R-13: configuración de formación práctica (FSD §6.3). NULL = no configurado (≠ false = no requerido).
-  requierePPS            Boolean?
-  requierePI             Boolean?
-  porcentajeMinFormacion Int?
+  requierePPS               Boolean?
+  requierePI                Boolean?
+  porcentajeMinFormacion    Int?     // deprecated: usar horasMinFormacionPractica
+  horasMinFormacionPractica Int?
   materias              Materia[]
   carrera               Carrera              @relation(fields: [carreraId], references: [id])
   vinculaciones         VinculacionCatedra[]
@@ -157,6 +158,10 @@ model ProgramaAsignatura {
   unidadesDidacticasJson       String?
   formacionPracticaJson        String?
   actividadesFormacionPractica String?
+  hsSincronicas                Int?
+  hsAsincronicas               Int?
+  hsPresenciales               Int?
+  hsFormacionPractica          Int?
   historial                    HistorialPrograma[]
   solicitudes                  SolicitudAprobacionPrograma[]
   mensajesCorrecion            MensajeCorrecionPrograma[]

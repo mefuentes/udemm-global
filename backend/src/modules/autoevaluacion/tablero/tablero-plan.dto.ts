@@ -9,10 +9,7 @@ export type {
   ProgramaInconsistenteR11,
   ResultadoR11,
 } from '../indicadores/r11.evaluador';
-export type {
-  MateriaFormacionPracticaR13,
-  ResultadoR13,
-} from '../indicadores/r13.evaluador';
+export type { ResultadoR13 } from '../indicadores/r13.evaluador';
 export type {
   MateriaAlertaR14,
   ResultadoR14,

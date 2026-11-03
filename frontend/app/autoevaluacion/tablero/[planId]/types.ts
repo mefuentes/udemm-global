@@ -78,15 +78,7 @@ export interface ResultadoR11 {
   estadoCalculo: EstadoCalculo;
 }
 
-// ── R-13 — Distribución de asignaturas por tipo ────────────────────────────────
-
-export interface MateriaFormacionPracticaR13 {
-  id: string;
-  nombre: string;
-  codigo: string;
-  tipoAsignatura: string;
-  cargaHorariaTotal: number | null;
-}
+// ── R-13 — Formación práctica ──────────────────────────────────────────────────
 
 export interface ResultadoR13 {
   planEstudioId: string;
@@ -94,10 +86,15 @@ export interface ResultadoR13 {
   porTipo: Record<string, number>;
   tienePPS: boolean;
   tienePI: boolean;
-  horasPPS: number | null;
-  horasPI: number | null;
-  materiasPPS: MateriaFormacionPracticaR13[];
-  materiasPI: MateriaFormacionPracticaR13[];
+  totalHorasFormacionPractica: number;
+  conDatosFP: number;
+  sinDatosFP: number;
+  configuracionPlan: {
+    requierePPS: boolean | null;
+    requierePI: boolean | null;
+    horasMinFormacionPractica: number | null;
+  };
+  violacionesFormacion: string[];
   estadoCalculo: EstadoCalculo;
 }
 

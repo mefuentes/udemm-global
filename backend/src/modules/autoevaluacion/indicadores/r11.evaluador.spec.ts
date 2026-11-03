@@ -44,6 +44,7 @@ function makeMateria(
     fechaAprobacion: null,
     anioVigencia: null,
     formacionPracticaJson,
+    hsSincronicas: null, hsAsincronicas: null, hsPresenciales: null, hsFormacionPractica: null,
   };
 }
 

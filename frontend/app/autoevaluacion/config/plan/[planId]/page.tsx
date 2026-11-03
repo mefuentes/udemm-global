@@ -17,7 +17,7 @@ interface ConfigPlan {
   horasMinCTX: number | null;
   requierePPS: boolean | null;
   requierePI: boolean | null;
-  porcentajeMinFormacion: number | null;
+  horasMinFormacionPractica: number | null;
 }
 
 type CampoUmbral = 'horasMinTotales' | 'horasMinCB' | 'horasMinTB' | 'horasMinTA' | 'horasMinCTX';
@@ -106,12 +106,12 @@ function ConfigPlanInner() {
   const [exito,     setExito]     = useState(false);
   const [errorGuardar, setErrorGuardar] = useState<string | null>(null);
 
-  // R-13: '' = null, 'true'/'false' para booleanos, string numérico para porcentaje
-  const [formR13, setFormR13] = useState<{ requierePPS: string; requierePI: string; porcentajeMinFormacion: string }>({
-    requierePPS: '', requierePI: '', porcentajeMinFormacion: '',
+  // R-13: '' = null, 'true'/'false' para booleanos, string numérico para horas
+  const [formR13, setFormR13] = useState<{ requierePPS: string; requierePI: string; horasMinFormacionPractica: string }>({
+    requierePPS: '', requierePI: '', horasMinFormacionPractica: '',
   });
-  const snapshotR13Ref = useRef<{ requierePPS: string; requierePI: string; porcentajeMinFormacion: string }>({
-    requierePPS: '', requierePI: '', porcentajeMinFormacion: '',
+  const snapshotR13Ref = useRef<{ requierePPS: string; requierePI: string; horasMinFormacionPractica: string }>({
+    requierePPS: '', requierePI: '', horasMinFormacionPractica: '',
   });
 
   // ── Carga ────────────────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ function ConfigPlanInner() {
       const r13Valores = {
         requierePPS: cfg.requierePPS !== null ? String(cfg.requierePPS) : '',
         requierePI:  cfg.requierePI  !== null ? String(cfg.requierePI)  : '',
-        porcentajeMinFormacion: cfg.porcentajeMinFormacion !== null ? String(cfg.porcentajeMinFormacion) : '',
+        horasMinFormacionPractica: cfg.horasMinFormacionPractica !== null ? String(cfg.horasMinFormacionPractica) : '',
       };
       setFormR13(r13Valores);
       snapshotR13Ref.current = { ...r13Valores };
@@ -168,14 +168,14 @@ function ConfigPlanInner() {
     if (e) { erroresCampo[p.campo] = e; hayErrores = true; }
   }
 
-  const errPorcentaje = (() => {
-    const v = formR13.porcentajeMinFormacion;
+  const errHorasFP = (() => {
+    const v = formR13.horasMinFormacionPractica;
     if (v === '') return null;
     const n = Number(v);
-    if (!Number.isInteger(n) || n < 0 || n > 100) return 'Debe ser un entero entre 0 y 100 o vacío';
+    if (!Number.isInteger(n) || n < 0) return 'Debe ser un entero ≥ 0 o vacío (sin umbral)';
     return null;
   })();
-  if (errPorcentaje) hayErrores = true;
+  if (errHorasFP) hayErrores = true;
 
   // ── Guardar ──────────────────────────────────────────────────────────────
 
@@ -201,11 +201,11 @@ function ConfigPlanInner() {
       sinCambios = false;
       payload[campo] = formR13[campo] === '' ? null : formR13[campo] === 'true';
     }
-    // R-13 porcentaje
-    if (formR13.porcentajeMinFormacion !== snapshotR13Ref.current.porcentajeMinFormacion) {
+    // R-13 horas mínimas FP
+    if (formR13.horasMinFormacionPractica !== snapshotR13Ref.current.horasMinFormacionPractica) {
       sinCambios = false;
-      payload.porcentajeMinFormacion =
-        formR13.porcentajeMinFormacion === '' ? null : Number(formR13.porcentajeMinFormacion);
+      payload.horasMinFormacionPractica =
+        formR13.horasMinFormacionPractica === '' ? null : Number(formR13.horasMinFormacionPractica);
     }
 
     if (sinCambios) {
@@ -239,7 +239,7 @@ function ConfigPlanInner() {
       const nuevosR13 = {
         requierePPS: cfg.requierePPS !== null ? String(cfg.requierePPS) : '',
         requierePI:  cfg.requierePI  !== null ? String(cfg.requierePI)  : '',
-        porcentajeMinFormacion: cfg.porcentajeMinFormacion !== null ? String(cfg.porcentajeMinFormacion) : '',
+        horasMinFormacionPractica: cfg.horasMinFormacionPractica !== null ? String(cfg.horasMinFormacionPractica) : '',
       };
       setFormR13(nuevosR13);
       snapshotR13Ref.current = { ...nuevosR13 };
@@ -261,7 +261,7 @@ function ConfigPlanInner() {
   // Indicadores de modificación para R-13
   const r13PPSmod = esAdmin && formR13.requierePPS !== snapshotR13Ref.current.requierePPS;
   const r13PImod  = esAdmin && formR13.requierePI  !== snapshotR13Ref.current.requierePI;
-  const r13Pctmod = esAdmin && formR13.porcentajeMinFormacion !== snapshotR13Ref.current.porcentajeMinFormacion;
+  const r13Pctmod = esAdmin && formR13.horasMinFormacionPractica !== snapshotR13Ref.current.horasMinFormacionPractica;
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -554,7 +554,7 @@ function ConfigPlanInner() {
               </div>
             </div>
 
-            {/* porcentajeMinFormacion */}
+            {/* horasMinFormacionPractica */}
             <div className="px-5 py-4 flex items-start gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
@@ -567,13 +567,13 @@ function ConfigPlanInner() {
                     </span>
                   )}
                 </div>
-                <p className="text-xs font-semibold text-slate-700 leading-snug">Porcentaje mínimo de formación práctica</p>
+                <p className="text-xs font-semibold text-slate-700 leading-snug">Horas de formación práctica</p>
                 <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                  Umbral de horas PPS+PI como porcentaje del total del plan (0–100).
-                  Sin configurar → R-13 no evalúa el porcentaje.
+                  Cantidad mínima de horas de formación práctica exigidas para el plan (entero ≥ 0).
+                  Sin configurar → R-13 no evalúa el umbral de horas.
                 </p>
-                {errPorcentaje && (
-                  <p className="text-[11px] text-red-600 mt-1">{errPorcentaje}</p>
+                {errHorasFP && (
+                  <p className="text-[11px] text-red-600 mt-1">{errHorasFP}</p>
                 )}
               </div>
               <div className="flex-shrink-0 w-36">
@@ -582,33 +582,32 @@ function ConfigPlanInner() {
                     <input
                       type="number"
                       min={0}
-                      max={100}
                       step={1}
-                      value={formR13.porcentajeMinFormacion}
+                      value={formR13.horasMinFormacionPractica}
                       onChange={e => {
                         setExito(false);
                         setErrorGuardar(null);
-                        setFormR13(prev => ({ ...prev, porcentajeMinFormacion: e.target.value }));
+                        setFormR13(prev => ({ ...prev, horasMinFormacionPractica: e.target.value }));
                       }}
                       placeholder="Sin umbral"
                       className={`w-full text-xs border rounded-lg pl-3 pr-7 py-2 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] ${
-                        errPorcentaje
+                        errHorasFP
                           ? 'border-red-300 bg-red-50'
                           : r13Pctmod
                           ? 'border-amber-300 bg-amber-50'
                           : 'border-slate-200 bg-white'
                       }`}
                     />
-                    {formR13.porcentajeMinFormacion !== '' && (
+                    {formR13.horasMinFormacionPractica !== '' && (
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none select-none">
-                        %
+                        Hs
                       </span>
                     )}
                   </div>
                 ) : (
                   <p className="text-sm font-semibold tabular-nums text-right text-slate-700">
-                    {config.porcentajeMinFormacion !== null
-                      ? `${config.porcentajeMinFormacion} %`
+                    {config.horasMinFormacionPractica !== null
+                      ? `${config.horasMinFormacionPractica} Hs`
                       : <span className="text-slate-400 font-normal text-xs">Sin configurar</span>}
                   </p>
                 )}

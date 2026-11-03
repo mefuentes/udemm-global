@@ -88,11 +88,12 @@ export interface ResultadoR14 {
  *   Detecta materias cuyas horas de formación práctica declaradas en el programa
  *   superan la carga horaria total de la asignatura. Alerta MEDIA.
  *
- * Fuente de horasFormacionPractica:
- *   Suma de horasClase en ProgramaAsignatura.formacionPracticaJson
- *   (array de {intensidad: string, horasClase: number} validado por el módulo de programas).
- *   Si formacionPracticaJson es null, vacío o no parseable → 0 horas declaradas (sin alerta).
- *   Si alguna fila tiene horasClase inválido → materia sin datos (no se evalúa).
+ * Fuente de horasFormacionPractica (D07, con fallback):
+ *   1. Si hsFormacionPractica (D07) no es null → se usa directamente.
+ *   2. Fallback: suma de horasClase en ProgramaAsignatura.formacionPracticaJson
+ *      (array de {intensidad: string, horasClase: number}).
+ *   Si el fallback es null, vacío o no parseable → 0 horas declaradas (sin alerta).
+ *   Si alguna fila del JSON tiene horasClase inválido → materia sin datos (no se evalúa).
  *
  * Fuente de horasTotal: Materia.cargaHorariaTotal.
  *
@@ -142,7 +143,13 @@ export class R14EvaluadorService implements IndicadorEvaluador<ResultadoR14> {
     let hayParseError = false;
 
     for (const mp of materiasProgramas) {
-      const horasFormacion = parsearFormacionPracticaJson(mp.formacionPracticaJson);
+      // Fuente primaria: hsFormacionPractica (campo D07); fallback: formacionPracticaJson
+      let horasFormacion: number | null;
+      if (mp.hsFormacionPractica !== null) {
+        horasFormacion = mp.hsFormacionPractica;
+      } else {
+        horasFormacion = parsearFormacionPracticaJson(mp.formacionPracticaJson);
+      }
 
       if (horasFormacion === null) {
         // formacionPracticaJson no pudo parsearse → sin datos confiables

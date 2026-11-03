@@ -20,6 +20,7 @@ body {
   min-height: 100vh;
   background: #f1f5f9;
   color: #0f172a;
+  overflow-x: hidden;
 }
 
 html.dark body {

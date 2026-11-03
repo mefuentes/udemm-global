@@ -567,7 +567,7 @@ export class ConsultasAcademicasService {
 
     const plan = await this.prisma.planEstudio.findUnique({
       where: { id: planEstudioId },
-      select: { id: true, carreraId: true, requierePPS: true, requierePI: true, porcentajeMinFormacion: true },
+      select: { id: true, carreraId: true, requierePPS: true, requierePI: true, porcentajeMinFormacion: true, horasMinFormacionPractica: true },
     });
     if (!plan) throw new NotFoundException(`Plan de estudio ${planEstudioId} no encontrado`);
 
@@ -579,6 +579,7 @@ export class ConsultasAcademicasService {
       requierePPS: plan.requierePPS ?? null,
       requierePI: plan.requierePI ?? null,
       porcentajeMinFormacion: plan.porcentajeMinFormacion ?? null,
+      horasMinFormacionPractica: plan.horasMinFormacionPractica ?? null,
     };
   }
 
@@ -1244,6 +1245,8 @@ export class ConsultasAcademicasService {
             estadoS1: true, estadoS2: true, estadoS3: true,
             estadoS4: true, estadoS5: true, estadoS6: true,
             formacionPracticaJson: true,
+            hsSincronicas: true, hsAsincronicas: true,
+            hsPresenciales: true, hsFormacionPractica: true,
           },
         },
       },
@@ -1280,6 +1283,10 @@ export class ConsultasAcademicasService {
         fechaAprobacion: p?.fechaAprobacion ?? null,
         anioVigencia: p?.anioVigencia ?? null,
         formacionPracticaJson: p?.formacionPracticaJson ?? null,
+        hsSincronicas: p?.hsSincronicas ?? null,
+        hsAsincronicas: p?.hsAsincronicas ?? null,
+        hsPresenciales: p?.hsPresenciales ?? null,
+        hsFormacionPractica: p?.hsFormacionPractica ?? null,
       };
     });
   }

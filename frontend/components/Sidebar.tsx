@@ -169,7 +169,7 @@ export function Sidebar() {
       submenu: [
         { label: 'Inicio',               href: '/autoevaluacion'         },
         { label: 'Bandeja de alertas',   href: '/autoevaluacion/alertas' },
-        { label: 'Reglas de validación', href: '/autoevaluacion/reglas'  },
+        { label: 'Configuración de Evaluaciones', href: '/autoevaluacion/reglas'  },
       ],
     };
 

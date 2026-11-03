@@ -693,12 +693,10 @@ describe('ExportacionesService', () => {
         r13: {
           estadoCalculo: 'CALCULADO',
           totalMaterias: 30, tienePPS: true, tienePI: false,
-          horasPPS: 200, horasPI: null,
+          totalHorasFormacionPractica: 200, conDatosFP: 1, sinDatosFP: 0,
           porTipo: { PPS: 2, 'PRÁCTICA SUPERVISADA': 1 },
-          materiasPPS: [
-            { id: 'm1', nombre: 'PPS I', codigo: 'PPS01', tipoAsignatura: 'PPS', cargaHorariaTotal: 100 },
-          ],
-          materiasPI: [],
+          configuracionPlan: { requierePPS: true, requierePI: false, horasMinFormacionPractica: 150 },
+          violacionesFormacion: [],
         },
         r14: {
           estadoCalculo: 'CALCULADO',
@@ -824,13 +822,10 @@ describe('ExportacionesService', () => {
         },
         r13: {
           estadoCalculo: 'CALCULADO', totalMaterias: 30, tienePPS: true, tienePI: false,
-          horasPPS: 200, horasPI: null,
+          totalHorasFormacionPractica: 200, conDatosFP: 2, sinDatosFP: 0,
           porTipo: { PPS: 2, 'PRÁCTICA SUPERVISADA': 1 },
-          materiasPPS: [
-            { id: 'm1', nombre: 'PPS I', codigo: 'PPS01', tipoAsignatura: 'PPS', cargaHorariaTotal: 100 },
-            { id: 'm2', nombre: 'PPS II', codigo: 'PPS02', tipoAsignatura: 'PPS', cargaHorariaTotal: 100 },
-          ],
-          materiasPI: [],
+          configuracionPlan: { requierePPS: true, requierePI: false, horasMinFormacionPractica: 150 },
+          violacionesFormacion: [],
         },
         r14: {
           estadoCalculo: 'CALCULADO', totalMaterias: 30, totalEvaluadas: 28, totalConAlerta: 2, totalSinDatos: 2,

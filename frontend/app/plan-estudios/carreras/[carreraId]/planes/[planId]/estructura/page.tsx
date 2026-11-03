@@ -13,19 +13,23 @@ import { normalizarMayusculas } from '@/lib/normalizarMayusculas';
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
 const BLOQUE_NOMBRE: Record<string, string> = {
-  CB: 'Ciencias Básicas',
-  TB: 'Tecnologías Básicas',
-  TA: 'Tecnologías Aplicadas',
-  CX: 'Cs. y Tecn. Complementarias',
-  EL: 'Electivas',
+  CB:  'Ciencias Básicas',
+  TB:  'Tecnologías Básicas',
+  TA:  'Tecnologías Aplicadas',
+  CX:  'Cs. y Tecn. Complementarias',
+  EL:  'Electivas',
+  PI:  'Proyecto Final Integrador',
+  PPS: 'Prácticas Profesionales Supervisadas',
 };
 
 const BLOQUES_CONOCIMIENTO = [
-  { codigo: 'CB', label: 'CB - Ciencias Básicas' },
-  { codigo: 'TB', label: 'TB - Tecnologías Básicas' },
-  { codigo: 'TA', label: 'TA - Tecnologías Aplicadas' },
-  { codigo: 'CX', label: 'CX - Cs. y Tecn. Complementarias' },
-  { codigo: 'EL', label: 'EL - Electivas' },
+  { codigo: 'CB',  label: 'CB - Ciencias Básicas' },
+  { codigo: 'TB',  label: 'TB - Tecnologías Básicas' },
+  { codigo: 'TA',  label: 'TA - Tecnologías Aplicadas' },
+  { codigo: 'CX',  label: 'CX - Cs. y Tecn. Complementarias' },
+  { codigo: 'EL',  label: 'EL - Electivas' },
+  { codigo: 'PI',  label: 'PI - Proyecto Final Integrador' },
+  { codigo: 'PPS', label: 'PPS - Prácticas Profesionales Supervisadas' },
 ];
 
 const TIPOS_ASIGNATURA   = ['OBLIGATORIA', 'ELECTIVA'];

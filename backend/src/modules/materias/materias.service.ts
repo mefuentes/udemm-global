@@ -136,12 +136,18 @@ export class MateriasService {
   }
 
   async crear(dto: CrearMateriaDto, usuarioId: string) {
+    let semanalesCrear: number | undefined;
+    if (dto.cargaHorariaTotal && dto.regimenCursado) {
+      const divisor = dto.regimenCursado === 'Anual' ? 32 : 16;
+      semanalesCrear = Math.round(dto.cargaHorariaTotal / divisor);
+    }
     const materia = await this.prisma.materia.create({
       data: {
         ...dto,
         creditos: dto.creditos ?? 0,
         tipoAsignatura: dto.tipoAsignatura ?? 'OBLIGATORIA',
-        estado: dto.estado ?? 'ACTIVO'
+        estado: dto.estado ?? 'ACTIVO',
+        ...(semanalesCrear !== undefined ? { cargaHorariaSemanal: semanalesCrear } : {})
       }
     });
     await this.registrarHistorial(
@@ -167,10 +173,17 @@ export class MateriasService {
     if (dto.observaciones     !== undefined) data.observaciones     = dto.observaciones;
     if (dto.anio              !== undefined) data.anio              = dto.anio;
     if (dto.cuatrimestre      !== undefined) data.cuatrimestre      = dto.cuatrimestre;
-    if (dto.cargaHorariaSemanal !== undefined) data.cargaHorariaSemanal = dto.cargaHorariaSemanal;
     if (dto.cargaHorariaTotal !== undefined) data.cargaHorariaTotal = dto.cargaHorariaTotal;
     // creditos no es nullable en el schema — nunca pasar null
     if (dto.creditos !== undefined) data.creditos = dto.creditos ?? 0;
+
+    // Recalcular horas semanales a partir del total y régimen (nuevo o existente)
+    const totalFinal   = (data.cargaHorariaTotal as number | undefined | null) ?? antes.cargaHorariaTotal;
+    const regimenFinal = (data.regimenCursado   as string | undefined) ?? antes.regimenCursado;
+    if (totalFinal && regimenFinal) {
+      const divisor = regimenFinal === 'Anual' ? 32 : 16;
+      data.cargaHorariaSemanal = Math.round(totalFinal / divisor);
+    }
 
     const materia = await this.prisma.materia.update({
       where: { id },

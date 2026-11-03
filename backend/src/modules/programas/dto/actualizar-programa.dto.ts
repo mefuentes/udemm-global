@@ -20,6 +20,10 @@ export class ActualizarProgramaDto {
   // S4
   @IsOptional() @IsString() formacionPracticaJson?: string;
   @IsOptional() @IsString() actividadesFormacionPractica?: string;
+  @IsOptional() @IsInt() @Min(0) @Max(999) @Type(() => Number) hsSincronicas?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(999) @Type(() => Number) hsAsincronicas?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(999) @Type(() => Number) hsPresenciales?: number;
+  // hsFormacionPractica es calculado por el servicio; no se acepta del cliente
 
   // S2 (legacy)
   @IsOptional() @IsString() fundamentacion?: string;

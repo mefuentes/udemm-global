@@ -21,6 +21,7 @@ import type {
   DedicacionConeauItem,
   DedicacionTipoItem,
   DistribucionSemaforosDto,
+  FpResumenPlan,
   PosgradoTipoItem,
   DocenteAccionRequerida,
   FilaDocenteListado,
@@ -166,8 +167,8 @@ export class TablroCarreraService {
       this.calcularR04ParaCarrera(carreraId, usuarioId, rolNombre, fechaEvaluacion),
     ] as const);
 
-    const [[ip01, ip02, ip03, ip08, ip04, ip09, ip10, ip13, r10, r12], [r03result, r04Results]] =
-      await Promise.all([mainP, arP]);
+    const [[ip01, ip02, ip03, ip08, ip04, ip09, ip10, ip13, r10, r12], [r03result, r04Results], fpPorPlan] =
+      await Promise.all([mainP, arP, this.calcularFpPorPlan(carreraId)]);
 
     const accionRequerida = this.buildAccionRequerida(ip13, r10, r03result, r04Results);
 
@@ -202,6 +203,7 @@ export class TablroCarreraService {
       accionRequerida,
       listadoDocentes,
       condicionesPlantell,
+      fpPorPlan,
       estadoGeneralCalculo: estadoMasRestrictivo(
         ip01.estadoCalculo, ip02.estadoCalculo,
         ip03.estadoCalculo, ip04.estadoCalculo, ip08.estadoCalculo,
@@ -209,6 +211,64 @@ export class TablroCarreraService {
         r10.estadoCalculo, r12.estadoCalculo,
       ),
     };
+  }
+
+  /** D07: Sumatoria de Formación Práctica por plan de estudios. */
+  private async calcularFpPorPlan(carreraId: string): Promise<FpResumenPlan[]> {
+    const planes = await this.prisma.planEstudio.findMany({
+      where: { carreraId, estado: 'ACTIVO' },
+      select: {
+        id: true, nombre: true,
+        materias: {
+          where: { estado: 'ACTIVO' },
+          select: {
+            programa: {
+              select: {
+                hsFormacionPractica: true,
+                formacionPracticaJson: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { nombre: 'asc' },
+    });
+
+    return planes.map(plan => {
+      let conDatosNuevos = 0, sumaHsNuevo = 0;
+      let conDatosHistoricos = 0, sumaHsHistorico = 0;
+      let sinDatos = 0;
+
+      for (const mat of plan.materias) {
+        const prog = mat.programa;
+        if (!prog) { sinDatos++; continue; }
+        if (prog.hsFormacionPractica !== null) {
+          conDatosNuevos++;
+          sumaHsNuevo += prog.hsFormacionPractica;
+        } else if (prog.formacionPracticaJson) {
+          try {
+            const rows: unknown = JSON.parse(prog.formacionPracticaJson);
+            if (Array.isArray(rows)) {
+              const suma = (rows as Array<{ horasClase?: unknown }>).reduce(
+                (acc, r) => acc + (typeof r.horasClase === 'number' ? r.horasClase : 0),
+                0,
+              );
+              conDatosHistoricos++;
+              sumaHsHistorico += suma;
+            } else sinDatos++;
+          } catch { sinDatos++; }
+        } else sinDatos++;
+      }
+
+      return {
+        planEstudioId: plan.id,
+        planNombre: plan.nombre,
+        totalMaterias: plan.materias.length,
+        conDatosNuevos, sumaHsNuevo,
+        conDatosHistoricos, sumaHsHistorico,
+        sinDatos,
+      };
+    });
   }
 
   /**

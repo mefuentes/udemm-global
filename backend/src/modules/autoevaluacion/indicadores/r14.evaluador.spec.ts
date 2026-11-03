@@ -41,6 +41,32 @@ function makeMateria(
     fechaAprobacion: null,
     anioVigencia: null,
     formacionPracticaJson,
+    hsSincronicas: null, hsAsincronicas: null, hsPresenciales: null, hsFormacionPractica: null,
+  };
+}
+
+// Factory para materias con campos D07 (hsFormacionPractica)
+function makeMateriaD07(
+  id: string,
+  nombre: string,
+  cargaHorariaTotal: number | null,
+  hsFormacionPractica: number,
+): MateriaProgramaAut {
+  return {
+    materiaId: id,
+    materiaNombre: nombre,
+    materiaCodigo: `COD-${id}`,
+    tipoAsignatura: 'OBLIGATORIA',
+    cargaHorariaTotal,
+    tienePrograma: true,
+    estadoPrograma: 'APROBADO',
+    secciones: null,
+    seccionesCompletas: 6,
+    fechaAprobacion: null,
+    anioVigencia: null,
+    formacionPracticaJson: null,
+    hsSincronicas: null, hsAsincronicas: null, hsPresenciales: null,
+    hsFormacionPractica,
   };
 }
 
@@ -209,5 +235,55 @@ describe('R14EvaluadorService — metadatos', () => {
     const service = makeService(makeConsultas(materias));
     const res = await service.evaluar(makeContexto());
     expect(res.valor?.totalMaterias).toBe(2);
+  });
+});
+
+// ── D07: campos estructurados (hsFormacionPractica) ───────────────────────────
+
+describe('R14EvaluadorService — D07 hsFormacionPractica (fuente primaria)', () => {
+  it('hsFormacionPractica no null → usa ese valor en lugar del JSON', async () => {
+    const m = makeMateriaD07('m1', 'Álgebra', 64, 80);
+    const service = makeService(makeConsultas([m]));
+    const res = await service.evaluar(makeContexto());
+    expect(res.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+    expect(res.valor?.totalConAlerta).toBe(1);
+    const alerta = res.valor?.enAlerta[0]!;
+    expect(alerta.horasFormacionPractica).toBe(80);
+    expect(alerta.exceso).toBe(16);
+  });
+
+  it('hsFormacionPractica=0 → sin alerta (evaluada)', async () => {
+    const m = makeMateriaD07('m1', 'Álgebra', 64, 0);
+    const service = makeService(makeConsultas([m]));
+    const res = await service.evaluar(makeContexto());
+    expect(res.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+    expect(res.valor?.totalConAlerta).toBe(0);
+    expect(res.valor?.totalEvaluadas).toBe(1);
+  });
+
+  it('hsFormacionPractica <= cargaHorariaTotal → sin alerta', async () => {
+    const m = makeMateriaD07('m1', 'Álgebra', 64, 32);
+    const service = makeService(makeConsultas([m]));
+    const res = await service.evaluar(makeContexto());
+    expect(res.valor?.enAlerta).toHaveLength(0);
+  });
+
+  it('D07 + JSON: cuando hsFormacionPractica no es null, JSON ignorado', async () => {
+    // JSON diría 99 horas (alerta), pero D07 dice 10 (sin alerta)
+    const m: MateriaProgramaAut = {
+      ...makeMateriaD07('m1', 'Álgebra', 64, 10),
+      formacionPracticaJson: fpJson(99),
+    };
+    const service = makeService(makeConsultas([m]));
+    const res = await service.evaluar(makeContexto());
+    expect(res.valor?.totalConAlerta).toBe(0);
+  });
+
+  it('hsFormacionPractica null → fallback a JSON (compatibilidad histórica)', async () => {
+    const m = makeMateria('m1', 'Álgebra', 64, fpJson(80));
+    const service = makeService(makeConsultas([m]));
+    const res = await service.evaluar(makeContexto());
+    expect(res.valor?.totalConAlerta).toBe(1);
+    expect(res.valor?.enAlerta[0].horasFormacionPractica).toBe(80);
   });
 });

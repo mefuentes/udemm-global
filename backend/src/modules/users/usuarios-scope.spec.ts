@@ -116,7 +116,7 @@ const makeService = (prisma: any) => new UsuariosService(prisma as any);
 
 const DATA_CREAR_BASE = {
   nombre: 'Juan', apellido: 'Pérez',
-  correoElectronico: 'juan@test.com',
+  correoElectronico: 'juan@udemm.edu.ar',
   contrasena: 'Contrasena1!',
   rolId: ROL_DC_ID,
 };

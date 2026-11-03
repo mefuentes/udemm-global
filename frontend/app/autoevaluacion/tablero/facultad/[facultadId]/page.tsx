@@ -533,7 +533,7 @@ function TablerFacultadInner() {
       {/* Encabezado */}
       <div className="flex items-start justify-between gap-4 mb-5">
         <div>
-          <h1 className="text-lg font-bold text-slate-800 leading-tight">Tablero por facultad</h1>
+          <h1 className="text-lg font-bold text-slate-800 leading-tight">Cuerpo Académico (Facultad)</h1>
           <p className="text-xs text-slate-400 mt-1">
             {facultadNombre ? `Facultad: ${facultadNombre} — ` : ''}MOD-AUT v2.0
             {dato && <> · Evaluado el {formatFecha(dato.fechaEvaluacion)}</>}
@@ -557,40 +557,6 @@ function TablerFacultadInner() {
           <span className="text-[10px] text-slate-400 italic">
             Estado más restrictivo entre los 6 bloques del tablero de facultad.
           </span>
-        </div>
-      )}
-
-      {/* Loading inicial */}
-      {cargando && !dato && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 flex items-center justify-center gap-3">
-          <IcSpinner />
-          <span className="text-sm text-slate-500">Calculando indicadores de la facultad...</span>
-        </div>
-      )}
-
-      {/* Error */}
-      {error && !cargando && (
-        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {/* Bloques */}
-      {dato && (
-        <div className="space-y-4">
-          <BloqueComposicion dato={dato} />
-          <BloqueFormacionComp form={dato.formacion} />
-          <BloqueInvestigacionComp inv={dato.investigacion} />
-          <BloqueDedicacionesComp ded={dato.dedicaciones} />
-          <BloqueCargaAcademicaComp carga={dato.cargaAcademica} />
-          <BloqueDistribucionMateriasComp dist={dato.distribucionMaterias} />
-
-          {/* Nota metodológica */}
-          <p className="text-[10px] text-slate-400 text-center">
-            Tablero MOD-AUT §3–6 — Facultad. Universo: docentes activos con vinculación APROBADA.
-            B-04 usa umbral P-02 (p02BajaH); B-05 usa límite P-03 (p03MaxMat). Sin config → NO_DETERMINABLE.
-            B-06 R-06: materias distintas (distinct materiaId) por docente, cross-carrera.
-          </p>
         </div>
       )}
 
@@ -656,57 +622,93 @@ function TablerFacultadInner() {
           </div>
         </div>
 
-        <div className="border-t border-slate-100 pt-3">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Historial de ejecuciones</p>
-            {cargandoHist && <IcSpinner sm />}
-          </div>
-          {historial && historial.items.length === 0 && !cargandoHist && (
-            <p className="text-[11px] text-slate-400 italic">Sin ejecuciones registradas para esta facultad.</p>
-          )}
-          {historial && historial.items.length > 0 && (
-            <div className="space-y-1.5">
-              {historial.items.map((item: ItemHistorial) => (
-                <div key={item.ejecucionId} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 border border-slate-100 text-xs flex-wrap">
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${item.estadoEjecucion === 'COMPLETADO' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                    {item.estadoEjecucion}
-                  </span>
-                  {item.estadoCalculo && <EstadoBadge ec={item.estadoCalculo} />}
-                  <span className="text-slate-500 text-[11px]">{formatFecha(item.fechaInicio)}</span>
-                  <span className="font-mono text-[10px] text-slate-300">{item.ejecucionId.slice(0, 8)}…</span>
-                  {item.errores && <span className="text-red-500 text-[10px]">{item.errores}</span>}
-                  {item.estadoEjecucion === 'COMPLETADO' && (
-                    <div className="ml-auto flex gap-1">
-                      <button onClick={() => exportar('pdf', item.ejecucionId)} disabled={!!exportando} className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40">PDF</button>
-                      <button onClick={() => exportar('xlsx', item.ejecucionId)} disabled={!!exportando} className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40">XLS</button>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {historial.total > historial.porPagina && (
-                <div className="flex items-center justify-between mt-1">
-                  <button
-                    onClick={() => setPaginaHistorial((p) => Math.max(1, p - 1))}
-                    disabled={paginaHistorial <= 1 || cargandoHist}
-                    className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    ← Anterior
-                  </button>
-                  <span className="text-[10px] text-slate-400">
-                    Pág.&nbsp;{paginaHistorial}&nbsp;de&nbsp;{Math.ceil(historial.total / historial.porPagina)}
-                  </span>
-                  <button
-                    onClick={() => setPaginaHistorial((p) => p + 1)}
-                    disabled={paginaHistorial * historial.porPagina >= historial.total || cargandoHist}
-                    className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    Siguiente →
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+      </div>
+
+      {/* Loading inicial */}
+      {cargando && !dato && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 flex items-center justify-center gap-3">
+          <IcSpinner />
+          <span className="text-sm text-slate-500">Calculando indicadores de la facultad...</span>
         </div>
+      )}
+
+      {/* Error */}
+      {error && !cargando && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {/* Bloques */}
+      {dato && (
+        <div className="space-y-4">
+          <BloqueComposicion dato={dato} />
+          <BloqueFormacionComp form={dato.formacion} />
+          <BloqueInvestigacionComp inv={dato.investigacion} />
+          <BloqueDedicacionesComp ded={dato.dedicaciones} />
+          <BloqueCargaAcademicaComp carga={dato.cargaAcademica} />
+          <BloqueDistribucionMateriasComp dist={dato.distribucionMaterias} />
+
+          {/* Nota metodológica */}
+          <p className="text-[10px] text-slate-400 text-center">
+            Tablero MOD-AUT §3–6 — Facultad. Universo: docentes activos con vinculación APROBADA.
+            B-04 usa umbral P-02 (p02BajaH); B-05 usa límite P-03 (p03MaxMat). Sin config → NO_DETERMINABLE.
+            B-06 R-06: materias distintas (distinct materiaId) por docente, cross-carrera.
+          </p>
+        </div>
+      )}
+
+      {/* ── Historial de ejecuciones ─────────────────────────────────────── */}
+      <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Historial de ejecuciones</p>
+          {cargandoHist && <IcSpinner sm />}
+        </div>
+        {historial && historial.items.length === 0 && !cargandoHist && (
+          <p className="text-[11px] text-slate-400 italic">Sin ejecuciones registradas para esta facultad.</p>
+        )}
+        {historial && historial.items.length > 0 && (
+          <div className="space-y-1.5">
+            {historial.items.map((item: ItemHistorial) => (
+              <div key={item.ejecucionId} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 border border-slate-100 text-xs flex-wrap">
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${item.estadoEjecucion === 'COMPLETADO' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                  {item.estadoEjecucion}
+                </span>
+                {item.estadoCalculo && <EstadoBadge ec={item.estadoCalculo} />}
+                <span className="text-slate-500 text-[11px]">{formatFecha(item.fechaInicio)}</span>
+                <span className="font-mono text-[10px] text-slate-300">{item.ejecucionId.slice(0, 8)}…</span>
+                {item.errores && <span className="text-red-500 text-[10px]">{item.errores}</span>}
+                {item.estadoEjecucion === 'COMPLETADO' && (
+                  <div className="ml-auto flex gap-1">
+                    <button onClick={() => exportar('pdf', item.ejecucionId)} disabled={!!exportando} className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40">PDF</button>
+                    <button onClick={() => exportar('xlsx', item.ejecucionId)} disabled={!!exportando} className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40">XLS</button>
+                  </div>
+                )}
+              </div>
+            ))}
+            {historial.total > historial.porPagina && (
+              <div className="flex items-center justify-between mt-1">
+                <button
+                  onClick={() => setPaginaHistorial((p) => Math.max(1, p - 1))}
+                  disabled={paginaHistorial <= 1 || cargandoHist}
+                  className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  ← Anterior
+                </button>
+                <span className="text-[10px] text-slate-400">
+                  Pág.&nbsp;{paginaHistorial}&nbsp;de&nbsp;{Math.ceil(historial.total / historial.porPagina)}
+                </span>
+                <button
+                  onClick={() => setPaginaHistorial((p) => p + 1)}
+                  disabled={paginaHistorial * historial.porPagina >= historial.total || cargandoHist}
+                  className="text-[10px] font-semibold text-[#0f4c81] hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Siguiente →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
     </div>

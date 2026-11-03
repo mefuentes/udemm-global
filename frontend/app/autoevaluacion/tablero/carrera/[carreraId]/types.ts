@@ -248,6 +248,18 @@ export interface CondicionesPlantellResponse {
   estadoCalculo: EstadoCalculo;
 }
 
+/** Sumatoria de Formación Práctica por plan (D07). */
+export interface FpResumenPlan {
+  planEstudioId: string;
+  planNombre: string;
+  totalMaterias: number;
+  conDatosNuevos: number;
+  sumaHsNuevo: number;
+  conDatosHistoricos: number;
+  sumaHsHistorico: number;
+  sinDatos: number;
+}
+
 export interface TablroCarreraResponse {
   carreraId: string;
   /** ISO 8601 */
@@ -266,5 +278,7 @@ export interface TablroCarreraResponse {
   accionRequerida: ResultadoAccionRequerida;
   /** Condiciones del plantel CONEAU (FSD §9.2, B-03). Presente en ejecuciones ≥ v2.1. */
   condicionesPlantell?: CondicionesPlantellResponse;
+  /** FP por plan (D07). Presente en ejecuciones ≥ v2.2. */
+  fpPorPlan?: FpResumenPlan[];
   estadoGeneralCalculo: EstadoCalculo;
 }

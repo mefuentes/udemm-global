@@ -39,9 +39,19 @@ const SELECT_USUARIO_CON_SCOPE = {
   },
 };
 
+const REGEX_DOMINIO_INSTITUCIONAL = /^[^@\s]+@(udemm\.edu\.ar|docentes\.udemm\.edu\.ar)$/i;
+
 @Injectable()
 export class UsuariosService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private validarDominioEmail(correo: string): void {
+    if (!REGEX_DOMINIO_INSTITUCIONAL.test(correo.trim())) {
+      throw new BadRequestException(
+        'Solo se permiten correos institucionales @udemm.edu.ar o @docentes.udemm.edu.ar',
+      );
+    }
+  }
 
   /**
    * Garantiza la existencia y estado correcto del registro Docente vinculado al usuario.
@@ -146,7 +156,10 @@ export class UsuariosService {
     carreraId?: string;
     facultadId?: string;
   }) {
-    // 1. Correo único
+    // 1. Dominio institucional
+    this.validarDominioEmail(data.correoElectronico);
+
+    // 2. Correo único
     const existe = await this.prisma.usuario.findUnique({
       where: { correoElectronico: data.correoElectronico }
     });
@@ -352,7 +365,12 @@ export class UsuariosService {
       if (!facultad) throw new NotFoundException('La Facultad indicada no existe.');
     }
 
-    // 5. Correo único
+    // 5. Dominio institucional (solo si se provee nuevo email)
+    if (data.correoElectronico) {
+      this.validarDominioEmail(data.correoElectronico);
+    }
+
+    // 6. Correo único
     if (data.correoElectronico) {
       const existe = await this.prisma.usuario.findFirst({
         where: { correoElectronico: data.correoElectronico, NOT: { id } }
@@ -360,7 +378,7 @@ export class UsuariosService {
       if (existe) throw new BadRequestException('El correo electrónico ya está en uso');
     }
 
-    // 6. Construir payload de actualización (sin campos de scope, que van a tablas propias)
+    // 7. Construir payload de actualización (sin campos de scope, que van a tablas propias)
     const updateData: any = {};
     if (data.nombre !== undefined)            updateData.nombre = data.nombre;
     if (data.apellido !== undefined)          updateData.apellido = data.apellido;
@@ -370,7 +388,7 @@ export class UsuariosService {
       updateData.contrasenaHash = await bcrypt.hash(data.contrasena, 10);
     }
 
-    // 7. Actualizar usuario y gestionar scopes en una sola transacción atómica.
+    // 8. Actualizar usuario y gestionar scopes en una sola transacción atómica.
     //    Orden de operaciones:
     //      a) Actualizar fila Usuario
     //      b) Eliminar asociaciones que ya no corresponden al nuevo rol
@@ -397,7 +415,7 @@ export class UsuariosService {
       return u;
     });
 
-    // 8. Sincronizar registro Docente (fuera de la transacción, no crítico)
+    // 9. Sincronizar registro Docente (fuera de la transacción, no crítico)
     if (data.rolId !== undefined || usuarioActualizado.rol.nombre === 'DOCENTE') {
       await this.sincronizarDocente(
         {

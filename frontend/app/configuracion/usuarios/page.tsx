@@ -20,6 +20,8 @@ interface UsuarioDetalle extends Usuario {
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 const INPUT = 'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#0f4c81] focus:ring-1 focus:ring-[#0f4c81]/20 transition';
 const EMPTY_FORM = { nombre: '', apellido: '', correoElectronico: '', contrasena: '', rolId: '', carreraId: '', facultadId: '' };
+const REGEX_DOMINIO_INSTITUCIONAL = /^[^@\s]+@(udemm\.edu\.ar|docentes\.udemm\.edu\.ar)$/i;
+const MSG_DOMINIO = 'Solo se permiten correos institucionales @udemm.edu.ar o @docentes.udemm.edu.ar';
 const ITEMS_POR_PAGINA = 10;
 
 export default function UsuariosPage() {
@@ -186,6 +188,11 @@ export default function UsuariosPage() {
     }
     if (!editandoId && !form.contrasena) { setFormError('La contraseña es obligatoria para nuevos usuarios.'); return; }
 
+    const emailTrimmed = form.correoElectronico.trim();
+    if (!REGEX_DOMINIO_INSTITUCIONAL.test(emailTrimmed)) {
+      setFormError(MSG_DOMINIO); return;
+    }
+
     const rolNombreSeleccionado = roles.find(r => r.id === form.rolId)?.nombre ?? '';
     if (rolNombreSeleccionado === 'DIRECTOR_CARRERA' && !form.carreraId) {
       setFormError('Seleccioná la Carrera para el Director de Carrera.'); return;
@@ -196,7 +203,7 @@ export default function UsuariosPage() {
 
     setSubmitting(true); setFormError(null);
     try {
-      const body: Record<string, string> = { nombre: form.nombre, apellido: form.apellido, correoElectronico: form.correoElectronico, rolId: form.rolId };
+      const body: Record<string, string> = { nombre: form.nombre, apellido: form.apellido, correoElectronico: emailTrimmed, rolId: form.rolId };
       if (form.contrasena) body.contrasena = form.contrasena;
       if (rolNombreSeleccionado === 'DIRECTOR_CARRERA' && form.carreraId) body.carreraId = form.carreraId;
       if (rolNombreSeleccionado === 'DECANO' && form.facultadId) body.facultadId = form.facultadId;
@@ -225,7 +232,7 @@ export default function UsuariosPage() {
   const hasta  = Math.min(pagina * ITEMS_POR_PAGINA, total);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5 pt-4 px-2">
+    <div className="max-w-6xl mx-auto space-y-5 pt-4 px-3 sm:px-5">
 
       {/* Encabezado */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -251,7 +258,7 @@ export default function UsuariosPage() {
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
 
         {/* Filtros */}
-        <div className="px-4 py-3 border-b border-slate-100 flex flex-wrap gap-2 items-center">
+        <div className="px-4 py-3 border-b border-slate-100 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           {/*
             data-no-uppercase="true" evita que UppercaseInputGuard (listener global en
             fase capture) transforme el valor directamente en el DOM antes de que React
@@ -263,15 +270,15 @@ export default function UsuariosPage() {
             value={buscar}
             onChange={handleBuscarChange}
             placeholder="Buscar por nombre, apellido o email..."
-            className={`${FILTER_INPUT} min-w-[200px] flex-1`}
+            className={`${FILTER_INPUT} sm:min-w-[200px] flex-1`}
           />
-          <select value={filtroRol} onChange={handleFiltroRolChange} className={FILTER_INPUT}>
+          <select value={filtroRol} onChange={handleFiltroRolChange} className={`${FILTER_INPUT} w-full sm:w-auto`}>
             <option value="">Todos los roles</option>
             {roles.map(r => (
               <option key={r.id} value={r.id}>{r.nombre.replace(/_/g, ' ')}</option>
             ))}
           </select>
-          <select value={filtroActivo} onChange={handleFiltroActivoChange} className={FILTER_INPUT}>
+          <select value={filtroActivo} onChange={handleFiltroActivoChange} className={`${FILTER_INPUT} w-full sm:w-auto`}>
             <option value="">Todos los estados</option>
             <option value="true">Activos</option>
             <option value="false">Inactivos</option>
@@ -279,7 +286,7 @@ export default function UsuariosPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="min-w-[680px] w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="bg-[#0f4c81] text-white text-xs font-semibold uppercase tracking-wider">
                 <th className="px-4 py-3 text-left">Apellido y Nombre</th>
@@ -340,11 +347,11 @@ export default function UsuariosPage() {
 
         {/* Paginación */}
         {!loading && total > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50/40">
-            <span className="text-xs text-slate-500">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-t border-slate-100 bg-slate-50/40">
+            <span className="text-xs text-slate-500 text-center sm:text-left">
               Mostrando {desde}–{hasta} de {total} usuario{total !== 1 ? 's' : ''}
             </span>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center justify-center sm:justify-end gap-1.5">
               <button
                 onClick={() => { const p = Math.max(1, pagina - 1); setPagina(p); cargar(p, buscarRef.current); }}
                 disabled={pagina === 1}
@@ -370,8 +377,8 @@ export default function UsuariosPage() {
       {/* Modal */}
       {mostrarForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-2xl flex flex-col max-h-[92dvh]">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
               <h2 className="text-base font-semibold text-slate-800">
                 {editandoId ? 'Editar Usuario' : 'Nuevo Usuario'}
               </h2>
@@ -384,11 +391,11 @@ export default function UsuariosPage() {
                 </svg>
               </button>
             </div>
-            <div className="px-5 py-4 space-y-3">
+            <div className="px-5 py-4 space-y-3 overflow-y-auto">
               {formError && (
                 <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">{formError}</div>
               )}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Nombre *</label>
                   <input
@@ -411,6 +418,7 @@ export default function UsuariosPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Email *</label>
                 <input type="email" data-no-uppercase="true" value={form.correoElectronico} onChange={e => setForm(p => ({ ...p, correoElectronico: e.target.value }))} className={INPUT} />
+                <p className="mt-1 text-[11px] text-slate-400">Solo se permiten correos @udemm.edu.ar o @docentes.udemm.edu.ar</p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -458,7 +466,7 @@ export default function UsuariosPage() {
                 </div>
               )}
             </div>
-            <div className="px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-100 flex justify-end gap-2 flex-shrink-0">
               <button
                 onClick={() => setMostrarForm(false)}
                 className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"

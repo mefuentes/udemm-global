@@ -1360,15 +1360,7 @@ function DetalleR12({ valor, estadoCalculo }: { valor: unknown; estadoCalculo: s
   );
 }
 
-// ── R-13: Formación práctica insuficiente ─────────────────────────────────
-
-interface MateriaFormacionPracticaR13 {
-  materiaId: string;
-  nombre: string;
-  codigo: string;
-  tipoAsignatura: string;
-  cargaHorariaTotal: number | null;
-}
+// ── R-13: Formación práctica ──────────────────────────────────────────────────
 
 interface ValorR13 {
   planEstudioId: string;
@@ -1376,14 +1368,13 @@ interface ValorR13 {
   porTipo: { OBLIGATORIA: number; ELECTIVA: number; PPS: number; PI: number; OTRO: number };
   tienePPS: boolean;
   tienePI: boolean;
-  horasPPS: number | null;
-  horasPI: number | null;
-  materiasPPS: MateriaFormacionPracticaR13[];
-  materiasPI: MateriaFormacionPracticaR13[];
+  totalHorasFormacionPractica: number;
+  conDatosFP: number;
+  sinDatosFP: number;
   configuracionPlan: {
     requierePPS: boolean | null;
     requierePI: boolean | null;
-    porcentajeMinFormacion: number | null;
+    horasMinFormacionPractica: number | null;
   };
   violacionesFormacion: string[];
 }
@@ -1395,14 +1386,19 @@ function DetalleR13({ valor, estadoCalculo }: { valor: unknown; estadoCalculo: s
   if (!valor || typeof valor !== 'object') return <FallbackDetalle valor={valor} />;
   const v = valor as ValorR13;
   const violaciones = v.violacionesFormacion ?? [];
-  const materiasPPS = v.materiasPPS ?? [];
-  const materiasPI = v.materiasPI ?? [];
   const { porTipo = { OBLIGATORIA: 0, ELECTIVA: 0, PPS: 0, PI: 0, OTRO: 0 }, configuracionPlan } = v;
+  const horasMin = configuracionPlan?.horasMinFormacionPractica ?? null;
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Metrica label="Total materias" valor={v.totalMaterias} />
+        <Metrica label="Hs. FP totales" valor={`${v.totalHorasFormacionPractica ?? 0} h`} />
+        <Metrica label="Mínimo requerido" valor={horasMin !== null ? `${horasMin} h` : '— no configurado'} destaca={horasMin === null} />
+        <Metrica label="Sin datos FP" valor={v.sinDatosFP ?? 0} destaca={(v.sinDatosFP ?? 0) > 0} />
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         <Metrica label="Tiene PPS" valor={v.tienePPS ? 'Sí' : 'No'} destaca={!v.tienePPS && configuracionPlan?.requierePPS === true} />
         <Metrica label="Tiene PI" valor={v.tienePI ? 'Sí' : 'No'} destaca={!v.tienePI && configuracionPlan?.requierePI === true} />
       </div>
@@ -1419,25 +1415,13 @@ function DetalleR13({ valor, estadoCalculo }: { valor: unknown; estadoCalculo: s
         </div>
       </div>
 
-      {/* Horas */}
-      {(materiasPPS.length > 0 || materiasPI.length > 0) && (
-        <div className="grid grid-cols-2 gap-2">
-          {materiasPPS.length > 0 && (
-            <Metrica label="Horas PPS" valor={v.horasPPS !== null ? `${v.horasPPS} hs` : '— (datos incompletos)'} destaca={v.horasPPS === null} />
-          )}
-          {materiasPI.length > 0 && (
-            <Metrica label="Horas PI" valor={v.horasPI !== null ? `${v.horasPI} hs` : '— (datos incompletos)'} destaca={v.horasPI === null} />
-          )}
-        </div>
-      )}
-
       {/* Configuración del plan */}
       {configuracionPlan && (
         <div className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 space-y-0.5">
           <p className="font-semibold text-slate-600 uppercase tracking-wide text-[10px] mb-1">Configuración del plan</p>
           <p>Requiere PPS: <span className="font-medium">{configuracionPlan.requierePPS === null ? '— no configurado' : configuracionPlan.requierePPS ? 'Sí' : 'No'}</span></p>
           <p>Requiere PI: <span className="font-medium">{configuracionPlan.requierePI === null ? '— no configurado' : configuracionPlan.requierePI ? 'Sí' : 'No'}</span></p>
-          <p>% mínimo formación práctica: <span className="font-medium">{configuracionPlan.porcentajeMinFormacion !== null ? `${configuracionPlan.porcentajeMinFormacion}%` : '— no configurado'}</span></p>
+          <p>Horas mínimas formación práctica: <span className="font-medium">{horasMin !== null ? `${horasMin} h` : '— no configurado'}</span></p>
         </div>
       )}
 
@@ -1460,57 +1444,9 @@ function DetalleR13({ valor, estadoCalculo }: { valor: unknown; estadoCalculo: s
         <p className="text-xs text-emerald-700 font-medium flex items-center gap-1.5">
           <span className="text-emerald-500">✓</span>
           {estadoCalculo === 'PARCIAL'
-            ? 'Sin incumplimientos detectados — resultado parcial por datos de carga horaria incompletos.'
+            ? 'Sin incumplimientos detectados — resultado parcial (hay materias sin datos de formación práctica).'
             : 'El plan cumple los requisitos de formación práctica configurados.'}
         </p>
-      )}
-
-      {/* Listado de materias PPS/PI */}
-      {materiasPPS.length > 0 && (
-        <div>
-          <SeccionTitulo>Materias PPS</SeccionTitulo>
-          <TablaWrapper>
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left px-3 py-2 text-[10px] font-semibold uppercase text-slate-500">Nombre</th>
-                <th className="text-left px-3 py-2 text-[10px] font-semibold uppercase text-slate-500 w-24">Código</th>
-                <th className="text-right px-3 py-2 text-[10px] font-semibold uppercase text-slate-500 w-24">Carga hs.</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {materiasPPS.map((m) => (
-                <tr key={m.materiaId} className="hover:bg-slate-50/60">
-                  <td className="px-3 py-1.5 text-slate-700">{m.nombre}</td>
-                  <td className="px-3 py-1.5 font-mono text-slate-500">{m.codigo}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{m.cargaHorariaTotal !== null ? `${m.cargaHorariaTotal} hs` : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </TablaWrapper>
-        </div>
-      )}
-      {materiasPI.length > 0 && (
-        <div>
-          <SeccionTitulo>Materias PI</SeccionTitulo>
-          <TablaWrapper>
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left px-3 py-2 text-[10px] font-semibold uppercase text-slate-500">Nombre</th>
-                <th className="text-left px-3 py-2 text-[10px] font-semibold uppercase text-slate-500 w-24">Código</th>
-                <th className="text-right px-3 py-2 text-[10px] font-semibold uppercase text-slate-500 w-24">Carga hs.</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {materiasPI.map((m) => (
-                <tr key={m.materiaId} className="hover:bg-slate-50/60">
-                  <td className="px-3 py-1.5 text-slate-700">{m.nombre}</td>
-                  <td className="px-3 py-1.5 font-mono text-slate-500">{m.codigo}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{m.cargaHorariaTotal !== null ? `${m.cargaHorariaTotal} hs` : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </TablaWrapper>
-        </div>
       )}
     </div>
   );

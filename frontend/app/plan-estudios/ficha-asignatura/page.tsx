@@ -27,7 +27,14 @@ const TABS_FICHA = [
 type TabId = typeof TABS_FICHA[number]['id'];
 
 const TIPOS_ASIGNATURA = ['OBLIGATORIA', 'ELECTIVA', 'OPTATIVA'];
-const REGIMENES = ['Cuatrimestral', 'Anual', 'Intensivo', 'Bimestral'];
+const REGIMENES = ['Cuatrimestral', 'Anual'];
+
+function calcularSemanales(total: string, regimen: string): number | null {
+  const t = parseInt(total, 10);
+  if (!t || !regimen) return null;
+  const divisor = regimen === 'Anual' ? 32 : 16;
+  return Math.round(t / divisor);
+}
 
 const MODALIDADES_DICTADO = [
   { value: 'PRESENCIAL', label: 'Presencial' },
@@ -47,11 +54,13 @@ function colorModalidadBadge(val?: string | null) {
 }
 
 const BLOQUES_CONOCIMIENTO = [
-  { codigo: 'CB', label: 'CB - Ciencias Básicas' },
-  { codigo: 'TB', label: 'TB - Tecnologías Básicas' },
-  { codigo: 'TA', label: 'TA - Tecnologías Aplicadas' },
-  { codigo: 'CX', label: 'CX - Cs. y Tecn. Complementarias' },
-  { codigo: 'EL', label: 'EL - Electivas' },
+  { codigo: 'CB',  label: 'CB - Ciencias Básicas' },
+  { codigo: 'TB',  label: 'TB - Tecnologías Básicas' },
+  { codigo: 'TA',  label: 'TA - Tecnologías Aplicadas' },
+  { codigo: 'CX',  label: 'CX - Cs. y Tecn. Complementarias' },
+  { codigo: 'EL',  label: 'EL - Electivas' },
+  { codigo: 'PI',  label: 'PI - Proyecto Final Integrador' },
+  { codigo: 'PPS', label: 'PPS - Prácticas Profesionales Supervisadas' },
 ];
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -101,6 +110,10 @@ interface ProgramaAsignatura {
   unidadesDidacticasJson?: string;
   formacionPracticaJson?: string;
   actividadesFormacionPractica?: string;
+  hsSincronicas?: number | null;
+  hsAsincronicas?: number | null;
+  hsPresenciales?: number | null;
+  hsFormacionPractica?: number | null;
   fundamentacion?: string;
   propositos?: string;
   objetivosEspecificos?: string;
@@ -199,7 +212,7 @@ type FormEditar = {
   nombre: string; descripcion: string; bloqueConocimiento: string;
   modalidadDictado: string; tipoAsignatura: string; regimenCursado: string;
   anio: string; cuatrimestre: string; observaciones: string; estado: string;
-  cargaHorariaSemanal: string; cargaHorariaTotal: string; creditos: string;
+  cargaHorariaTotal: string; creditos: string;
 };
 
 // ── Iconos ────────────────────────────────────────────────────────────────────
@@ -623,7 +636,7 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
   const [form, setForm] = useState<FormEditar>({
     nombre: '', descripcion: '', bloqueConocimiento: '', modalidadDictado: '',
     tipoAsignatura: 'OBLIGATORIA', regimenCursado: '', anio: '', cuatrimestre: '',
-    observaciones: '', estado: 'ACTIVO', cargaHorariaSemanal: '', cargaHorariaTotal: '', creditos: ''
+    observaciones: '', estado: 'ACTIVO', cargaHorariaTotal: '', creditos: ''
   });
 
   // Correlativas management
@@ -656,7 +669,6 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
         cuatrimestre: data.cuatrimestre?.toString() ?? '',
         observaciones: data.observaciones ?? '',
         estado: data.estado ?? 'ACTIVO',
-        cargaHorariaSemanal: data.cargaHorariaSemanal?.toString() ?? '',
         cargaHorariaTotal: data.cargaHorariaTotal?.toString() ?? '',
         creditos: data.creditos?.toString() ?? ''
       });
@@ -685,8 +697,9 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
       };
       if (form.anio) payload.anio = parseInt(form.anio);
       if (form.cuatrimestre !== '') payload.cuatrimestre = parseInt(form.cuatrimestre);
-      if (form.cargaHorariaSemanal) payload.cargaHorariaSemanal = parseInt(form.cargaHorariaSemanal);
       if (form.cargaHorariaTotal) payload.cargaHorariaTotal = parseInt(form.cargaHorariaTotal);
+      const semanalesCalc = calcularSemanales(form.cargaHorariaTotal, form.regimenCursado);
+      if (semanalesCalc !== null) payload.cargaHorariaSemanal = semanalesCalc;
       if (form.creditos) payload.creditos = parseInt(form.creditos);
 
       await apiFetch(`${API_URL}/materias/${materiaId}`, {
@@ -760,7 +773,6 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
       cuatrimestre: ficha.cuatrimestre?.toString() ?? '',
       observaciones: ficha.observaciones ?? '',
       estado: ficha.estado ?? 'ACTIVO',
-      cargaHorariaSemanal: ficha.cargaHorariaSemanal?.toString() ?? '',
       cargaHorariaTotal: ficha.cargaHorariaTotal?.toString() ?? '',
       creditos: ficha.creditos?.toString() ?? ''
     });
@@ -967,9 +979,14 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
               <CampoEditable label="Horas semanales"
                 valor={ficha.cargaHorariaSemanal ? `${ficha.cargaHorariaSemanal} horas` : '—'}
                 editar={modoEditar}
-                input={<input type="text" inputMode="numeric" value={form.cargaHorariaSemanal}
-                  onChange={e => setForm(f => ({ ...f, cargaHorariaSemanal: soloDigitos(e.target.value) }))}
-                  className={inputCls} placeholder="0" />} />
+                input={(() => {
+                  const v = calcularSemanales(form.cargaHorariaTotal, form.regimenCursado);
+                  return (
+                    <input type="text" readOnly value={v !== null ? `${v} horas` : '—'}
+                      className={`${inputCls} bg-slate-50 dark:bg-slate-700/50 text-slate-400 dark:text-slate-500 cursor-default select-none`}
+                      title="Se calcula automáticamente: Horas totales ÷ 16 (cuatrimestral) o ÷ 32 (anual)" />
+                  );
+                })()} />
               <CampoEditable label="Horas totales"
                 valor={ficha.cargaHorariaTotal ? `${ficha.cargaHorariaTotal} horas` : '—'}
                 editar={modoEditar}
@@ -1301,14 +1318,21 @@ function calcEstadoS3(prog: ProgramaAsignatura): string {
 }
 
 function calcEstadoS4(prog: ProgramaAsignatura): string {
-  const hasActiv = (prog.actividadesFormacionPractica?.trim().length ?? 0) > 50;
+  if ((prog.actividadesFormacionPractica?.trim().length ?? 0) <= 50) return 'PENDIENTE';
+  // Path nuevo (D07): alguno de los tres campos > 0
+  if (
+    (typeof prog.hsSincronicas === 'number' && prog.hsSincronicas > 0) ||
+    (typeof prog.hsAsincronicas === 'number' && prog.hsAsincronicas > 0) ||
+    (typeof prog.hsPresenciales === 'number' && prog.hsPresenciales > 0)
+  ) return 'COMPLETO';
+  // Path histórico: formacionPracticaJson con al menos una fila válida
   const filas = tryParseJson<IntensidadFila[]>(prog.formacionPracticaJson) ?? [];
   const hasIntens = filas.some(f =>
     (f.intensidad?.trim().length ?? 0) > 0 &&
     typeof f.horasClase === 'number' && Number.isInteger(f.horasClase) &&
     f.horasClase >= 0 && f.horasClase <= 99
   );
-  return hasActiv && hasIntens ? 'COMPLETO' : 'PENDIENTE';
+  return hasIntens ? 'COMPLETO' : 'PENDIENTE';
 }
 
 const SECCIONES_PROGRAMA: SeccionConfig[] = [
@@ -1444,18 +1468,31 @@ async function exportarProgramaPDF(ficha: FichaCompleta, programa: ProgramaAsign
     'Actividades de formación práctica',
     programa.actividadesFormacionPractica ?? '',
   );
-  const tblIntens = intensFilasPdf.length === 0 ? SIN :
-    `<table>
-      <thead><tr>
-        <th style="width:80%">Intensidad de formación práctica</th>
-        <th style="width:20%;text-align:center">Horas de clase</th>
-      </tr></thead>
-      <tbody>
-        ${intensFilasPdf.map(f => `<tr>
-          <td>${nl2br(f.intensidad||'—')}</td>
-          <td style="text-align:center">${esc(f.horasClase != null ? String(f.horasClase) : '—')}</td>
-        </tr>`).join('')}
-      </tbody></table>`;
+  // D07: usar campos estructurados si existen; fallback a JSON histórico
+  const tblIntens = programa.hsFormacionPractica != null
+    ? `<table>
+        <thead><tr>
+          <th style="width:70%">Tipo</th>
+          <th style="width:30%;text-align:center">Horas</th>
+        </tr></thead>
+        <tbody>
+          <tr><td>Hs. Sincrónicas</td><td style="text-align:center">${esc(String(programa.hsSincronicas ?? 0))}</td></tr>
+          <tr><td>Hs. Asincrónicas</td><td style="text-align:center">${esc(String(programa.hsAsincronicas ?? 0))}</td></tr>
+          <tr><td>Hs. Presenciales</td><td style="text-align:center">${esc(String(programa.hsPresenciales ?? 0))}</td></tr>
+          <tr style="font-weight:600"><td>Hs. Formación Práctica (Total)</td><td style="text-align:center">${esc(String(programa.hsFormacionPractica))}</td></tr>
+        </tbody></table>`
+    : intensFilasPdf.length === 0 ? SIN
+    : `<table>
+        <thead><tr>
+          <th style="width:80%">Intensidad de formación práctica</th>
+          <th style="width:20%;text-align:center">Horas de clase</th>
+        </tr></thead>
+        <tbody>
+          ${intensFilasPdf.map(f => `<tr>
+            <td>${nl2br(f.intensidad||'—')}</td>
+            <td style="text-align:center">${esc(f.horasClase != null ? String(f.horasClase) : '—')}</td>
+          </tr>`).join('')}
+        </tbody></table>`;
   const s4HTML = s4ActHTML + campoTabla('Intensidad de la formación práctica', tblIntens);
 
   // ── S5: Metodología y evaluación (campos genéricos) ───────────────────
@@ -1583,6 +1620,11 @@ function ProgramaView({
   const [editUDRows, setEditUDRows] = useState<Array<{ _id: string; unidad: string; horas: string }>>([]);
   const udRefMap = useRef<Record<string, { unidad: HTMLTextAreaElement | null; horas: HTMLInputElement | null }>>({});
   const fpTextRef  = useRef<HTMLTextAreaElement | null>(null);
+  // D07: campos estructurados de Formación Práctica
+  const [editHsSincronicas,  setEditHsSincronicas]  = useState<string>('');
+  const [editHsAsincronicas, setEditHsAsincronicas] = useState<string>('');
+  const [editHsPresenciales, setEditHsPresenciales] = useState<string>('');
+  // Legacy
   const [editIntensRows, setEditIntensRows] = useState<Array<{ _id: string; intensidad: string; horasClase: string }>>([]);
   const intensRefMap = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const [guardando, setGuardando] = useState(false);
@@ -1705,6 +1747,11 @@ function ProgramaView({
 
   function iniciarEdicionFormacion() {
     const mkId = () => String(gridIdCounter.current++);
+    // Inicializar campos D07
+    setEditHsSincronicas(programa?.hsSincronicas != null ? String(programa.hsSincronicas) : '');
+    setEditHsAsincronicas(programa?.hsAsincronicas != null ? String(programa.hsAsincronicas) : '');
+    setEditHsPresenciales(programa?.hsPresenciales != null ? String(programa.hsPresenciales) : '');
+    // Inicializar legacy (para referencia histórica si no hay D07)
     const filas = tryParseJson<IntensidadFila[]>(programa?.formacionPracticaJson) ?? [];
     intensRefMap.current = {};
     setEditIntensRows(filas.map(f => ({
@@ -1718,18 +1765,22 @@ function ProgramaView({
 
   async function guardarFormacion() {
     const texto = fpTextRef.current?.value ?? '';
-    const filas: IntensidadFila[] = editIntensRows.map(row => ({
-      intensidad: intensRefMap.current[row._id]?.value ?? row.intensidad,
-      horasClase: Math.max(0, Math.min(99, parseInt(row.horasClase) || 0)),
-    }));
+    const hsSinStr = editHsSincronicas.trim();
+    const hsAsiStr = editHsAsincronicas.trim();
+    const hsPreStr = editHsPresenciales.trim();
     setGuardando(true);
     setErrorMsg(null);
     try {
       const payload: Record<string, unknown> = {
-        seccionModificada:           seccion.titulo,
+        seccionModificada:            seccion.titulo,
         actividadesFormacionPractica: texto,
-        formacionPracticaJson:        JSON.stringify(filas),
       };
+      // Incluir campos D07 solo si al menos uno tiene valor; omitir preserva null histórico
+      if (hsSinStr !== '' || hsAsiStr !== '' || hsPreStr !== '') {
+        payload.hsSincronicas  = Math.max(0, Math.min(999, parseInt(hsSinStr)  || 0));
+        payload.hsAsincronicas = Math.max(0, Math.min(999, parseInt(hsAsiStr) || 0));
+        payload.hsPresenciales = Math.max(0, Math.min(999, parseInt(hsPreStr) || 0));
+      }
       const data = await apiFetch(`${API_URL}/programas/materia/${materiaId}`, {
         method: 'PATCH',
         body: JSON.stringify(payload)
@@ -2337,96 +2388,113 @@ function ProgramaView({
               )}
             </div>
 
-            {/* Bloque 2: Intensidad de la Formación Práctica */}
+            {/* Bloque 2: Intensidad de la Formación Práctica (D07) */}
             <div>
               <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-2">
                 Intensidad de la formación práctica
               </p>
-              <div className="overflow-x-auto rounded-lg border border-slate-200">
-                <table className="w-full text-sm border-collapse">
-                  <thead>
-                    <tr className="bg-[#0f4c81] text-white text-xs font-semibold uppercase tracking-wider">
-                      <th className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                        Intensidad de formación práctica
-                      </th>
-                      <th className="text-center px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 w-32">
-                        Horas de clase
-                      </th>
-                      {editando && <th className="w-10" />}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {editando ? (
-                      editIntensRows.length === 0 ? (
-                        <tr>
-                          <td colSpan={3} className="px-3 py-4 text-center text-sm text-slate-300 italic">
-                            Sin filas — use &ldquo;Agregar fila&rdquo;
-                          </td>
-                        </tr>
-                      ) : (
-                        editIntensRows.map(row => (
-                          <tr key={row._id} className="border-b border-slate-100 last:border-0">
-                            <td className="px-2 py-1.5 align-top">
-                              <textarea
-                                ref={el => { intensRefMap.current[row._id] = el; }}
-                                defaultValue={row.intensidad}
-                                rows={2}
-                                className={cellCls}
-                                placeholder="Tipo de actividad de formación práctica"
-                              />
-                            </td>
-                            <td className="px-2 py-1.5 align-middle">
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={row.horasClase}
-                                onChange={e => {
-                                  const digits = soloDigitos(e.target.value);
-                                  const val = digits === '' ? '' : String(Math.min(99, parseInt(digits, 10)));
-                                  setEditIntensRows(prev => prev.map(r => r._id === row._id ? { ...r, horasClase: val } : r));
-                                }}
-                                className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] text-center"
-                              />
-                            </td>
-                            <td className="px-2 py-1.5 align-middle text-center">
-                              <button
-                                onClick={() => {
-                                  delete intensRefMap.current[row._id];
-                                  setEditIntensRows(prev => prev.filter(r => r._id !== row._id));
-                                }}
-                                className="text-slate-300 hover:text-red-500 transition-colors text-base leading-none"
-                                title="Eliminar fila"
-                              >✕</button>
+              {editando ? (
+                <div className="space-y-3">
+                  {/* Inputs D07 */}
+                  {(
+                    [
+                      { label: 'Hs. Sincrónicas',  state: editHsSincronicas,  setter: setEditHsSincronicas },
+                      { label: 'Hs. Asincrónicas', state: editHsAsincronicas, setter: setEditHsAsincronicas },
+                      { label: 'Hs. Presenciales', state: editHsPresenciales, setter: setEditHsPresenciales },
+                    ] as const
+                  ).map(({ label, state, setter }) => (
+                    <div key={label} className="flex items-center gap-3">
+                      <span className="text-sm text-slate-600 w-40 shrink-0">{label}</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={state}
+                        onChange={e => {
+                          const digits = soloDigitos(e.target.value);
+                          setter(digits === '' ? '' : String(Math.min(999, parseInt(digits, 10))));
+                        }}
+                        className="w-28 text-sm border border-slate-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] text-center"
+                        placeholder="0"
+                      />
+                    </div>
+                  ))}
+                  {/* Total de solo lectura */}
+                  <div className="flex items-center gap-3 border-t border-slate-100 pt-3">
+                    <span className="text-sm font-semibold text-slate-700 w-40 shrink-0">Hs. Formación Práctica</span>
+                    <input
+                      type="text"
+                      readOnly
+                      value={
+                        (parseInt(editHsSincronicas) || 0) +
+                        (parseInt(editHsAsincronicas) || 0) +
+                        (parseInt(editHsPresenciales) || 0)
+                      }
+                      className="w-28 text-sm border border-slate-200 rounded px-2 py-1.5 bg-slate-50 text-slate-400 text-center cursor-default select-none"
+                      title="Calculado automáticamente: Hs. Sincrónicas + Hs. Asincrónicas + Hs. Presenciales"
+                    />
+                  </div>
+                  {/* Referencia histórica (solo si hay JSON legacy y sin campos D07 previos) */}
+                  {programa?.formacionPracticaJson &&
+                    programa.hsSincronicas == null &&
+                    programa.hsAsincronicas == null &&
+                    programa.hsPresenciales == null && (
+                    <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                      Referencia histórica: este programa tenía datos de formación práctica en el formato anterior.
+                      Complete los campos nuevos para actualizar. Los datos anteriores se conservan y quedan como respaldo.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {programa?.hsSincronicas != null || programa?.hsAsincronicas != null || programa?.hsPresenciales != null ? (
+                    <div className="rounded-lg border border-slate-200 overflow-hidden">
+                      <table className="w-full text-sm">
+                        <tbody>
+                          {[
+                            { label: 'Hs. Sincrónicas',        valor: programa?.hsSincronicas  },
+                            { label: 'Hs. Asincrónicas',       valor: programa?.hsAsincronicas },
+                            { label: 'Hs. Presenciales',       valor: programa?.hsPresenciales },
+                          ].map(({ label, valor }) => (
+                            <tr key={label} className="border-b border-slate-100 last:border-0">
+                              <td className="px-3 py-2 text-slate-500">{label}</td>
+                              <td className="px-3 py-2 text-center font-mono text-slate-700">{valor ?? '—'}</td>
+                            </tr>
+                          ))}
+                          <tr className="bg-slate-50 font-semibold">
+                            <td className="px-3 py-2 text-slate-700">Hs. Formación Práctica</td>
+                            <td className="px-3 py-2 text-center font-mono text-slate-700">
+                              {programa?.hsFormacionPractica ?? '—'}
                             </td>
                           </tr>
-                        ))
-                      )
-                    ) : intensFilas.length === 0 ? (
-                      <tr>
-                        <td colSpan={2} className="px-3 py-5 text-center text-sm text-slate-300 italic">Sin datos</td>
-                      </tr>
-                    ) : (
-                      intensFilas.map((row, i) => (
-                        <tr key={i} className="border-b border-slate-100 last:border-0">
-                          <td className="px-3 py-2.5 text-sm text-slate-700 align-top whitespace-pre-wrap">
-                            {row.intensidad || <span className="text-slate-300 italic">—</span>}
-                          </td>
-                          <td className="px-3 py-2.5 text-sm text-slate-700 text-center">
-                            {row.horasClase ?? '—'}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              {editando && (
-                <button
-                  onClick={() => setEditIntensRows(prev => [...prev, { _id: String(gridIdCounter.current++), intensidad: '', horasClase: '' }])}
-                  className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-[#0f4c81] hover:bg-[#0f4c81]/5 px-2.5 py-1.5 rounded-lg transition-colors"
-                >
-                  <span className="text-base leading-none">+</span> Agregar fila
-                </button>
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : intensFilas.length > 0 ? (
+                    <div>
+                      <p className="text-[10px] text-slate-400 italic mb-1">Datos históricos (formato anterior)</p>
+                      <div className="overflow-x-auto rounded-lg border border-slate-200">
+                        <table className="w-full text-sm border-collapse">
+                          <thead>
+                            <tr>
+                              <th className="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Intensidad</th>
+                              <th className="text-center px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-24">Horas</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {intensFilas.map((row, i) => (
+                              <tr key={i} className="border-b border-slate-100 last:border-0">
+                                <td className="px-3 py-2 text-slate-700 whitespace-pre-wrap">{row.intensidad || <span className="text-slate-300 italic">—</span>}</td>
+                                <td className="px-3 py-2 text-slate-700 text-center">{row.horasClase ?? '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-300 italic">Sin datos</p>
+                  )}
+                </div>
               )}
             </div>
 

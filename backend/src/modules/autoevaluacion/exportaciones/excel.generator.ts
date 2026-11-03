@@ -515,7 +515,7 @@ function buildHojaR11(ws: ExcelJS.Worksheet, snap: Record<string, unknown>): voi
   }
 }
 
-// ── R-13 — Formación práctica (PPS / PI) ──────────────────────────────────────
+// ── R-13 — Formación práctica ─────────────────────────────────────────────────
 
 function buildHojaR13(ws: ExcelJS.Worksheet, snap: Record<string, unknown>): void {
   ws.columns = [
@@ -526,19 +526,23 @@ function buildHojaR13(ws: ExcelJS.Worksheet, snap: Record<string, unknown>): voi
   ];
 
   const d = snap['r13'] as Record<string, unknown> | undefined;
-  addSectionTitle(ws, 'R-13 — Formación práctica (PPS / PI)', 4);
+  addSectionTitle(ws, 'R-13 — Formación práctica', 4);
 
   if (!d) { addNoDataRow(ws, 4); return; }
 
   const tienePPS = d['tienePPS'] as boolean | undefined;
   const tienePI  = d['tienePI']  as boolean | undefined;
+  const cfg = d['configuracionPlan'] as Record<string, unknown> | undefined;
+  const horasMin = cfg?.['horasMinFormacionPractica'] as number | null | undefined;
 
-  addKvRow(ws, 'Total materias del plan',     fmtNum(d['totalMaterias'] as number));
-  addKvRow(ws, 'Tiene PPS',                   tienePPS === true ? 'Sí' : tienePPS === false ? 'No' : '—');
-  addKvRow(ws, 'Tiene PI',                    tienePI  === true ? 'Sí' : tienePI  === false ? 'No' : '—');
-  addKvRow(ws, 'Horas PPS',                   fmtNum(d['horasPPS'] as number | null, ' h'));
-  addKvRow(ws, 'Horas PI',                    fmtNum(d['horasPI']  as number | null, ' h'));
-  addKvRow(ws, 'Estado de cálculo',           String(d['estadoCalculo'] ?? '—').replace(/_/g, ' '));
+  addKvRow(ws, 'Total materias del plan',         fmtNum(d['totalMaterias'] as number));
+  addKvRow(ws, 'Tiene PPS',                        tienePPS === true ? 'Sí' : tienePPS === false ? 'No' : '—');
+  addKvRow(ws, 'Tiene PI',                         tienePI  === true ? 'Sí' : tienePI  === false ? 'No' : '—');
+  addKvRow(ws, 'Hs. formación práctica totales',   fmtNum(d['totalHorasFormacionPractica'] as number | null, ' h'));
+  addKvRow(ws, 'Mínimo configurado',               horasMin != null ? `${horasMin} h` : '—');
+  addKvRow(ws, 'Materias con datos FP',            fmtNum(d['conDatosFP'] as number | null));
+  addKvRow(ws, 'Materias sin datos FP',            fmtNum(d['sinDatosFP'] as number | null));
+  addKvRow(ws, 'Estado de cálculo',                String(d['estadoCalculo'] ?? '—').replace(/_/g, ' '));
 
   // Distribución por tipo
   const porTipo = d['porTipo'] as Record<string, number> | undefined;
@@ -547,44 +551,6 @@ function buildHojaR13(ws: ExcelJS.Worksheet, snap: Record<string, unknown>): voi
     addTableHdr(ws, ['Tipo de asignatura', 'Cantidad', '', '']);
     for (const [tipo, cantidad] of Object.entries(porTipo)) {
       const r = ws.addRow([safeStr(tipo), cantidad, '', '']);
-      r.height = 15;
-    }
-  }
-
-  // Tabla materias PPS
-  const materiasPPS = d['materiasPPS'] as Record<string, unknown>[] | undefined;
-  addSubsectionTitle(ws, 'Materias de Práctica Profesional Supervisada (PPS)', 4);
-  if (!materiasPPS || materiasPPS.length === 0) {
-    addNoDataRow(ws, 4, 'Sin materias PPS en este plan');
-  } else {
-    const hdrPPS = addTableHdr(ws, ['Código', 'Nombre', 'Tipo asignatura', 'Carga horaria']);
-    ws.autoFilter = { from: { row: hdrPPS.number, column: 1 }, to: { row: hdrPPS.number, column: 4 } };
-    for (const m of materiasPPS) {
-      const r = ws.addRow([
-        safeStr(m['codigo']),
-        safeStr(m['nombre']),
-        safeStr(m['tipoAsignatura']),
-        typeof m['cargaHorariaTotal'] === 'number' ? m['cargaHorariaTotal'] : '—',
-      ]);
-      r.height = 15;
-    }
-  }
-
-  // Tabla materias PI
-  const materiasPI = d['materiasPI'] as Record<string, unknown>[] | undefined;
-  addSubsectionTitle(ws, 'Materias de Práctica Integradora (PI)', 4);
-  if (!materiasPI || materiasPI.length === 0) {
-    addNoDataRow(ws, 4, 'Sin materias PI en este plan');
-  } else {
-    const hdrPI = addTableHdr(ws, ['Código', 'Nombre', 'Tipo asignatura', 'Carga horaria']);
-    ws.autoFilter = { from: { row: hdrPI.number, column: 1 }, to: { row: hdrPI.number, column: 4 } };
-    for (const m of materiasPI) {
-      const r = ws.addRow([
-        safeStr(m['codigo']),
-        safeStr(m['nombre']),
-        safeStr(m['tipoAsignatura']),
-        typeof m['cargaHorariaTotal'] === 'number' ? m['cargaHorariaTotal'] : '—',
-      ]);
       r.height = 15;
     }
   }

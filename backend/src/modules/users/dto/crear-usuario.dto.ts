@@ -1,4 +1,8 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
+
+const REGEX_DOMINIO_INSTITUCIONAL = /^[^@\s]+@(udemm\.edu\.ar|docentes\.udemm\.edu\.ar)$/i;
+const MSG_DOMINIO = 'Solo se permiten correos institucionales @udemm.edu.ar o @docentes.udemm.edu.ar';
 
 export class CrearUsuarioDto {
   @IsString()
@@ -11,7 +15,9 @@ export class CrearUsuarioDto {
   @MaxLength(100, { message: 'El apellido excede la longitud máxima de 100 caracteres.' })
   apellido: string;
 
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsEmail({}, { message: 'El correo electrónico no tiene un formato válido.' })
+  @Matches(REGEX_DOMINIO_INSTITUCIONAL, { message: MSG_DOMINIO })
   @IsNotEmpty({ message: 'El correo electrónico es obligatorio.' })
   @MaxLength(320, { message: 'El correo electrónico excede la longitud máxima permitida.' })
   correoElectronico: string;

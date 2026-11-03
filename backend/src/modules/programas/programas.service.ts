@@ -64,16 +64,27 @@ function calcEstadoSecciones(prog: Record<string, unknown>): Record<string, stri
   const uds = tryParseJsonArr<UD>(prog['unidadesDidacticasJson']);
   const s3 = uds.some(r => (r.unidad?.trim().length ?? 0) > 0) ? 'COMPLETO' : 'PENDIENTE';
 
-  // S4: actividadesFormacionPractica (texto >50 chars) + al menos una fila de intensidad válida
-  type IF4 = { intensidad?: string; horasClase?: number };
-  const ifs = tryParseJsonArr<IF4>(prog['formacionPracticaJson']);
-  const s4 =
-    str(prog, 'actividadesFormacionPractica').length > 50 &&
-    ifs.some(f =>
+  // S4: actividadesFormacionPractica >50 chars + (nuevos campos hs* > 0 ó JSON histórico válido)
+  const s4 = (() => {
+    if (str(prog, 'actividadesFormacionPractica').length <= 50) return 'PENDIENTE';
+    // Path nuevo: alguno de los tres campos estructurados tiene valor > 0
+    const hsS = prog['hsSincronicas'] as number | null | undefined;
+    const hsA = prog['hsAsincronicas'] as number | null | undefined;
+    const hsP = prog['hsPresenciales'] as number | null | undefined;
+    if (
+      (typeof hsS === 'number' && hsS > 0) ||
+      (typeof hsA === 'number' && hsA > 0) ||
+      (typeof hsP === 'number' && hsP > 0)
+    ) return 'COMPLETO';
+    // Path histórico: formacionPracticaJson con al menos una fila válida
+    type IF4 = { intensidad?: string; horasClase?: number };
+    const ifs = tryParseJsonArr<IF4>(prog['formacionPracticaJson']);
+    return ifs.some(f =>
       (f.intensidad?.trim().length ?? 0) > 0 &&
       typeof f.horasClase === 'number' && Number.isInteger(f.horasClase) &&
       f.horasClase >= 0 && f.horasClase <= 99
     ) ? 'COMPLETO' : 'PENDIENTE';
+  })();
 
   // S5: 4 campos textarea obligatorios >50 chars
   const s5 =
@@ -109,6 +120,7 @@ const CAMPOS_SUSTANCIALES = new Set([
   'bibliografiaBasica', 'bibliografiaComplementaria', 'recursosDidacticos',
   // Sección 4
   'actividadesFormacionPractica', 'formacionPracticaJson',
+  'hsSincronicas', 'hsAsincronicas', 'hsPresenciales',
   'metodologiaEnsenanza', 'tiposFormacionPractica', 'porcentajeTiempoFormacion',
   'actividadesPracticas', 'cronograma',
   // Sección 5
@@ -241,6 +253,16 @@ export class ProgramasService {
       data.fechaAprobacion = fechaAprobacion ? new Date(fechaAprobacion) : null;
     }
 
+    // Validar campos estructurados de FP: entero 0-999
+    for (const campo of ['hsSincronicas', 'hsAsincronicas', 'hsPresenciales'] as const) {
+      if (data[campo] !== undefined && data[campo] !== null) {
+        const v = Number(data[campo]);
+        if (!Number.isInteger(v) || v < 0 || v > 999) {
+          throw new BadRequestException(`${campo} debe ser un entero entre 0 y 999`);
+        }
+      }
+    }
+
     // Validar horasClase en formacionPracticaJson: debe ser entero 0-99
     if (typeof data.formacionPracticaJson === 'string') {
       try {
@@ -291,6 +313,16 @@ export class ProgramasService {
       ...((programaActual as unknown as Record<string, unknown>) ?? {}),
       ...data,
     };
+
+    // Calcular y persistir hsFormacionPractica cuando se modifica algún campo estructurado
+    if (data.hsSincronicas !== undefined || data.hsAsincronicas !== undefined || data.hsPresenciales !== undefined) {
+      const s = typeof mergedForCalc['hsSincronicas'] === 'number' ? mergedForCalc['hsSincronicas'] : 0;
+      const a = typeof mergedForCalc['hsAsincronicas'] === 'number' ? mergedForCalc['hsAsincronicas'] : 0;
+      const p = typeof mergedForCalc['hsPresenciales'] === 'number' ? mergedForCalc['hsPresenciales'] : 0;
+      data.hsFormacionPractica = (s as number) + (a as number) + (p as number);
+      mergedForCalc['hsFormacionPractica'] = data.hsFormacionPractica;
+    }
+
     const estadoSecciones = calcEstadoSecciones(mergedForCalc);
     const todasCompletas = Object.values(estadoSecciones).every(v => v === 'COMPLETO');
 

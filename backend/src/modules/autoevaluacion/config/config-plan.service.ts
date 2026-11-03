@@ -31,6 +31,7 @@ export class ConfigPlanService {
       requierePPS: plan.requierePPS,
       requierePI: plan.requierePI,
       porcentajeMinFormacion: plan.porcentajeMinFormacion,
+      horasMinFormacionPractica: plan.horasMinFormacionPractica,
     };
   }
 
@@ -58,6 +59,7 @@ export class ConfigPlanService {
     if ('requierePPS' in dto) data['requierePPS'] = dto.requierePPS ?? null;
     if ('requierePI' in dto) data['requierePI'] = dto.requierePI ?? null;
     if ('porcentajeMinFormacion' in dto) data['porcentajeMinFormacion'] = dto.porcentajeMinFormacion ?? null;
+    if ('horasMinFormacionPractica' in dto) data['horasMinFormacionPractica'] = dto.horasMinFormacionPractica ?? null;
 
     if (Object.keys(data).length === 0) {
       return this.obtenerUmbralesSinScope(planEstudioId);
@@ -76,6 +78,7 @@ export class ConfigPlanService {
         requierePPS: true,
         requierePI: true,
         porcentajeMinFormacion: true,
+        horasMinFormacionPractica: true,
       },
     });
   }
@@ -99,6 +102,7 @@ export class ConfigPlanService {
         requierePPS: true,
         requierePI: true,
         porcentajeMinFormacion: true,
+        horasMinFormacionPractica: true,
       },
     });
     if (!plan) throw new NotFoundException(`Plan de estudio ${planEstudioId} no encontrado`);
@@ -122,6 +126,7 @@ export class ConfigPlanService {
         requierePPS: true,
         requierePI: true,
         porcentajeMinFormacion: true,
+        horasMinFormacionPractica: true,
       },
     });
   }

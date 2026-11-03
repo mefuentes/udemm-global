@@ -59,6 +59,7 @@ export class CrearMateriaDto {
 
   @IsOptional()
   @IsString()
+  @IsIn(['Cuatrimestral', 'Anual'])
   regimenCursado?: string;
 
   @IsOptional()

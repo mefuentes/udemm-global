@@ -594,15 +594,19 @@ function renderDetailR11(doc: PDFKit.PDFDocument, snap: Record<string, unknown>)
 function renderDetailR13(doc: PDFKit.PDFDocument, snap: Record<string, unknown>): void {
   const d = snap['r13'] as Record<string, unknown> | undefined;
   if (!d) return;
-  renderSubsectionTitle(doc, 'R-13 — Formación práctica (PPS / PI)');
+  renderSubsectionTitle(doc, 'R-13 — Formación práctica');
   const tienePPS = d['tienePPS'] as boolean;
   const tienePI  = d['tienePI']  as boolean;
+  const cfg = d['configuracionPlan'] as Record<string, unknown> | undefined;
+  const horasMin = cfg?.['horasMinFormacionPractica'] as number | null | undefined;
   renderMetricGrid(doc, [
-    { label: 'Total materias', value: String(d['totalMaterias'] ?? '—') },
-    { label: 'Tiene PPS',      value: tienePPS === true ? 'Sí' : tienePPS === false ? 'No' : '—' },
-    { label: 'Tiene PI',       value: tienePI  === true ? 'Sí' : tienePI  === false ? 'No' : '—' },
-    { label: 'Horas PPS',      value: fmtNum(d['horasPPS'] as number | null, ' h') },
-    { label: 'Horas PI',       value: fmtNum(d['horasPI']  as number | null, ' h') },
+    { label: 'Total materias',     value: String(d['totalMaterias'] ?? '—') },
+    { label: 'Tiene PPS',          value: tienePPS === true ? 'Sí' : tienePPS === false ? 'No' : '—' },
+    { label: 'Tiene PI',           value: tienePI  === true ? 'Sí' : tienePI  === false ? 'No' : '—' },
+    { label: 'Hs. FP totales',     value: fmtNum(d['totalHorasFormacionPractica'] as number | null, ' h') },
+    { label: 'Mínimo configurado', value: horasMin != null ? `${horasMin} h` : '—' },
+    { label: 'Con datos FP',       value: String(d['conDatosFP'] ?? '—') },
+    { label: 'Sin datos FP',       value: String(d['sinDatosFP'] ?? '—') },
   ]);
   const porTipo = d['porTipo'] as Record<string, number> | undefined;
   if (porTipo && Object.keys(porTipo).length > 0) {
@@ -611,28 +615,6 @@ function renderDetailR13(doc: PDFKit.PDFDocument, snap: Record<string, unknown>)
       .text('Distribución por tipo de asignatura:', MARGIN, doc.y);
     doc.moveDown(0.2);
     renderCompactList(doc, Object.entries(porTipo).map(([tipo, n]) => `${tipo}: ${n}`));
-  }
-  const materiasPPS = d['materiasPPS'] as Record<string, unknown>[] | undefined;
-  if (materiasPPS && materiasPPS.length > 0) {
-    addPageIfNeeded(doc, 20);
-    doc.fillColor(C_MID).font('Helvetica-Bold').fontSize(7)
-      .text('Materias PPS:', MARGIN, doc.y);
-    doc.moveDown(0.2);
-    renderCompactList(doc, materiasPPS.map(m => {
-      const h = m['cargaHorariaTotal'] !== null && m['cargaHorariaTotal'] !== undefined ? ` — ${m['cargaHorariaTotal']} h` : '';
-      return `[${m['codigo'] ?? '?'}] ${m['nombre'] ?? '—'}${h}`;
-    }));
-  }
-  const materiasPI = d['materiasPI'] as Record<string, unknown>[] | undefined;
-  if (materiasPI && materiasPI.length > 0) {
-    addPageIfNeeded(doc, 20);
-    doc.fillColor(C_MID).font('Helvetica-Bold').fontSize(7)
-      .text('Materias PI:', MARGIN, doc.y);
-    doc.moveDown(0.2);
-    renderCompactList(doc, materiasPI.map(m => {
-      const h = m['cargaHorariaTotal'] !== null && m['cargaHorariaTotal'] !== undefined ? ` — ${m['cargaHorariaTotal']} h` : '';
-      return `[${m['codigo'] ?? '?'}] ${m['nombre'] ?? '—'}${h}`;
-    }));
   }
   renderEstadoBadge(doc, d['estadoCalculo'] as string | undefined);
   doc.moveDown(0.2);

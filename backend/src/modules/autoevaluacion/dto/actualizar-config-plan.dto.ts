@@ -45,10 +45,16 @@ export class ActualizarConfigPlanDto {
   @IsBoolean({ message: 'requierePI debe ser booleano o null' })
   requierePI?: boolean | null;
 
-  /** null = borrar (no configurado); 0–100 = porcentaje mínimo de horas prácticas */
+  /** null = borrar (no configurado); 0–100 = porcentaje mínimo de horas prácticas. @deprecated usar horasMinFormacionPractica */
   @IsOptional()
   @IsInt({ message: 'porcentajeMinFormacion debe ser un entero' })
   @Min(0, { message: 'porcentajeMinFormacion debe ser 0 o mayor' })
   @Max(100, { message: 'porcentajeMinFormacion no puede superar 100' })
   porcentajeMinFormacion?: number | null;
+
+  /** null = borrar (no configurado); >= 0 = horas mínimas de formación práctica del plan */
+  @IsOptional()
+  @IsInt({ message: 'horasMinFormacionPractica debe ser un entero' })
+  @Min(0, { message: 'horasMinFormacionPractica debe ser 0 o mayor' })
+  horasMinFormacionPractica?: number | null;
 }
