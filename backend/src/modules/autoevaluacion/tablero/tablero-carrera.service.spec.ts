@@ -19,7 +19,7 @@ type CargoPair = { docenteId: string; cargoId: string; cargo: { nombre: string }
 
 function makePrisma(overrides: {
   carrera?: { id: string } | null;
-  planes?: { id: string }[];
+  planes?: { id: string; nombre?: string; materias?: Array<{ programa: { hsFormacionPractica: number | null; formacionPracticaJson: string | null } | null }> }[];
   totalMaterias?: number;
   materiasCubiertasIds?: { materiaId: string }[];
   docentesVigentesIds?: DocenteId[];
@@ -28,10 +28,21 @@ function makePrisma(overrides: {
 } = {}) {
   const {
     carrera = { id: CAR_ID },
-    planes = [{ id: 'plan-1' }],
+    planes = [{ id: 'plan-1', nombre: 'Plan 1', materias: [] as Array<{ programa: { hsFormacionPractica: number | null; formacionPracticaJson: string | null } | null }> }],
     totalMaterias = 10,
     materiasCubiertasIds = [{ materiaId: 'm-1' }, { materiaId: 'm-2' }],
-    docentesVigentesIds = [{ docenteId: 'd-1' }],
+    docentesVigentesIds = [
+      // IDs usados por los mocks de evaluadores (R-07, R-10, R-12, R-03, R-15) en sus
+      // listas de alertas, para que el filtro filtrarXxx los considere docentes de la carrera.
+      { docenteId: 'd-1' },
+      { docenteId: 'd-over-1' }, { docenteId: 'd-over-2' },
+      { docenteId: 'd-baja-1' }, { docenteId: 'd-baja-2' }, { docenteId: 'd-baja-3' },
+      { docenteId: 'd-inc-1' }, { docenteId: 'd-inc-2' },
+      { docenteId: 'd-shared' },
+      { docenteId: 'd-alerta-1' }, { docenteId: 'd-alerta-2' },
+      { docenteId: 'd-x' },
+      { docenteId: 'd-nd-1' }, { docenteId: 'd-nd-2' },
+    ],
     cargosActivosConCategoria = [{ docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'Titular' } }],
     cargosVigentes = [],
   } = overrides;
@@ -845,6 +856,58 @@ describe('TablroCarreraService', () => {
       expect(res.r12.totalNoDeterminables).toBe(1);
     });
 
+    it('T-01: CALCULADO cuando todos los noDeterminables son externos a la carrera (alcanceFacultad=true)', async () => {
+      // d-nd-1 y d-nd-2 ausentes de docentesVigentesIds: simula docentes externos a esta carrera.
+      // filtrarR12 debe reconocer que la causa del PARCIAL original desapareció y recalcular el estado.
+      const docentesVigentesIds = [
+        { docenteId: 'd-1' },
+        { docenteId: 'd-over-1' }, { docenteId: 'd-over-2' },
+        { docenteId: 'd-baja-1' }, { docenteId: 'd-baja-2' }, { docenteId: 'd-baja-3' },
+        { docenteId: 'd-inc-1' }, { docenteId: 'd-inc-2' },
+        { docenteId: 'd-shared' },
+        { docenteId: 'd-alerta-1' }, { docenteId: 'd-alerta-2' },
+        { docenteId: 'd-x' },
+        // d-nd-1 y d-nd-2 ausentes
+      ];
+      const res = await makeSvc(
+        { docentesVigentesIds },
+        true,
+        EstadoCalculo.CALCULADO, EstadoCalculo.CALCULADO, {},
+        EstadoCalculo.CALCULADO, EstadoCalculo.CALCULADO,
+        EstadoCalculo.PARCIAL, { noDeterminables: 2 },
+      ).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.r12.totalNoDeterminables).toBe(0);
+      expect(res.r12.noDeterminables).toEqual([]);
+      expect(res.r12.alcanceFacultad).toBe(true);
+      expect(res.r12.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+      expect(res.estadoGeneralCalculo).not.toBe(EstadoCalculo.PARCIAL);
+    });
+
+    it('PARCIAL se preserva cuando quedan noDeterminables propios de la carrera tras el filtro', async () => {
+      // d-nd-1 está en docentesVigentesIds (pertenece a la carrera), por lo tanto el PARCIAL se mantiene.
+      const res = await makeSvc(
+        {}, true,
+        EstadoCalculo.CALCULADO, EstadoCalculo.CALCULADO, {},
+        EstadoCalculo.CALCULADO, EstadoCalculo.CALCULADO,
+        EstadoCalculo.PARCIAL, { noDeterminables: 1 },
+      ).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.r12.estadoCalculo).toBe(EstadoCalculo.PARCIAL);
+      expect(res.r12.totalNoDeterminables).toBe(1);
+    });
+
+    it('PARCIAL se preserva cuando alcanceFacultad=false aunque no queden noDeterminables', async () => {
+      // Con DIRECTOR_CARRERA (alcanceFacultad=false), el PARCIAL refleja limitación de scope,
+      // no docentes externos. filtrarR12 no debe convertirlo a CALCULADO.
+      const res = await makeSvc(
+        {}, true,
+        EstadoCalculo.CALCULADO, EstadoCalculo.CALCULADO, {},
+        EstadoCalculo.CALCULADO, EstadoCalculo.CALCULADO,
+        EstadoCalculo.PARCIAL, { alcanceFacultad: false },
+      ).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.r12.estadoCalculo).toBe(EstadoCalculo.PARCIAL);
+      expect(res.r12.alcanceFacultad).toBe(false);
+    });
+
     it('R-12 es invocado con carreraId, usuarioId y rolNombre del contexto', async () => {
       const r12Mock = makeR12Mock();
       const svc = new TablroCarreraService(
@@ -1207,7 +1270,7 @@ describe('TablroCarreraService', () => {
           .mockResolvedValueOnce(buildR04Result('plan-2', [{ docenteId: 'd-cross', nombre: 'Cross Plan' }])),
       };
       const svc = new TablroCarreraService(
-        makePrisma({ planes: [{ id: 'plan-1' }, { id: 'plan-2' }] }) as any,
+        makePrisma({ planes: [{ id: 'plan-1', nombre: 'Plan 1', materias: [] }, { id: 'plan-2', nombre: 'Plan 2', materias: [] }] }) as any,
         makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
         makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
         makeR03Mock() as any, r04Mock as any,
@@ -1414,7 +1477,7 @@ describe('TablroCarreraService', () => {
     it('R-04 solo se llama con planes de la carrera solicitada', async () => {
       const r04Mock = makeR04Mock([]);
       const svc = new TablroCarreraService(
-        makePrisma({ planes: [{ id: 'plan-carrera' }] }) as any,
+        makePrisma({ planes: [{ id: 'plan-carrera', nombre: 'Plan Carrera', materias: [] }] }) as any,
         makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
         makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
         makeR03Mock() as any, r04Mock as any,
@@ -1454,6 +1517,53 @@ describe('TablroCarreraService', () => {
         res.accionRequerida.sobreasignados.total,
       );
     });
+
+    // 12. Fix cross-carrera: docentes de otras carreras (misma facultad) no contaminan el tablero
+    it('docentes de otras carreras (alcanceFacultad=true) no aparecen en las listas del tablero', async () => {
+      // R-07 retorna 2 sobreasignados: uno de ESTA carrera y uno de otra carrera del mismo cuerpo
+      // docente de facultad. Solo el de esta carrera debe quedar en ip13.
+      const r07ContaminadoMock = {
+        evaluar: jest.fn().mockResolvedValue({
+          codigo: 'R-07',
+          contextoId: CAR_ID,
+          tipoContexto: 'DOCENTE' as const,
+          estadoImplementacion: 'IMPLEMENTADO' as const,
+          estadoCalculo: EstadoCalculo.CALCULADO,
+          valor: {
+            carreraId: CAR_ID,
+            facultadId: 'fac-01',
+            limite: 3,
+            totalDocentes: 5,
+            totalSobreasignados: 2,
+            sobreasignados: [
+              { docenteId: 'd-carrera', nombre: 'Docente Esta Carrera', nMaterias: 4, exceso: 1, asignaciones: [] },
+              { docenteId: 'd-otra-carrera', nombre: 'Docente Otra Carrera', nMaterias: 5, exceso: 2, asignaciones: [] },
+            ],
+            totalNoDeterminables: 0,
+            noDeterminables: [],
+            alcanceFacultad: true,
+          } as ResultadoR07,
+          datosFaltantes: [],
+          fechaEvaluacion: new Date(),
+        }),
+      };
+      const svc = new TablroCarreraService(
+        makePrisma({ docentesVigentesIds: [{ docenteId: 'd-carrera' }] }) as any,
+        makeScope() as any, makeR15Mock() as any,
+        r07ContaminadoMock as any,
+        makeIP09Mock() as any, makeIP10Mock() as any,
+        makeR12Mock() as any, makeR10Mock() as any,
+        makeR03Mock() as any, makeR04Mock() as any,
+      );
+      const res = await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+      // Solo 'd-carrera' pertenece a esta carrera; 'd-otra-carrera' debe ser filtrado.
+      expect(res.ip13.sobreasignados).toHaveLength(1);
+      expect(res.ip13.sobreasignados[0].docenteId).toBe('d-carrera');
+      expect(res.ip13.sobreasignados.some(d => d.docenteId === 'd-otra-carrera')).toBe(false);
+      expect(res.ip13.totalSobreasignados).toBe(1);
+      expect(res.ip13.totalDocentes).toBe(1);
+    });
   });
 });
 
@@ -1489,7 +1599,7 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
 
     return {
       carrera:      { findUnique: jest.fn().mockResolvedValue({ id: CAR_ID }) },
-      planEstudio:  { findMany: jest.fn().mockResolvedValue([{ id: 'plan-1' }]) },
+      planEstudio:  { findMany: jest.fn().mockResolvedValue([{ id: 'plan-1', nombre: 'Plan 1', materias: [] }]) },
       materia:      { count: jest.fn().mockResolvedValue(5) },
       docente:      { findMany: jest.fn().mockResolvedValue(docentes) },
       cargoDocente: {
@@ -1723,5 +1833,216 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
     // El try/catch en consultarCarrera absorbe el error; el resto del análisis sigue disponible.
     expect(res.condicionesPlantell).toBeUndefined();
     expect(res.ip01).toBeDefined(); // El análisis principal no se ve afectado.
+  });
+
+  // ── IP-05 / IP-06 / IP-07 — derivados de condicionesPlantell ─────────────────
+
+  describe('IP-05 / IP-06 / IP-07 — derivados de condicionesPlantell', () => {
+
+    // Escenario 1–3: datos completos
+    it('IP-05 datos completos: conPosgrado y porcentaje correctos', async () => {
+      const res = await makeSvcCP({
+        docenteIds: ['d-1', 'd-2', 'd-3', 'd-4'],
+        docentes: [
+          { id: 'd-1', tituloPosgrado: 'Maestría', tituloProyectoInvestigacion: null },
+          { id: 'd-2', tituloPosgrado: 'Doctorado', tituloProyectoInvestigacion: null },
+          { id: 'd-3', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+          { id: 'd-4', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+        ],
+        cargosRegulares: [],
+        vincsConDesig: [
+          { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
+          { docenteId: 'd-2', designacion: { nombre: 'CONTRATADO' } },
+          { docenteId: 'd-3', designacion: { nombre: 'CONTRATADO' } },
+          { docenteId: 'd-4', designacion: { nombre: 'CONTRATADO' } },
+        ],
+        cargosVigentes: ['d-1', 'd-2', 'd-3', 'd-4'].map((id, i) => ({
+          docenteId: id, cargoId: `c-${i}`, cargo: { nombre: 'Titular' },
+        })),
+      }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+      expect(res.ip05).toBeDefined();
+      expect(res.ip05!.conPosgrado).toBe(2);
+      expect(res.ip05!.totalDocentes).toBe(4);
+      // round(2/4 × 100) = 50
+      expect(res.ip05!.porcentaje).toBe(50);
+      expect(res.ip05!.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+    });
+
+    it('IP-06 datos completos: conInvestigacion y porcentaje correctos', async () => {
+      const res = await makeSvcCP({
+        docenteIds: ['d-1', 'd-2', 'd-3'],
+        docentes: [
+          { id: 'd-1', tituloPosgrado: null, tituloProyectoInvestigacion: 'Proyecto A' },
+          { id: 'd-2', tituloPosgrado: null, tituloProyectoInvestigacion: 'Proyecto B' },
+          { id: 'd-3', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+        ],
+        cargosRegulares: [],
+        vincsConDesig: [
+          { docenteId: 'd-1', designacion: { nombre: 'CONTRATADO' } },
+          { docenteId: 'd-2', designacion: { nombre: 'CONTRATADO' } },
+          { docenteId: 'd-3', designacion: { nombre: 'CONTRATADO' } },
+        ],
+        cargosVigentes: ['d-1', 'd-2', 'd-3'].map((id, i) => ({
+          docenteId: id, cargoId: `c-${i}`, cargo: { nombre: 'Titular' },
+        })),
+      }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+      expect(res.ip06).toBeDefined();
+      expect(res.ip06!.conInvestigacion).toBe(2);
+      expect(res.ip06!.totalDocentes).toBe(3);
+      // round(2/3 × 100) = round(66.6…) = 67
+      expect(res.ip06!.porcentaje).toBe(67);
+      expect(res.ip06!.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+    });
+
+    it('IP-07 datos completos: conDesignacionRegular y porcentaje correctos', async () => {
+      const res = await makeSvcCP({
+        docenteIds: ['d-1', 'd-2', 'd-3'],
+        docentes: [
+          { id: 'd-1', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+          { id: 'd-2', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+          { id: 'd-3', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+        ],
+        cargosRegulares: [{ docenteId: 'd-1' }, { docenteId: 'd-2' }],
+        cargosInterinos: [],
+        vincsConDesig: [
+          { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
+          { docenteId: 'd-2', designacion: { nombre: 'REGULAR AD HONOREM' } },
+          { docenteId: 'd-3', designacion: { nombre: 'CONTRATADO' } },
+        ],
+        cargosVigentes: ['d-1', 'd-2', 'd-3'].map((id, i) => ({
+          docenteId: id, cargoId: `c-${i}`, cargo: { nombre: 'Titular' },
+        })),
+      }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+      expect(res.ip07).toBeDefined();
+      expect(res.ip07!.conDesignacionRegular).toBe(2);
+      expect(res.ip07!.totalDocentes).toBe(3);
+      // round(2/3 × 100) = 67
+      expect(res.ip07!.porcentaje).toBe(67);
+      expect(res.ip07!.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+    });
+
+    // Escenario 4: carrera sin docentes → NO_APLICA
+    it('carrera sin docentes: ip05/ip06/ip07 con estadoCalculo NO_APLICA y porcentaje null', async () => {
+      const res = await makeSvcCP({ docenteIds: [], vincsConDesig: [] }).consultarCarrera(
+        CAR_ID, USR.usuarioId, USR.rolNombre,
+      );
+      expect(res.ip05!.estadoCalculo).toBe(EstadoCalculo.NO_APLICA);
+      expect(res.ip05!.porcentaje).toBeNull();
+      expect(res.ip06!.estadoCalculo).toBe(EstadoCalculo.NO_APLICA);
+      expect(res.ip06!.porcentaje).toBeNull();
+      expect(res.ip07!.estadoCalculo).toBe(EstadoCalculo.NO_APLICA);
+      expect(res.ip07!.porcentaje).toBeNull();
+    });
+
+    // Escenario 5: datos faltantes (fallo de calcularCondicionesPlantell)
+    it('si calcularCondicionesPlantell falla, ip05/ip06/ip07 son undefined', async () => {
+      const res = await makeSvcCP({ throwOnCargoDocente: true }).consultarCarrera(
+        CAR_ID, USR.usuarioId, USR.rolNombre,
+      );
+      expect(res.ip05).toBeUndefined();
+      expect(res.ip06).toBeUndefined();
+      expect(res.ip07).toBeUndefined();
+    });
+
+    // Escenario 6–7: denominadores correctos
+    it('denominador usa totalDocentes del plantel activo', async () => {
+      // 1 de 1 docente con posgrado → porcentaje = 100
+      const res = await makeSvcCP({
+        docenteIds: ['d-1'],
+        docentes: [{ id: 'd-1', tituloPosgrado: 'Maestría', tituloProyectoInvestigacion: null }],
+        cargosRegulares: [],
+        vincsConDesig: [{ docenteId: 'd-1', designacion: { nombre: 'CONTRATADO' } }],
+        cargosVigentes: [{ docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'Titular' } }],
+      }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+      expect(res.ip05!.totalDocentes).toBe(1);
+      expect(res.ip05!.porcentaje).toBe(100);
+    });
+
+    it('porcentaje 0 cuando ningún docente cumple la condición', async () => {
+      const res = await makeSvcCP({
+        docenteIds: ['d-1', 'd-2'],
+        docentes: [
+          { id: 'd-1', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+          { id: 'd-2', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+        ],
+        cargosRegulares: [],
+        vincsConDesig: [
+          { docenteId: 'd-1', designacion: { nombre: 'CONTRATADO' } },
+          { docenteId: 'd-2', designacion: { nombre: 'CONTRATADO' } },
+        ],
+        cargosVigentes: [
+          { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'Titular' } },
+          { docenteId: 'd-2', cargoId: 'c-2', cargo: { nombre: 'Titular' } },
+        ],
+      }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+      expect(res.ip05!.conPosgrado).toBe(0);
+      expect(res.ip05!.porcentaje).toBe(0);
+      expect(res.ip06!.conInvestigacion).toBe(0);
+      expect(res.ip06!.porcentaje).toBe(0);
+      expect(res.ip07!.conDesignacionRegular).toBe(0);
+      expect(res.ip07!.porcentaje).toBe(0);
+    });
+
+    // Escenario 9: consistencia ip05/ip06/ip07 con condicionesPlantell
+    it('ip05/ip06/ip07 son consistentes con condicionesPlantell (mismos valores base)', async () => {
+      const res = await makeSvcCP({
+        docenteIds: ['d-1', 'd-2'],
+        docentes: [
+          { id: 'd-1', tituloPosgrado: 'Maestría', tituloProyectoInvestigacion: 'Proyecto' },
+          { id: 'd-2', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+        ],
+        cargosRegulares: [{ docenteId: 'd-1' }],
+        cargosInterinos: [],
+        vincsConDesig: [
+          { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
+          { docenteId: 'd-2', designacion: { nombre: 'CONTRATADO' } },
+        ],
+        cargosVigentes: [
+          { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'Titular' } },
+          { docenteId: 'd-2', cargoId: 'c-2', cargo: { nombre: 'JTP' } },
+        ],
+      }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+      const cp = res.condicionesPlantell!;
+      expect(res.ip05!.conPosgrado).toBe(cp.conPosgrado);
+      expect(res.ip05!.totalDocentes).toBe(cp.totalDocentes);
+      expect(res.ip06!.conInvestigacion).toBe(cp.conInvestigacion);
+      expect(res.ip07!.conDesignacionRegular).toBe(cp.conDesignacionRegular);
+    });
+
+    // Escenario 10: integridad DTO
+    it('ip05/ip06/ip07 están presentes en la respuesta cuando condicionesPlantell está disponible', async () => {
+      const res = await makeSvcCP().consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+      expect(res.ip05).toBeDefined();
+      expect(res.ip06).toBeDefined();
+      expect(res.ip07).toBeDefined();
+      expect(res.ip05).toMatchObject({ conPosgrado: expect.any(Number), totalDocentes: expect.any(Number), estadoCalculo: expect.any(String) });
+      expect(res.ip06).toMatchObject({ conInvestigacion: expect.any(Number), totalDocentes: expect.any(Number), estadoCalculo: expect.any(String) });
+      expect(res.ip07).toMatchObject({ conDesignacionRegular: expect.any(Number), totalDocentes: expect.any(Number), estadoCalculo: expect.any(String) });
+    });
+
+    // Escenarios 11–12: no regresión
+    it('no regresión: ip01, ip02, ip03, ip04 intactos cuando ip05/06/07 están presentes', async () => {
+      const res = await makeSvcCP().consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ip01).toBeDefined();
+      expect(res.ip02).toBeDefined();
+      expect(res.ip03).toBeDefined();
+      expect(res.ip04).toBeDefined();
+    });
+
+    it('no regresión: ip08, ip09, ip10, ip13 intactos cuando ip05/06/07 están presentes', async () => {
+      const res = await makeSvcCP().consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ip08).toBeDefined();
+      expect(res.ip09).toBeDefined();
+      expect(res.ip10).toBeDefined();
+      expect(res.ip13).toBeDefined();
+      expect(res.estadoGeneralCalculo).toBeDefined();
+    });
   });
 });

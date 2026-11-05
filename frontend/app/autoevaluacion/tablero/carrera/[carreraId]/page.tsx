@@ -344,6 +344,58 @@ function TarjetaIP04({ ip04 }: { ip04: ResultadoIP04 }) {
   );
 }
 
+// ── IP-05 / IP-06 / IP-07: Condiciones del plantel (indicadores explícitos) ───
+
+type ResultadoIPPorcentaje = {
+  porcentaje: number | null;
+  totalDocentes: number;
+  estadoCalculo: EstadoCalculo;
+};
+
+function TarjetaIPPorcentaje({
+  codigo, titulo, conteoLabel, conteo, datos,
+}: {
+  codigo: string;
+  titulo: string;
+  conteoLabel: string;
+  conteo: number;
+  datos: ResultadoIPPorcentaje;
+}) {
+  const ec = datos.estadoCalculo;
+  const pct = datos.porcentaje;
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <EtiquetaIndicador codigo={codigo} titulo={titulo} />
+      {ec === 'NO_APLICA' ? (
+        <div className="p-3 rounded-lg bg-sky-50 border border-sky-200">
+          <p className="text-xs text-sky-700">Sin docentes activos con asignación aprobada. No aplica.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-lg px-3 py-3 border border-[#0f4c81]/15 bg-[#0f4c81]/5 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#0f4c81]/60 mb-0.5 leading-tight">
+                {conteoLabel}
+              </p>
+              <p className="text-2xl font-bold tabular-nums text-[#0f4c81]">{conteo}</p>
+            </div>
+            <Metrica label="Total plantel" valor={datos.totalDocentes} />
+            <Metrica label="Porcentaje" valor={pct !== null ? `${pct}%` : '—'} destaca />
+          </div>
+          {pct !== null && (
+            <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-full rounded-full bg-[#0f4c81]/60" style={{ width: `${pct}%` }} />
+            </div>
+          )}
+          <div className="flex justify-end mt-2">
+            <EstadoBadge ec={ec} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── IP-10: Consistencia del plantel docente ───────────────────────────────────
 
 function TarjetaIP10({ ip10 }: { ip10: ResultadoIP10 }) {
@@ -1445,6 +1497,9 @@ function TablroCarreraInner() {
   const ip02 = dato?.ip02;
   const ip03 = dato?.ip03;
   const ip04 = dato?.ip04;
+  const ip05 = dato?.ip05;
+  const ip06 = dato?.ip06;
+  const ip07 = dato?.ip07;
   const ip08 = dato?.ip08;
   const ip09 = dato?.ip09;
   const ip10 = dato?.ip10;
@@ -1721,6 +1776,39 @@ function TablroCarreraInner() {
 
           {/* IP-04 — Materias por docente */}
           <TarjetaIP04 ip04={ip04} />
+
+          {/* IP-05 — Docentes con formación de posgrado */}
+          {ip05 && (
+            <TarjetaIPPorcentaje
+              codigo="IP-05"
+              titulo="Docentes con formación de posgrado"
+              conteoLabel="Con posgrado"
+              conteo={ip05.conPosgrado}
+              datos={ip05}
+            />
+          )}
+
+          {/* IP-06 — Docentes con actividad de investigación */}
+          {ip06 && (
+            <TarjetaIPPorcentaje
+              codigo="IP-06"
+              titulo="Docentes con actividad de investigación"
+              conteoLabel="Con investigación"
+              conteo={ip06.conInvestigacion}
+              datos={ip06}
+            />
+          )}
+
+          {/* IP-07 — Docentes con designación regular */}
+          {ip07 && (
+            <TarjetaIPPorcentaje
+              codigo="IP-07"
+              titulo="Docentes con designación regular"
+              conteoLabel="Con desig. regular"
+              conteo={ip07.conDesignacionRegular}
+              datos={ip07}
+            />
+          )}
 
           {/* IP-09 — Completitud promedio del plantel */}
           <TarjetaIP09 ip09={ip09} />

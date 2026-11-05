@@ -430,9 +430,42 @@ export interface CondicionesPlantellDto {
   estadoCalculo: EstadoCalculo;
 }
 
+// ── IP-05 / IP-06 / IP-07 — Condiciones del plantel explícitas ───────────────
+
 /**
- * Respuesta del endpoint POST /autoevaluacion/tablero/carrera/:carreraId.
- *
+ * FSD §6, IP-05 — Docentes con formación de posgrado.
+ * Derivado de condicionesPlantell.conPosgrado. Denominador: totalDocentes vigentes.
+ */
+export interface ResultadoIP05 {
+  conPosgrado: number;
+  totalDocentes: number;
+  /** round(conPosgrado / totalDocentes × 100). null cuando totalDocentes = 0. */
+  porcentaje: number | null;
+  estadoCalculo: EstadoCalculo;
+}
+
+/**
+ * FSD §6, IP-06 — Docentes con actividad de investigación.
+ * Derivado de condicionesPlantell.conInvestigacion.
+ */
+export interface ResultadoIP06 {
+  conInvestigacion: number;
+  totalDocentes: number;
+  porcentaje: number | null;
+  estadoCalculo: EstadoCalculo;
+}
+
+/**
+ * FSD §6, IP-07 — Docentes con designación regular.
+ * Derivado de condicionesPlantell.conDesignacionRegular.
+ */
+export interface ResultadoIP07 {
+  conDesignacionRegular: number;
+  totalDocentes: number;
+  porcentaje: number | null;
+  estadoCalculo: EstadoCalculo;
+}
+
 // ── FP resumen por plan (D07) ─────────────────────────────────────────────────
 
 /** Sumatoria de Formación Práctica por plan de estudios (D07). */
@@ -483,6 +516,15 @@ export interface TablroCarreraResponseDto {
    * Presente en ejecuciones ≥ v2.1. Ausente en snapshots históricos anteriores.
    */
   condicionesPlantell?: CondicionesPlantellDto;
+  /**
+   * IP-05: Docentes con posgrado. Derivado de condicionesPlantell.
+   * Presente en ejecuciones ≥ v2.3.
+   */
+  ip05?: ResultadoIP05;
+  /** IP-06: Docentes con investigación. Derivado de condicionesPlantell. Presente en ejecuciones ≥ v2.3. */
+  ip06?: ResultadoIP06;
+  /** IP-07: Docentes con designación regular. Derivado de condicionesPlantell. Presente en ejecuciones ≥ v2.3. */
+  ip07?: ResultadoIP07;
   /**
    * Sumatoria de Formación Práctica por plan (D07).
    * Presente en ejecuciones ≥ v2.2. Diferencia datos nuevos (D07), históricos (JSON) y faltantes.

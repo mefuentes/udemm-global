@@ -23,9 +23,12 @@ const MAX_LIST_ITEMS = 15;
 
 const META_CARRERA: Array<[string, string]> = [
   ['ip01', 'IP-01 — Total docentes'],
-  ['ip02', 'IP-02 — Docentes con formación de posgrado'],
+  ['ip02', 'IP-02 — Cargos docentes vigentes'],
   ['ip03', 'IP-03 — Materias con cobertura docente aprobada'],
-  ['ip04', 'IP-04 — Docentes con actividad de investigación'],
+  ['ip04', 'IP-04 — Materias por docente'],
+  ['ip05', 'IP-05 — Docentes con formación de posgrado'],
+  ['ip06', 'IP-06 — Docentes con actividad de investigación'],
+  ['ip07', 'IP-07 — Docentes con designación regular'],
   ['ip08', 'IP-08 — Relación profesores/auxiliares'],
   ['ip09', 'IP-09 — Completitud promedio de fichas docentes'],
   ['ip10', 'IP-10 / R-03 — Tope semanal de horas'],

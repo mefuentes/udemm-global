@@ -21,20 +21,33 @@ const DEFAULT_CONTEXTO = {
 // ── Fábricas de stubs ─────────────────────────────────────────────────────────
 
 function makeR03Stub(totalEnAlerta = 0, estadoCalculo = EstadoCalculo.CALCULADO) {
+  const enAlerta = Array.from({ length: totalEnAlerta }, (_, i) => ({
+    docenteId: `docente-r03-${i + 1}`,
+    nombre: `Docente R03 ${i + 1}`,
+    componentes: { horasDocencia: 30, horasGestion: 0, horasNoAcademico: 0, usoTope: 30 },
+    exceso: 2,
+  }));
   return {
     evaluar: jest.fn().mockResolvedValue({
       estadoCalculo,
-      valor: { totalEnAlerta },
+      valor: { totalEnAlerta, enAlerta },
       datosFaltantes: [],
     }),
   };
 }
 
 function makeR07Stub(totalSobreasignados = 0, estadoCalculo = EstadoCalculo.CALCULADO) {
+  const sobreasignados = Array.from({ length: totalSobreasignados }, (_, i) => ({
+    docenteId: `docente-r07-${i + 1}`,
+    nombre: `Docente R07 ${i + 1}`,
+    nMaterias: 5,
+    exceso: 2,
+    asignaciones: [],
+  }));
   return {
     evaluar: jest.fn().mockResolvedValue({
       estadoCalculo,
-      valor: { totalSobreasignados },
+      valor: { totalSobreasignados, sobreasignados },
       datosFaltantes: [],
     }),
   };
@@ -54,10 +67,20 @@ function makeR04Stub(
   };
 }
 
-function makePrismaStub(planIds: string[] = [PLAN_ID_1]) {
+function makePrismaStub(
+  planIds: string[] = [PLAN_ID_1],
+  docenteIdsInCarrera: string[] = [
+    DOCENTE_A, DOCENTE_B,
+    ...Array.from({ length: 10 }, (_, i) => `docente-r03-${i + 1}`),
+    ...Array.from({ length: 10 }, (_, i) => `docente-r07-${i + 1}`),
+  ],
+) {
   return {
     planEstudio: {
       findMany: jest.fn().mockResolvedValue(planIds.map(id => ({ id }))),
+    },
+    vinculacionCatedra: {
+      findMany: jest.fn().mockResolvedValue(docenteIdsInCarrera.map(id => ({ docenteId: id }))),
     },
   };
 }
@@ -335,5 +358,103 @@ describe('IP10EvaluadorService — metadatos del resultado', () => {
     );
     const res = await svc.evaluarParaCarrera(CARRERA_ID, USER_ID, 'SECRETARIA_ACADEMICA', FECHA_HOY);
     expect(res.carreraId).toBe(CARRERA_ID);
+  });
+});
+
+// ── T-02. Alertas de docentes externos no penalizan la fórmula ───────────────
+
+const DOCENTE_EXT = 'ext-docente-no-carrera';
+
+describe('IP10EvaluadorService — T-02: filtrado de alertas externas a la carrera', () => {
+  it('alertas R-03 de docentes externos no suman al componente A', async () => {
+    // R-03 devuelve 2 alertas: DOCENTE_A (en carrera) y DOCENTE_EXT (externo)
+    const r03 = {
+      evaluar: jest.fn().mockResolvedValue({
+        estadoCalculo: EstadoCalculo.CALCULADO,
+        valor: {
+          totalEnAlerta: 2,
+          enAlerta: [
+            { docenteId: DOCENTE_A, nombre: 'Docente A', componentes: { horasDocencia: 30, horasGestion: 0, horasNoAcademico: 0, usoTope: 30 }, exceso: 2 },
+            { docenteId: DOCENTE_EXT, nombre: 'Externo', componentes: { horasDocencia: 30, horasGestion: 0, horasNoAcademico: 0, usoTope: 30 }, exceso: 2 },
+          ],
+        },
+        datosFaltantes: [],
+      }),
+    };
+    // vinculacionCatedra solo incluye DOCENTE_A (DOCENTE_EXT no pertenece a la carrera)
+    const prisma = makePrismaStub([PLAN_ID_1], [DOCENTE_A]);
+    const svc = makeSvc(prisma, r03 as any, makeR07Stub(0) as any, makeR04Stub());
+    const res = await svc.evaluarParaCarrera(CARRERA_ID, USER_ID, 'SECRETARIA_ACADEMICA', FECHA_HOY);
+
+    expect(res.alertasR03).toBe(1);       // solo DOCENTE_A
+    expect(res.componenteA).toBe(1);      // A = 1 (R-03) + 0 (R-04)
+    expect(res.puntaje).toBe(75);         // 100 − 25×1 = 75
+  });
+
+  it('alertas R-07 de docentes externos no suman al componente M', async () => {
+    // R-07 devuelve 2 sobreasignados: DOCENTE_B (en carrera) y DOCENTE_EXT (externo)
+    const r07 = {
+      evaluar: jest.fn().mockResolvedValue({
+        estadoCalculo: EstadoCalculo.CALCULADO,
+        valor: {
+          totalSobreasignados: 2,
+          sobreasignados: [
+            { docenteId: DOCENTE_B, nombre: 'Docente B', nMaterias: 5, exceso: 2, asignaciones: [] },
+            { docenteId: DOCENTE_EXT, nombre: 'Externo', nMaterias: 5, exceso: 2, asignaciones: [] },
+          ],
+        },
+        datosFaltantes: [],
+      }),
+    };
+    // vinculacionCatedra solo incluye DOCENTE_B (DOCENTE_EXT no pertenece a la carrera)
+    const prisma = makePrismaStub([PLAN_ID_1], [DOCENTE_B]);
+    const svc = makeSvc(prisma, makeR03Stub(0) as any, r07 as any, makeR04Stub());
+    const res = await svc.evaluarParaCarrera(CARRERA_ID, USER_ID, 'SECRETARIA_ACADEMICA', FECHA_HOY);
+
+    expect(res.alertasR07).toBe(1);       // solo DOCENTE_B
+    expect(res.componenteM).toBe(1);      // M = 1
+    expect(res.puntaje).toBe(90);         // 100 − 10×1 = 90
+  });
+
+  it('docente compartido (en carrera, carga institucional completa) sigue siendo penalizable', async () => {
+    // DOCENTE_A pertenece a la carrera y también tiene carga en otra carrera de la facultad.
+    // R-03 y R-07 lo detectan con la carga total (faculty-wide). Debe penalizar esta carrera.
+    const r03 = {
+      evaluar: jest.fn().mockResolvedValue({
+        estadoCalculo: EstadoCalculo.CALCULADO,
+        valor: {
+          totalEnAlerta: 2,
+          enAlerta: [
+            { docenteId: DOCENTE_A, nombre: 'Docente A (compartido)', componentes: { horasDocencia: 35, horasGestion: 0, horasNoAcademico: 0, usoTope: 35 }, exceso: 7 },
+            { docenteId: DOCENTE_EXT, nombre: 'Externo', componentes: { horasDocencia: 30, horasGestion: 0, horasNoAcademico: 0, usoTope: 30 }, exceso: 2 },
+          ],
+        },
+        datosFaltantes: [],
+      }),
+    };
+    const r07 = {
+      evaluar: jest.fn().mockResolvedValue({
+        estadoCalculo: EstadoCalculo.CALCULADO,
+        valor: {
+          totalSobreasignados: 2,
+          sobreasignados: [
+            { docenteId: DOCENTE_A, nombre: 'Docente A (compartido)', nMaterias: 6, exceso: 3, asignaciones: [] },
+            { docenteId: DOCENTE_EXT, nombre: 'Externo', nMaterias: 5, exceso: 2, asignaciones: [] },
+          ],
+        },
+        datosFaltantes: [],
+      }),
+    };
+    // DOCENTE_A pertenece a la carrera; DOCENTE_EXT no
+    const prisma = makePrismaStub([PLAN_ID_1], [DOCENTE_A]);
+    const svc = makeSvc(prisma, r03 as any, r07 as any, makeR04Stub());
+    const res = await svc.evaluarParaCarrera(CARRERA_ID, USER_ID, 'SECRETARIA_ACADEMICA', FECHA_HOY);
+
+    // DOCENTE_A es de la carrera → sus alertas penalizan
+    expect(res.alertasR03).toBe(1);       // DOCENTE_A
+    expect(res.alertasR07).toBe(1);       // DOCENTE_A
+    expect(res.componenteA).toBe(1);      // A = 1 R-03 + 0 R-04
+    expect(res.componenteM).toBe(1);      // M = 1 R-07
+    expect(res.puntaje).toBe(65);         // 100 − 25×1 − 10×1 = 65
   });
 });

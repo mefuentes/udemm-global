@@ -31,6 +31,9 @@ import type {
   ResultadoIP02,
   ResultadoIP03,
   ResultadoIP04,
+  ResultadoIP05,
+  ResultadoIP06,
+  ResultadoIP07,
   ResultadoIP08,
   ResultadoIP09,
   ResultadoIP10,
@@ -167,10 +170,24 @@ export class TablroCarreraService {
       this.calcularR04ParaCarrera(carreraId, usuarioId, rolNombre, fechaEvaluacion),
     ] as const);
 
-    const [[ip01, ip02, ip03, ip08, ip04, ip09, ip10, ip13, r10, r12], [r03result, r04Results], fpPorPlan] =
-      await Promise.all([mainP, arP, this.calcularFpPorPlan(carreraId)]);
+    // Set de docenteIds que pertenecen a esta carrera. R-07/R-10/R-12/R-03 calculan
+    // con alcance de facultad para roles privilegiados; las listas presentadas al
+    // tablero de carrera se acotan a los docentes que pertenecen a la carrera pedida.
+    const docenteIdsCarreraP = this.prisma.vinculacionCatedra.findMany({
+      where: { carreraId, estado: 'APROBADA', docente: { activo: true } },
+      select: { docenteId: true },
+      distinct: ['docenteId'],
+    }).then(rows => new Set(rows.map(r => r.docenteId)));
 
-    const accionRequerida = this.buildAccionRequerida(ip13, r10, r03result, r04Results);
+    const [[ip01, ip02, ip03, ip08, ip04, ip09, ip10, ip13, r10, r12], [r03result, r04Results], fpPorPlan, docenteIdsCarrera] =
+      await Promise.all([mainP, arP, this.calcularFpPorPlan(carreraId), docenteIdsCarreraP]);
+
+    const ip13Filtrado = this.filtrarIP13(ip13, docenteIdsCarrera);
+    const r10Filtrado  = this.filtrarR10(r10, docenteIdsCarrera);
+    const r12Filtrado  = this.filtrarR12(r12, docenteIdsCarrera);
+    const r03Filtrado  = this.filtrarR03(r03result, docenteIdsCarrera);
+
+    const accionRequerida = this.buildAccionRequerida(ip13Filtrado, r10Filtrado, r03Filtrado, r04Results);
 
     // Listado de docentes: calculado con los mismos datos vigentes; incluido en el
     // snapshot para garantizar consistencia temporal en exportaciones PDF posteriores.
@@ -182,9 +199,18 @@ export class TablroCarreraService {
 
     // Condiciones del plantel (B-03): fallo gracioso igual que listadoDocentes.
     // ip08 ya está calculado — se reutiliza para evitar una segunda consulta de cargos.
+    // ip05/ip06/ip07 se derivan de condicionesPlantell sin consultas adicionales.
     let condicionesPlantell: CondicionesPlantellDto | undefined;
+    let ip05: ResultadoIP05 | undefined;
+    let ip06: ResultadoIP06 | undefined;
+    let ip07: ResultadoIP07 | undefined;
     try {
       condicionesPlantell = await this.calcularCondicionesPlantell(carreraId, fechaEvaluacion, ip08);
+      if (condicionesPlantell) {
+        ip05 = this.derivarIP05(condicionesPlantell);
+        ip06 = this.derivarIP06(condicionesPlantell);
+        ip07 = this.derivarIP07(condicionesPlantell);
+      }
     } catch { /* campo ausente en snapshot si falla */ }
 
     return {
@@ -194,12 +220,15 @@ export class TablroCarreraService {
       ip02,
       ip03,
       ip04,
+      ip05,
+      ip06,
+      ip07,
       ip08,
       ip09,
       ip10,
-      ip13,
-      r10,
-      r12,
+      ip13: ip13Filtrado,
+      r10: r10Filtrado,
+      r12: r12Filtrado,
       accionRequerida,
       listadoDocentes,
       condicionesPlantell,
@@ -207,10 +236,74 @@ export class TablroCarreraService {
       estadoGeneralCalculo: estadoMasRestrictivo(
         ip01.estadoCalculo, ip02.estadoCalculo,
         ip03.estadoCalculo, ip04.estadoCalculo, ip08.estadoCalculo,
-        ip09.estadoCalculo, ip10.estadoCalculo, ip13.estadoCalculo,
-        r10.estadoCalculo, r12.estadoCalculo,
+        ip09.estadoCalculo, ip10.estadoCalculo, ip13Filtrado.estadoCalculo,
+        r10Filtrado.estadoCalculo, r12Filtrado.estadoCalculo,
       ),
     };
+  }
+
+  // ── Filtrado de listas a scope de carrera ─────────────────────────────────────
+  // Los evaluadores R-07/R-10/R-12/R-03 calculan con alcance de facultad para roles
+  // privilegiados (correcto para la fórmula). Los siguientes métodos acotan las listas
+  // presentadas al tablero de carrera a los docentes que pertenecen a la carrera pedida.
+
+  private filtrarIP13(ip13: ResultadoIP13, docenteIds: Set<string>): ResultadoIP13 {
+    if (ip13.estadoCalculo === EstadoCalculo.NO_APLICA) return ip13;
+    const sobreasignados = ip13.sobreasignados.filter(d => docenteIds.has(d.docenteId));
+    return {
+      ...ip13,
+      totalDocentes: docenteIds.size,
+      totalSobreasignados: sobreasignados.length,
+      sobreasignados,
+    };
+  }
+
+  private filtrarR10(r10: ResultadoR10, docenteIds: Set<string>): ResultadoR10 {
+    if (r10.estadoCalculo === EstadoCalculo.NO_APLICA) return r10;
+    const enAlerta = r10.enAlerta.filter(d => docenteIds.has(d.docenteId));
+    return {
+      ...r10,
+      totalDocentes: docenteIds.size,
+      totalEnAlerta: enAlerta.filter(d => !d.incierto).length,
+      totalInciertos: enAlerta.filter(d => d.incierto).length,
+      enAlerta,
+    };
+  }
+
+  private filtrarR12(r12: ResultadoR12, docenteIds: Set<string>): ResultadoR12 {
+    if (r12.estadoCalculo === EstadoCalculo.NO_APLICA) return r12;
+    const incompletos     = r12.incompletos.filter(d => docenteIds.has(d.docenteId));
+    const noDeterminables = r12.noDeterminables.filter(d => docenteIds.has(d.docenteId));
+    // R-12 produce PARCIAL por dos causas: alcanceFacultad=false (limitación de rol) o
+    // noDeterminables.length > 0 (docentes cross-facultad). Si tras filtrar todos los
+    // noDeterminables resultan externos a esta carrera y el alcance es de facultad, el
+    // único motivo del PARCIAL original desapareció: se recalcula como CALCULADO.
+    let estadoCalculo = r12.estadoCalculo;
+    if (
+      estadoCalculo === EstadoCalculo.PARCIAL &&
+      r12.alcanceFacultad === true &&
+      noDeterminables.length === 0
+    ) {
+      estadoCalculo = EstadoCalculo.CALCULADO;
+    }
+    return {
+      ...r12,
+      estadoCalculo,
+      totalDocentes: docenteIds.size,
+      totalIncompletos: incompletos.length,
+      incompletos,
+      totalNoDeterminables: noDeterminables.length,
+      noDeterminables,
+    };
+  }
+
+  private filtrarR03(
+    r03result: ResultadoIndicador<ResultadoR03>,
+    docenteIds: Set<string>,
+  ): ResultadoIndicador<ResultadoR03> {
+    if (!r03result.valor || r03result.estadoCalculo === EstadoCalculo.NO_APLICA) return r03result;
+    const enAlerta = r03result.valor.enAlerta.filter(d => docenteIds.has(d.docenteId));
+    return { ...r03result, valor: { ...r03result.valor, enAlerta } };
   }
 
   /** D07: Sumatoria de Formación Práctica por plan de estudios. */
@@ -939,6 +1032,32 @@ export class TablroCarreraService {
       distribucionPosgrado,
       estadoCalculo: EstadoCalculo.CALCULADO,
     };
+  }
+
+  // ── Derivaciones sin consulta adicional (IP-05, IP-06, IP-07) ───────────────
+
+  private derivarIP05(cp: CondicionesPlantellDto): ResultadoIP05 {
+    if (cp.estadoCalculo === EstadoCalculo.NO_APLICA) {
+      return { conPosgrado: 0, totalDocentes: 0, porcentaje: null, estadoCalculo: EstadoCalculo.NO_APLICA };
+    }
+    const pct = cp.totalDocentes > 0 ? Math.round((cp.conPosgrado / cp.totalDocentes) * 100) : null;
+    return { conPosgrado: cp.conPosgrado, totalDocentes: cp.totalDocentes, porcentaje: pct, estadoCalculo: EstadoCalculo.CALCULADO };
+  }
+
+  private derivarIP06(cp: CondicionesPlantellDto): ResultadoIP06 {
+    if (cp.estadoCalculo === EstadoCalculo.NO_APLICA) {
+      return { conInvestigacion: 0, totalDocentes: 0, porcentaje: null, estadoCalculo: EstadoCalculo.NO_APLICA };
+    }
+    const pct = cp.totalDocentes > 0 ? Math.round((cp.conInvestigacion / cp.totalDocentes) * 100) : null;
+    return { conInvestigacion: cp.conInvestigacion, totalDocentes: cp.totalDocentes, porcentaje: pct, estadoCalculo: EstadoCalculo.CALCULADO };
+  }
+
+  private derivarIP07(cp: CondicionesPlantellDto): ResultadoIP07 {
+    if (cp.estadoCalculo === EstadoCalculo.NO_APLICA) {
+      return { conDesignacionRegular: 0, totalDocentes: 0, porcentaje: null, estadoCalculo: EstadoCalculo.NO_APLICA };
+    }
+    const pct = cp.totalDocentes > 0 ? Math.round((cp.conDesignacionRegular / cp.totalDocentes) * 100) : null;
+    return { conDesignacionRegular: cp.conDesignacionRegular, totalDocentes: cp.totalDocentes, porcentaje: pct, estadoCalculo: EstadoCalculo.CALCULADO };
   }
 
   /**

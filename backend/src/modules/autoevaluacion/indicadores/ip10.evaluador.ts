@@ -69,20 +69,30 @@ export class IP10EvaluadorService {
       select: { id: true },
     });
 
-    const allResults = await Promise.all([
-      this.r03.evaluar(contextoCarrera),
-      this.r07.evaluar(contextoCarrera),
-      ...planes.map(p =>
-        this.r04.evaluar({ planEstudioId: p.id, usuarioId, rolNombre, fechaEvaluacion }),
-      ),
+    // docenteIds de esta carrera: acota los conteos de R-03/R-07 cuando operan con
+    // alcance de facultad (roles privilegiados), evitando penalizar el score con
+    // docentes que no pertenecen a la carrera evaluada.
+    const [allResults, docenteIdsCarrera] = await Promise.all([
+      Promise.all([
+        this.r03.evaluar(contextoCarrera),
+        this.r07.evaluar(contextoCarrera),
+        ...planes.map(p =>
+          this.r04.evaluar({ planEstudioId: p.id, usuarioId, rolNombre, fechaEvaluacion }),
+        ),
+      ]),
+      this.prisma.vinculacionCatedra.findMany({
+        where: { carreraId, estado: 'APROBADA', docente: { activo: true } },
+        select: { docenteId: true },
+        distinct: ['docenteId'],
+      }).then(rows => new Set(rows.map(r => r.docenteId))),
     ]);
 
     const r03Res = allResults[0] as ResultadoIndicador<ResultadoR03>;
     const r07Res = allResults[1] as ResultadoIndicador<ResultadoR07>;
     const r04Results = allResults.slice(2) as ResultadoIndicador<ResultadoR04>[];
 
-    const alertasR03 = r03Res.valor?.totalEnAlerta ?? 0;
-    const alertasR07 = r07Res.valor?.totalSobreasignados ?? 0;
+    const alertasR03 = (r03Res.valor?.enAlerta ?? []).filter(d => docenteIdsCarrera.has(d.docenteId)).length;
+    const alertasR07 = (r07Res.valor?.sobreasignados ?? []).filter(d => docenteIdsCarrera.has(d.docenteId)).length;
 
     let alertasR04Penalizables = 0;
     for (const r04Res of r04Results) {

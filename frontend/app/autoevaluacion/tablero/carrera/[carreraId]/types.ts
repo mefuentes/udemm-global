@@ -53,6 +53,31 @@ export interface ResultadoIP13 {
   estadoCalculo: EstadoCalculo;
 }
 
+/** FSD §7, IP-05 — Docentes con formación de posgrado. Derivado de condicionesPlantell. */
+export interface ResultadoIP05 {
+  conPosgrado: number;
+  totalDocentes: number;
+  /** round(conPosgrado / totalDocentes × 100). null cuando totalDocentes = 0. */
+  porcentaje: number | null;
+  estadoCalculo: EstadoCalculo;
+}
+
+/** FSD §7, IP-06 — Docentes con actividad de investigación. Derivado de condicionesPlantell. */
+export interface ResultadoIP06 {
+  conInvestigacion: number;
+  totalDocentes: number;
+  porcentaje: number | null;
+  estadoCalculo: EstadoCalculo;
+}
+
+/** FSD §7, IP-07 — Docentes con designación regular. Derivado de condicionesPlantell. */
+export interface ResultadoIP07 {
+  conDesignacionRegular: number;
+  totalDocentes: number;
+  porcentaje: number | null;
+  estadoCalculo: EstadoCalculo;
+}
+
 /** FSD §7, IP-08 — Relación profesores / auxiliares del plantel de la carrera. */
 export interface ResultadoIP08 {
   profesores: number;
@@ -276,6 +301,12 @@ export interface TablroCarreraResponse {
   r12: ResultadoR12;
   /** Panel «Acción requerida» (FSD §9.2). */
   accionRequerida: ResultadoAccionRequerida;
+  /** IP-05 — Docentes con posgrado. Presente en ejecuciones ≥ v2.4. */
+  ip05?: ResultadoIP05;
+  /** IP-06 — Docentes con investigación. Presente en ejecuciones ≥ v2.4. */
+  ip06?: ResultadoIP06;
+  /** IP-07 — Docentes con designación regular. Presente en ejecuciones ≥ v2.4. */
+  ip07?: ResultadoIP07;
   /** Condiciones del plantel CONEAU (FSD §9.2, B-03). Presente en ejecuciones ≥ v2.1. */
   condicionesPlantell?: CondicionesPlantellResponse;
   /** FP por plan (D07). Presente en ejecuciones ≥ v2.2. */
