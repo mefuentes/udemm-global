@@ -432,6 +432,30 @@ export class UsuariosService {
     return usuarioActualizado;
   }
 
+  /**
+   * Regulariza usuarios DOCENTE que fueron creados antes de que existiera
+   * sincronizarDocente. Para cada usuario con rol DOCENTE sin registro Docente
+   * vinculado, crea o vincula el Docente correspondiente de forma idempotente.
+   *
+   * Seguro de ejecutar múltiples veces: sincronizarDocente es idempotente.
+   * No modifica vinculaciones ni datos académicos existentes.
+   */
+  async regularizarDocentesExistentes(): Promise<{ procesados: number }> {
+    const rolDocente = await this.prisma.rol.findFirst({ where: { nombre: 'DOCENTE' } });
+    if (!rolDocente) return { procesados: 0 };
+
+    const usuarios = await this.prisma.usuario.findMany({
+      where: { rolId: rolDocente.id },
+      select: { id: true, nombre: true, apellido: true, correoElectronico: true, activo: true },
+    });
+
+    for (const u of usuarios) {
+      await this.sincronizarDocente(u, 'DOCENTE');
+    }
+
+    return { procesados: usuarios.length };
+  }
+
   async toggleEstado(id: string) {
     const usuario = await this.obtenerUsuarioPorId(id);
     const actualizado = await this.prisma.usuario.update({

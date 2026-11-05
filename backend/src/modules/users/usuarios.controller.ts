@@ -45,4 +45,9 @@ export class UsuariosController {
   toggleEstado(@Param('id') id: string) {
     return this.usuariosService.toggleEstado(id);
   }
+
+  @Post('regularizar-docentes')
+  regularizarDocentes() {
+    return this.usuariosService.regularizarDocentesExistentes();
+  }
 }
