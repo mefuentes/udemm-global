@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 
 export class CrearVinculacionDto {
   @IsUUID() facultadId: string;
@@ -17,6 +17,10 @@ export class CrearVinculacionDto {
   @Min(1900, { message: 'El año de inicio no es válido' })
   @Max(2100, { message: 'El año de inicio no es válido' })
   anioInicio: number;
+
+  @IsOptional()
+  @IsBoolean()
+  esResponsableCatedra?: boolean | null;
 
   @IsOptional()
   @IsString()

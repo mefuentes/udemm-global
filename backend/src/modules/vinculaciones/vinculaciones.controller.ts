@@ -16,6 +16,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { VinculacionesService } from './vinculaciones.service';
 import { CrearVinculacionDto } from './dto/crear-vinculacion.dto';
+import { ActualizarResponsabilidadDto } from './dto/actualizar-responsabilidad.dto';
 import { FiltrarVinculacionesDto } from './dto/filtrar-vinculaciones.dto';
 import { DesvincularVinculacionDto } from './dto/desvincular-vinculacion.dto';
 import { RechazarVinculacionDto } from './dto/rechazar-vinculacion.dto';
@@ -91,5 +92,26 @@ export class VinculacionesController {
     @Req() req: any,
   ) {
     return this.service.desvincular(id, dto, req.user.id);
+  }
+
+  /**
+   * Registra o modifica esResponsableCatedra en una vinculación existente.
+   * - PENDIENTE: cualquier rol de ROLES_CREAR puede cambiar la propuesta.
+   * - APROBADA: solo ADMIN o DIRECTOR_CARRERA (el servicio lo verifica internamente).
+   * - Otros estados: el servicio devuelve 400.
+   */
+  @Patch(':id/responsabilidad')
+  @Roles(...ROLES_CREAR)
+  actualizarResponsabilidad(
+    @Param('id') id: string,
+    @Body() dto: ActualizarResponsabilidadDto,
+    @Req() req: any,
+  ) {
+    return this.service.actualizarResponsabilidad(
+      id,
+      dto.esResponsableCatedra,
+      req.user.id,
+      req.user?.rol?.nombre ?? '',
+    );
   }
 }

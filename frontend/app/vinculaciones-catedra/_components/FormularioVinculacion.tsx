@@ -85,6 +85,7 @@ function validarAnio(val: string): string | null {
 
 export function FormularioVinculacion({ onGuardado, onCerrar }: Props) {
   const [form, setForm] = useState<FormState>(VACIO);
+  const [esResponsableCatedra, setEsResponsableCatedra] = useState<boolean | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [anioError, setAnioError] = useState<string | null>(null);
@@ -214,8 +215,9 @@ export function FormularioVinculacion({ onGuardado, onCerrar }: Props) {
         cargoId:       form.cargoId,
         modalidadId:   form.modalidadId,
         designacionId: form.designacionId,
-        anioInicio:    parseInt(form.anioInicio, 10),
-        observaciones: form.observaciones || undefined,
+        anioInicio:           parseInt(form.anioInicio, 10),
+        esResponsableCatedra: esResponsableCatedra,
+        observaciones:        form.observaciones || undefined,
       };
       const r = await apiFetch(`${API}/vinculaciones-catedra`, {
         method: 'POST',
@@ -421,6 +423,40 @@ export function FormularioVinculacion({ onGuardado, onCerrar }: Props) {
                 {anioError}
               </p>
             )}
+          </Campo>
+
+          <Separador label="Responsabilidad de cátedra" />
+
+          <Campo label="¿Este docente es Responsable de Cátedra?">
+            <div className="flex gap-2">
+              {([
+                { valor: null,  label: 'Sin clasificar', title: 'No se define aún — se puede cambiar más adelante' },
+                { valor: true,  label: 'Responsable',    title: 'Propuesta: será Responsable de Cátedra al aprobarse' },
+                { valor: false, label: 'No responsable', title: 'No es Responsable de Cátedra' },
+              ] as { valor: boolean | null; label: string; title: string }[]).map(({ valor, label, title }) => {
+                const activo = esResponsableCatedra === valor;
+                const color =
+                  valor === true  ? (activo ? 'bg-[#0f4c81] border-[#0f4c81] text-white' : 'border-slate-200 text-slate-600 hover:border-[#0f4c81]/40 hover:bg-blue-50') :
+                  valor === false ? (activo ? 'bg-slate-700 border-slate-700 text-white'  : 'border-slate-200 text-slate-600 hover:border-slate-400 hover:bg-slate-50') :
+                                   (activo ? 'bg-slate-200 border-slate-300 text-slate-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50');
+                return (
+                  <button
+                    key={String(valor)}
+                    type="button"
+                    title={title}
+                    onClick={() => setEsResponsableCatedra(valor)}
+                    className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${color}`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1.5 italic">
+              {esResponsableCatedra === true  && 'Propuesta de responsabilidad — se confirma como efectiva al aprobar la vinculación.'}
+              {esResponsableCatedra === false && 'Vinculación sin responsabilidad de cátedra.'}
+              {esResponsableCatedra === null  && 'Sin clasificar — se puede establecer más adelante desde el detalle de la vinculación.'}
+            </p>
           </Campo>
 
           <Separador label="Observaciones" />

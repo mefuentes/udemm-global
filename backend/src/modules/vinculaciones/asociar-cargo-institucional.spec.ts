@@ -61,7 +61,7 @@ function makePrisma({
   };
 }
 
-const makeService = (prisma: any) => new VinculacionesService(prisma as any);
+const makeService = (prisma: any) => new VinculacionesService(prisma as any, {} as any);
 
 // ── DTO: validaciones ────────────────────────────────────────────────────────
 

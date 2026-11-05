@@ -149,6 +149,12 @@ export default function VinculacionesCatedraPage() {
   const puedeClasificar =
     usuario?.rol?.nombre === 'ADMINISTRADOR_SISTEMA' ||
     usuario?.rol?.nombre === 'DIRECTOR_CARRERA';
+  // ROLES_CREAR — pueden editar la propuesta en PENDIENTE
+  const puedeEditarPendiente =
+    puedeClasificar ||
+    usuario?.rol?.nombre === 'SECRETARIA_ACADEMICA' ||
+    usuario?.rol?.nombre === 'DECANO' ||
+    usuario?.rol?.nombre === 'RECTORADO';
   const [clasificandoResponsable, setClasificandoResponsable] = useState(false);
   const [errorClasificacion, setErrorClasificacion]           = useState<string | null>(null);
   const [exitoClasificacion, setExitoClasificacion]           = useState<string | null>(null);
@@ -168,6 +174,35 @@ export default function VinculacionesCatedraPage() {
     setVerTarget(null);
     setErrorClasificacion(null);
     setExitoClasificacion(null);
+  }
+
+  async function actualizarResponsabilidadPendiente(valor: boolean | null) {
+    if (!verTarget) return;
+    const vinId = verTarget.id;
+    setClasificandoResponsable(true);
+    setErrorClasificacion(null);
+    setExitoClasificacion(null);
+    try {
+      const r = await apiFetch(`${API}/vinculaciones-catedra/${vinId}/responsabilidad`, {
+        method: 'PATCH',
+        body: JSON.stringify({ esResponsableCatedra: valor }),
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        throw new Error(mensajeErrorHttp(r, data, 'Error al actualizar la propuesta de responsabilidad'));
+      }
+      setVerTarget(prev => prev?.id === vinId ? { ...prev, esResponsableCatedra: valor } : prev);
+      setItems(prev => prev.map(v => v.id === vinId ? { ...v, esResponsableCatedra: valor } : v));
+      setExitoClasificacion(
+        valor === true  ? 'Propuesta registrada: será responsable de cátedra al aprobarse.' :
+        valor === false ? 'Propuesta guardada: no responsable de cátedra.' :
+                          'Clasificación borrada — vinculación sin clasificar.',
+      );
+    } catch (e) {
+      setErrorClasificacion((e as Error).message);
+    } finally {
+      setClasificandoResponsable(false);
+    }
   }
 
   async function clasificarResponsable(esResponsable: boolean) {
@@ -569,8 +604,11 @@ export default function VinculacionesCatedraPage() {
               <section>
                 <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Responsabilidad de cátedra</h3>
                 <div className="flex items-center gap-2 mb-3">
-                  {verTarget.esResponsableCatedra === true && (
-                    <span className="inline-flex text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Responsable de cátedra</span>
+                  {verTarget.esResponsableCatedra === true && verTarget.estado === 'APROBADA' && (
+                    <span className="inline-flex text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Responsable efectivo</span>
+                  )}
+                  {verTarget.esResponsableCatedra === true && verTarget.estado !== 'APROBADA' && (
+                    <span className="inline-flex text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Propuesta: Responsable</span>
                   )}
                   {verTarget.esResponsableCatedra === false && (
                     <span className="inline-flex text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">No responsable</span>
@@ -579,6 +617,46 @@ export default function VinculacionesCatedraPage() {
                     <span className="inline-flex text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">Sin clasificar</span>
                   )}
                 </div>
+
+                {/* Controles PENDIENTE — propuesta libre, cualquier rol de ROLES_CREAR */}
+                {verTarget.estado === 'PENDIENTE_DE_APROBACION' && puedeEditarPendiente && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-slate-400 italic mb-2">
+                      Propuesta — se confirma como efectiva al aprobar la vinculación.
+                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        onClick={() => actualizarResponsabilidadPendiente(true)}
+                        disabled={clasificandoResponsable || verTarget.esResponsableCatedra === true}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {clasificandoResponsable ? 'Procesando…' : 'Proponer como responsable'}
+                      </button>
+                      <button
+                        onClick={() => actualizarResponsabilidadPendiente(false)}
+                        disabled={clasificandoResponsable || verTarget.esResponsableCatedra === false}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {clasificandoResponsable ? 'Procesando…' : 'No responsable'}
+                      </button>
+                      <button
+                        onClick={() => actualizarResponsabilidadPendiente(null)}
+                        disabled={clasificandoResponsable || verTarget.esResponsableCatedra == null}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-400 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {clasificandoResponsable ? 'Procesando…' : 'Borrar clasificación'}
+                      </button>
+                    </div>
+                    {exitoClasificacion && (
+                      <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{exitoClasificacion}</p>
+                    )}
+                    {errorClasificacion && (
+                      <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{errorClasificacion}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Controles APROBADA — designación efectiva, solo ADMIN + DIRECTOR */}
                 {verTarget.estado === 'APROBADA' && puedeClasificar && (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">

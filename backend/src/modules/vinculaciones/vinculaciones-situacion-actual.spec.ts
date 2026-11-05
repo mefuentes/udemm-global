@@ -36,7 +36,7 @@ function makePrisma(rows: any[], docenteActivo = true) {
   };
 }
 
-const makeService = (prisma: any) => new VinculacionesService(prisma as any);
+const makeService = (prisma: any) => new VinculacionesService(prisma as any, {} as any);
 
 describe('VinculacionesService — consulta de vinculaciones para sección 4.1 SITUACIÓN ACTUAL', () => {
 
