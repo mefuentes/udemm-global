@@ -247,6 +247,8 @@ export class TablroPlanService {
         paresInciertos: 0,
         totalMaterias: 0,
         estadoCalculo: EstadoCalculo.NO_DETERMINABLE,
+        detalleAlertas: [],
+        detalleInciertos: [],
       };
     }
     return {
@@ -254,6 +256,8 @@ export class TablroPlanService {
       paresInciertos: r02.valor.paresInciertos.length,
       totalMaterias: r02.valor.totalMaterias,
       estadoCalculo: r02.estadoCalculo ?? EstadoCalculo.NO_DETERMINABLE,
+      detalleAlertas: r02.valor.paresConAlerta,
+      detalleInciertos: r02.valor.paresInciertos,
     };
   }
 

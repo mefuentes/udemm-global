@@ -27,11 +27,32 @@ export interface ResultadoIPL03 {
   estadoCalculo: EstadoCalculo;
 }
 
+export interface AlertaR02 {
+  materiaId: string;
+  materiaNombre: string;
+  materiaCodigo: string;
+  catedraId: string;
+  catedraNombre?: string;
+  cantidadResponsables: number;
+}
+
+export interface ParIncierto02 {
+  materiaId: string;
+  materiaNombre: string;
+  materiaCodigo: string;
+  catedraId: string;
+  catedraNombre?: string;
+  confirmedTrue: number;
+  sinClasificar: number;
+}
+
 export interface ResultadoIPL04 {
   paresConAlerta: number;
   paresInciertos: number;
   totalMaterias: number;
   estadoCalculo: EstadoCalculo;
+  detalleAlertas: AlertaR02[];
+  detalleInciertos: ParIncierto02[];
 }
 
 export interface EvaluacionBloqueIPL05 {

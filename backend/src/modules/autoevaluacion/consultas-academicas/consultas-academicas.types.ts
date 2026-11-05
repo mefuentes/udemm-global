@@ -105,6 +105,8 @@ export interface VinculacionAut {
   materiaNombre?: string;
   docenteId: string;
   catedraId: string;
+  /** Nombre de la cátedra; poblado por obtenerVinculacionesDePlan. undefined en otros métodos. */
+  catedraNombre?: string;
   planEstudioId: string;
   carreraId: string;
   /**

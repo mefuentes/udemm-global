@@ -19,6 +19,8 @@ export interface AlertaR02 {
   materiaNombre: string;
   materiaCodigo: string;
   catedraId: string;
+  /** Nombre de la cátedra; presente cuando el origen lo provee (obtenerVinculacionesDePlan). */
+  catedraNombre?: string;
   /** Número de VinculacionCatedra APROBADAS con esResponsableCatedra=true. Siempre >= 2. */
   cantidadResponsables: number;
 }
@@ -33,6 +35,8 @@ export interface ParIncierto02 {
   materiaNombre: string;
   materiaCodigo: string;
   catedraId: string;
+  /** Nombre de la cátedra; presente cuando el origen lo provee (obtenerVinculacionesDePlan). */
+  catedraNombre?: string;
   /** Número de APROBADAS con esResponsableCatedra=true (0 o 1). */
   confirmedTrue: number;
   /** Número de APROBADAS con esResponsableCatedra=null. */
@@ -132,7 +136,7 @@ export class R02EvaluadorService implements IndicadorEvaluador<ResultadoR02> {
 
     // Conteo por par (materiaId, catedraId) — solo APROBADAS
     // clave compuesta: `${materiaId}::${catedraId}`
-    type ConteosPar = { nTrue: number; nNull: number; materiaId: string; catedraId: string };
+    type ConteosPar = { nTrue: number; nNull: number; materiaId: string; catedraId: string; catedraNombre?: string };
     const pares = new Map<string, ConteosPar>();
 
     for (const v of vinculaciones) {
@@ -144,6 +148,7 @@ export class R02EvaluadorService implements IndicadorEvaluador<ResultadoR02> {
         nNull: 0,
         materiaId: v.materiaId,
         catedraId: v.catedraId,
+        catedraNombre: v.catedraNombre,
       };
 
       if (v.esResponsableCatedra === true) existing.nTrue++;
@@ -156,7 +161,7 @@ export class R02EvaluadorService implements IndicadorEvaluador<ResultadoR02> {
     const paresConAlerta: AlertaR02[] = [];
     const paresInciertos: ParIncierto02[] = [];
 
-    for (const { nTrue, nNull, materiaId, catedraId } of pares.values()) {
+    for (const { nTrue, nNull, materiaId, catedraId, catedraNombre } of pares.values()) {
       const materia = materiasMap.get(materiaId);
       if (!materia) continue;
 
@@ -166,6 +171,7 @@ export class R02EvaluadorService implements IndicadorEvaluador<ResultadoR02> {
           materiaNombre: materia.nombre,
           materiaCodigo: materia.codigo,
           catedraId,
+          catedraNombre,
           cantidadResponsables: nTrue,
         });
       } else if (nTrue + nNull >= 2) {
@@ -175,6 +181,7 @@ export class R02EvaluadorService implements IndicadorEvaluador<ResultadoR02> {
           materiaNombre: materia.nombre,
           materiaCodigo: materia.codigo,
           catedraId,
+          catedraNombre,
           confirmedTrue: nTrue,
           sinClasificar: nNull,
         });

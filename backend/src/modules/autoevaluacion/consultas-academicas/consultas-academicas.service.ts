@@ -301,6 +301,7 @@ export class ConsultasAcademicasService {
         id: true, materiaId: true, docenteId: true, catedraId: true,
         planEstudioId: true, carreraId: true, estado: true,
         esResponsableCatedra: true, horasSemana: true,
+        catedra: { select: { nombre: true } },
         docente: {
           select: {
             id: true, nombre: true, apellido: true, activo: true,
@@ -315,6 +316,7 @@ export class ConsultasAcademicasService {
       materiaId: v.materiaId,
       docenteId: v.docenteId,
       catedraId: v.catedraId,
+      catedraNombre: v.catedra.nombre,
       planEstudioId: v.planEstudioId,
       carreraId: v.carreraId,
       estado: v.estado,

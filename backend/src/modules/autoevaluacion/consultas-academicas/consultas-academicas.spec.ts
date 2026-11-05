@@ -60,6 +60,7 @@ function makeVinculacion(overrides = {}) {
     catedraId: 'cat-01', planEstudioId: PLAN_ID, carreraId: CAR_ID,
     estado: 'APROBADA', esResponsableCatedra: null, horasSemana: 4,
     materia: { nombre: 'Álgebra' },
+    catedra: { nombre: 'Cátedra Álgebra' },
     docente: DOC_ROW,
     ...overrides,
   };

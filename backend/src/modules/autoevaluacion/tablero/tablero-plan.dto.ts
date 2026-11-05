@@ -1,5 +1,6 @@
 import type { EstadoCalculo } from '../types/estado-calculo.types';
 import type { DatoFaltante } from '../indicadores/indicadores.types';
+import type { AlertaR02, ParIncierto02 } from '../indicadores/r02.evaluador';
 import type { ResultadoR11 } from '../indicadores/r11.evaluador';
 import type { ResultadoR13 } from '../indicadores/r13.evaluador';
 import type { ResultadoR14 } from '../indicadores/r14.evaluador';
@@ -28,6 +29,10 @@ export interface ResultadoIPL04 {
   paresInciertos: number;
   totalMaterias: number;
   estadoCalculo: EstadoCalculo;
+  /** Detalle completo de alertas R-02 (array vacío cuando paresConAlerta=0). */
+  detalleAlertas: AlertaR02[];
+  /** Detalle completo de pares inciertos R-02 (array vacío cuando paresInciertos=0). */
+  detalleInciertos: ParIncierto02[];
 }
 
 /** FSD §8, Tabla 25, IPL-01 — Horas totales del plan vs P-10 (horasMinTotales). */

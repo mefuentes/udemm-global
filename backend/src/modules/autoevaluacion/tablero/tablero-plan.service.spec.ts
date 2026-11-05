@@ -22,6 +22,7 @@ function makeR02Result(
     materiaNombre: `Materia ${i + 1}`,
     materiaCodigo: `M0${i + 1}`,
     catedraId: `cat-${i + 1}`,
+    catedraNombre: `Cátedra ${i + 1}`,
     cantidadResponsables: 2,
   }));
   const paresInciertos = Array.from({ length: inciertos }, (_, i) => ({
@@ -29,6 +30,7 @@ function makeR02Result(
     materiaNombre: `Materia Inc ${i + 1}`,
     materiaCodigo: `MI0${i + 1}`,
     catedraId: `cat-inc-${i + 1}`,
+    catedraNombre: `Cátedra Inc ${i + 1}`,
     confirmedTrue: 1,
     sinClasificar: 1,
   }));
@@ -226,6 +228,40 @@ describe('TablroPlanService', () => {
       ).consultarPlan(PLAN_ID, USR.usuarioId, USR.rolNombre);
       expect(res.ipl04.paresConAlerta).toBe(5);
       expect(res.ipl04.totalMaterias).toBe(10);
+    });
+
+    it('detalleAlertas contiene los AlertaR02 completos cuando hay alertas', async () => {
+      const res = await makeSvc(
+        makeR02Result(EstadoCalculo.CALCULADO, { alertas: 2, totalMaterias: 5 }),
+      ).consultarPlan(PLAN_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ipl04.detalleAlertas).toHaveLength(2);
+      expect(res.ipl04.detalleAlertas[0].catedraId).toBe('cat-1');
+      expect(res.ipl04.detalleAlertas[0].catedraNombre).toBe('Cátedra 1');
+      expect(res.ipl04.detalleAlertas[0].cantidadResponsables).toBe(2);
+    });
+
+    it('detalleInciertos contiene los ParIncierto02 completos cuando hay inciertos', async () => {
+      const res = await makeSvc(
+        makeR02Result(EstadoCalculo.PARCIAL, { inciertos: 1, totalMaterias: 5 }),
+      ).consultarPlan(PLAN_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ipl04.detalleInciertos).toHaveLength(1);
+      expect(res.ipl04.detalleInciertos[0].catedraId).toBe('cat-inc-1');
+      expect(res.ipl04.detalleInciertos[0].confirmedTrue).toBe(1);
+      expect(res.ipl04.detalleInciertos[0].sinClasificar).toBe(1);
+    });
+
+    it('detalleAlertas y detalleInciertos son arrays vacíos cuando R-02 falla', async () => {
+      const res = await makeSvc(new Error('timeout'))
+        .consultarPlan(PLAN_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ipl04.detalleAlertas).toEqual([]);
+      expect(res.ipl04.detalleInciertos).toEqual([]);
+    });
+
+    it('detalleAlertas y detalleInciertos vacíos cuando no hay alertas ni inciertos', async () => {
+      const res = await makeSvc(makeR02Result(EstadoCalculo.CALCULADO, { alertas: 0, inciertos: 0 }))
+        .consultarPlan(PLAN_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ipl04.detalleAlertas).toEqual([]);
+      expect(res.ipl04.detalleInciertos).toEqual([]);
     });
   });
 

@@ -6,9 +6,11 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch, mensajeErrorHttp } from '@/lib/api';
 import type {
+  AlertaR02,
   EvaluacionBloqueIPL05,
   EstadoCalculo,
   MateriaAlertaR14,
+  ParIncierto02,
   ResultadoIPL04,
   ResultadoR11,
   ResultadoR13,
@@ -95,35 +97,163 @@ function EtiquetaIndicador({ codigo, titulo }: { codigo: string; titulo: string 
 
 // ── IPL-04: doble responsable de cátedra ────────────────────────────────────
 
+function NombreCatedra({ nombre, id }: { nombre?: string; id: string }) {
+  if (nombre) return <>{nombre}</>;
+  return <span className="font-mono text-[10px] text-slate-400">{id}</span>;
+}
+
+function TablaAlertasR02({ alertas }: { alertas: AlertaR02[] }) {
+  if (alertas.length === 0) {
+    return (
+      <p className="text-[11px] text-emerald-700 py-1">
+        No se detectaron cátedras con múltiples responsables confirmados.
+      </p>
+    );
+  }
+  return (
+    <div className="overflow-x-auto rounded-lg border border-red-100">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-red-50">
+            <th className="text-left px-3 py-1.5 font-semibold text-slate-500">Materia</th>
+            <th className="text-left px-3 py-1.5 font-semibold text-slate-500">Cátedra</th>
+            <th className="text-right px-3 py-1.5 font-semibold text-slate-500">Responsables</th>
+            <th className="text-left px-3 py-1.5 font-semibold text-slate-500">Situación</th>
+          </tr>
+        </thead>
+        <tbody>
+          {alertas.map((a, i) => (
+            <tr key={`${a.materiaId}::${a.catedraId}`} className={i % 2 === 0 ? '' : 'bg-slate-50/50'}>
+              <td className="px-3 py-1.5 text-slate-700">
+                {a.materiaNombre}
+                {a.materiaCodigo && <span className="ml-1 text-[10px] text-slate-400 font-mono">({a.materiaCodigo})</span>}
+              </td>
+              <td className="px-3 py-1.5 text-slate-700">
+                <NombreCatedra nombre={a.catedraNombre} id={a.catedraId} />
+              </td>
+              <td className="px-3 py-1.5 text-right font-bold text-red-700 tabular-nums">{a.cantidadResponsables}</td>
+              <td className="px-3 py-1.5 text-red-600 text-[10px]">
+                {a.cantidadResponsables} docentes marcados como responsables — revisar y corregir.
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function TablaIncientosR02({ inciertos }: { inciertos: ParIncierto02[] }) {
+  if (inciertos.length === 0) return null;
+  return (
+    <div className="overflow-x-auto rounded-lg border border-amber-100 mt-2">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-amber-50">
+            <th className="text-left px-3 py-1.5 font-semibold text-slate-500">Materia</th>
+            <th className="text-left px-3 py-1.5 font-semibold text-slate-500">Cátedra</th>
+            <th className="text-right px-3 py-1.5 font-semibold text-slate-500">Confirmados</th>
+            <th className="text-right px-3 py-1.5 font-semibold text-slate-500">Sin clasificar</th>
+            <th className="text-left px-3 py-1.5 font-semibold text-slate-500">Incertidumbre</th>
+          </tr>
+        </thead>
+        <tbody>
+          {inciertos.map((p, i) => (
+            <tr key={`${p.materiaId}::${p.catedraId}`} className={i % 2 === 0 ? '' : 'bg-slate-50/50'}>
+              <td className="px-3 py-1.5 text-slate-700">
+                {p.materiaNombre}
+                {p.materiaCodigo && <span className="ml-1 text-[10px] text-slate-400 font-mono">({p.materiaCodigo})</span>}
+              </td>
+              <td className="px-3 py-1.5 text-slate-700">
+                <NombreCatedra nombre={p.catedraNombre} id={p.catedraId} />
+              </td>
+              <td className="px-3 py-1.5 text-right tabular-nums text-slate-700">{p.confirmedTrue}</td>
+              <td className="px-3 py-1.5 text-right tabular-nums text-amber-700 font-semibold">{p.sinClasificar}</td>
+              <td className="px-3 py-1.5 text-amber-600 text-[10px]">
+                Vinculaciones sin clasificar — puede haber doble responsable.
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function TarjetaIPL04({ ipl04 }: { ipl04: ResultadoIPL04 }) {
   const ec = ipl04.estadoCalculo;
+  const alertas   = ipl04.detalleAlertas   ?? [];
+  const inciertos = ipl04.detalleInciertos ?? [];
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      {/* Encabezado */}
       <div className="flex items-center gap-2 mb-3">
         <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10">IPL-04</span>
-        <span className="text-xs font-semibold text-slate-700">Pares materia/cátedra con múltiples responsables</span>
+        <span className="text-xs font-semibold text-slate-700">R-02 — Doble responsable de cátedra</span>
       </div>
+
+      {/* Métricas */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        <Metrica label="Total materias" valor={ipl04.totalMaterias} />
+        <Metrica label="Total materias"   valor={ipl04.totalMaterias} />
         <Metrica label="Pares con alerta" valor={ipl04.paresConAlerta} destaca={ipl04.paresConAlerta > 0} />
-        <Metrica label="Pares inciertos" valor={ipl04.paresInciertos} />
+        <Metrica label="Pares inciertos"  valor={ipl04.paresInciertos} />
       </div>
+
+      {/* Sin problemas */}
       {ipl04.paresConAlerta === 0 && ipl04.paresInciertos === 0 && ec === 'CALCULADO' && (
         <p className="mt-2 text-xs text-emerald-700 flex items-center gap-1.5">
           <span className="text-emerald-500">✓</span> Sin pares con múltiples responsables confirmados.
         </p>
       )}
-      {ipl04.paresInciertos > 0 && (
+
+      {/* Detalle desplegable */}
+      {(alertas.length > 0 || inciertos.length > 0) && (
+        <details className="mt-3 group">
+          <summary className="cursor-pointer text-[11px] font-semibold text-slate-500 hover:text-slate-700 select-none list-none flex items-center gap-1.5">
+            <span className="inline-block transition-transform group-open:rotate-90">▶</span>
+            Detalle de R-02 — Responsables de cátedra
+          </summary>
+
+          <div className="mt-2 space-y-3">
+            {/* A. Alertas confirmadas */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-red-600 mb-1">
+                Alertas confirmadas ({alertas.length})
+              </p>
+              <TablaAlertasR02 alertas={alertas} />
+            </div>
+
+            {/* B. Casos inciertos */}
+            {inciertos.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 mb-1">
+                  Casos inciertos ({inciertos.length})
+                </p>
+                <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 mb-1">
+                  <p className="text-[11px] text-amber-700">
+                    Existen vinculaciones cuya responsabilidad aún no fue clasificada. El resultado de R-02 puede ser parcial.
+                  </p>
+                </div>
+                <TablaIncientosR02 inciertos={inciertos} />
+              </div>
+            )}
+          </div>
+        </details>
+      )}
+
+      {/* Solo inciertos sin alertas */}
+      {alertas.length === 0 && inciertos.length > 0 && (
         <div className="mt-2 p-2 rounded-lg bg-amber-50 border border-amber-200">
           <p className="text-[11px] text-amber-700">
-            {ipl04.paresInciertos} par{ipl04.paresInciertos !== 1 ? 'es' : ''} con <span className="font-mono">esResponsableCatedra</span> sin clasificar.
+            Existen vinculaciones cuya responsabilidad aún no fue clasificada. El resultado de R-02 puede ser parcial.
           </p>
         </div>
       )}
+
       <div className="flex justify-end mt-2">
         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${
-          ec === 'CALCULADO' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-          ec === 'PARCIAL' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+          ec === 'CALCULADO'       ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+          ec === 'PARCIAL'         ? 'bg-amber-50 text-amber-700 border-amber-200' :
           ec === 'NO_DETERMINABLE' ? 'bg-slate-100 text-slate-600 border-slate-200' :
           'bg-sky-50 text-sky-700 border-sky-200'
         }`}>{ec.replace(/_/g, ' ')}</span>
