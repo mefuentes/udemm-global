@@ -947,3 +947,143 @@ describe('ConsultasAcademicasService — detección multi-facultad (comportamien
   });
 
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// K. FUENTE DE HORAS DE DOCENCIA — R-03 / R-10 usan VinculacionCatedra.horasSemana
+// ════════════════════════════════════════════════════════════════════════════
+
+function makeVinR03(overrides: Record<string, any> = {}) {
+  return {
+    docenteId: DOC_ID,
+    horasSemana: 8,
+    docente: {
+      nombre: 'Ana', apellido: 'García',
+      tiempoDedicacionGestionSemanal: null,
+      fechaFinGestion: null,
+      funcionGestion: null,
+      desempenoActualJson: null,
+      cargosAcademicosJson: null,
+    },
+    ...overrides,
+  };
+}
+
+function makeVinR10(overrides: Record<string, any> = {}) {
+  return {
+    docenteId: DOC_ID,
+    horasSemana: 8,
+    docente: {
+      nombre: 'Ana', apellido: 'García',
+      tiempoDedicacionGestionSemanal: null,
+      fechaFinGestion: null,
+      funcionGestion: null,
+      desempenoActualJson: null,
+      cargosAcademicosJson: null,
+      otrasDedicacionesJson: null,
+      proyectosInvestigacionJson: null,
+      participacionVinculacionJson: null,
+    },
+    ...overrides,
+  };
+}
+
+describe('ConsultasAcademicasService — fuente horasSemana en R-03 y R-10', () => {
+
+  it('TC-Q-R03-01: horasSemana=12 → horasDocenciaConocidas=12', async () => {
+    const prisma = makePrisma({
+      vinculacionCatedra: {
+        findMany: jest.fn()
+          .mockResolvedValueOnce([makeVinR03({ horasSemana: 12 })])
+          .mockResolvedValueOnce([]),
+      },
+    });
+    const r = await svc(prisma, makeScope()).obtenerDocentesParaR03(CAR_ID, USR, ADMIN);
+    expect(r.docentes[0].horasDocenciaConocidas).toBe(12);
+    expect(r.docentes[0].tieneMateriaSinHoras).toBe(false);
+  });
+
+  it('TC-Q-R03-02: horasSemana=null → tieneMateriaSinHoras=true', async () => {
+    const prisma = makePrisma({
+      vinculacionCatedra: {
+        findMany: jest.fn()
+          .mockResolvedValueOnce([makeVinR03({ horasSemana: null })])
+          .mockResolvedValueOnce([]),
+      },
+    });
+    const r = await svc(prisma, makeScope()).obtenerDocentesParaR03(CAR_ID, USR, ADMIN);
+    expect(r.docentes[0].tieneMateriaSinHoras).toBe(true);
+    expect(r.docentes[0].horasDocenciaConocidas).toBe(0);
+  });
+
+  it('TC-Q-R03-03: 2 vinculaciones del mismo docente → suma de horasSemana', async () => {
+    const prisma = makePrisma({
+      vinculacionCatedra: {
+        findMany: jest.fn()
+          .mockResolvedValueOnce([
+            makeVinR03({ horasSemana: 6 }),
+            makeVinR03({ horasSemana: 4 }),
+          ])
+          .mockResolvedValueOnce([]),
+      },
+    });
+    const r = await svc(prisma, makeScope()).obtenerDocentesParaR03(CAR_ID, USR, ADMIN);
+    expect(r.docentes).toHaveLength(1);
+    expect(r.docentes[0].horasDocenciaConocidas).toBe(10);
+  });
+
+  it('TC-Q-R03-04: una vinculación null y otra con 6h → tieneMateriaSinHoras=true, conocidas=6', async () => {
+    const prisma = makePrisma({
+      vinculacionCatedra: {
+        findMany: jest.fn()
+          .mockResolvedValueOnce([
+            makeVinR03({ horasSemana: null }),
+            makeVinR03({ horasSemana: 6 }),
+          ])
+          .mockResolvedValueOnce([]),
+      },
+    });
+    const r = await svc(prisma, makeScope()).obtenerDocentesParaR03(CAR_ID, USR, ADMIN);
+    expect(r.docentes[0].tieneMateriaSinHoras).toBe(true);
+    expect(r.docentes[0].horasDocenciaConocidas).toBe(6);
+  });
+
+  it('TC-Q-R10-01: horasSemana=12 → horasDocenciaConocidas=12', async () => {
+    const prisma = makePrisma({
+      vinculacionCatedra: {
+        findMany: jest.fn()
+          .mockResolvedValueOnce([makeVinR10({ horasSemana: 12 })])
+          .mockResolvedValueOnce([]),
+      },
+    });
+    const r = await svc(prisma, makeScope()).obtenerDocentesParaR10(CAR_ID, USR, ADMIN);
+    expect(r.docentes[0].horasDocenciaConocidas).toBe(12);
+    expect(r.docentes[0].tieneMateriaSinHoras).toBe(false);
+  });
+
+  it('TC-Q-R10-02: horasSemana=null → tieneMateriaSinHoras=true', async () => {
+    const prisma = makePrisma({
+      vinculacionCatedra: {
+        findMany: jest.fn()
+          .mockResolvedValueOnce([makeVinR10({ horasSemana: null })])
+          .mockResolvedValueOnce([]),
+      },
+    });
+    const r = await svc(prisma, makeScope()).obtenerDocentesParaR10(CAR_ID, USR, ADMIN);
+    expect(r.docentes[0].tieneMateriaSinHoras).toBe(true);
+  });
+
+  it('TC-Q-R10-R03-PARIDAD: mismo horasSemana produce mismo horasDocenciaConocidas en R03 y R10', async () => {
+    const vinR03 = jest.fn()
+      .mockResolvedValueOnce([makeVinR03({ horasSemana: 9 })])
+      .mockResolvedValueOnce([]);
+    const vinR10 = jest.fn()
+      .mockResolvedValueOnce([makeVinR10({ horasSemana: 9 })])
+      .mockResolvedValueOnce([]);
+    const r03 = await svc(makePrisma({ vinculacionCatedra: { findMany: vinR03 } }), makeScope())
+      .obtenerDocentesParaR03(CAR_ID, USR, ADMIN);
+    const r10 = await svc(makePrisma({ vinculacionCatedra: { findMany: vinR10 } }), makeScope())
+      .obtenerDocentesParaR10(CAR_ID, USR, ADMIN);
+    expect(r03.docentes[0].horasDocenciaConocidas).toBe(r10.docentes[0].horasDocenciaConocidas);
+  });
+
+});

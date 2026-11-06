@@ -314,13 +314,13 @@ describe('R03EvaluadorService', () => {
     expect(v.noDeterminables[0].detalleDatos).toContain('tiempoDedicacionGestionSemanal');
   });
 
-  it('TC-11: materia sin cargaHorariaSemanal + suma conocida < P-01 → noDeterminable', async () => {
+  it('TC-11: vinculación sin horasSemana + suma conocida < P-01 → noDeterminable', async () => {
     const doc = mkDocente({ horasDocenciaConocidas: 30, tieneMateriaSinHoras: true });
     const { svc } = makeSvc(mkData({ docentes: [doc] }), mkConfig(60));
     const r = await svc.evaluar(mkCtx());
     const v = r.valor as ResultadoR03;
     expect(v.totalNoDeterminables).toBe(1);
-    expect(v.noDeterminables[0].detalleDatos).toContain('cargaHorariaSemanal');
+    expect(v.noDeterminables[0].detalleDatos).toContain('horasSemana');
   });
 
   it('TC-12: materia sin horas + suma conocida > P-01 → alerta confirmada (no noDeterminable)', async () => {

@@ -340,7 +340,7 @@ export class TablroFacultadService {
           facultadId,
           estado: 'APROBADA',
           docente: { activo: true },
-          materia: { cargaHorariaSemanal: { not: null } },
+          horasSemana: { not: null },
         },
         _sum: { horasSemana: true },
       }),

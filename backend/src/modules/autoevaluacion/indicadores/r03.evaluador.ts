@@ -355,7 +355,7 @@ export class R03EvaluadorService implements IndicadorEvaluador<ResultadoR03> {
         });
       } else if (tieneIndeterminados) {
         const detalle = [
-          d.tieneMateriaSinHoras ? 'materias sin cargaHorariaSemanal en MOD-PDE' : '',
+          d.tieneMateriaSinHoras ? 'vinculaciones sin horasSemana (fuente 4.1)' : '',
           g.indeterminado ? 'tiempoDedicacionGestionSemanal con valor no numérico' : '',
           na.tieneIndeterminados
             ? 'dedicacionSeman con valores no numéricos en desempenoActualJson'

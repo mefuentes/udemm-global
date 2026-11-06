@@ -160,7 +160,7 @@ export interface DocenteAlertaR10 {
   umbral: number;
   /**
    * true cuando el total real podría superar horasConocidas:
-   * materias sin cargaHorariaSemanal, asignaciones cross-facultad,
+   * vinculaciones sin horasSemana (fuente 4.1), asignaciones cross-facultad,
    * o algún componente indeterminado (valor no numérico o actividad declarada sin horas).
    */
   incierto: boolean;
@@ -310,10 +310,10 @@ export class R10EvaluadorService implements IndicadorEvaluador<ResultadoR10> {
         ? [
             {
               campo:
-                'cargaHorariaSemanal / tiempoDedicacionGestionSemanal / otrasDedicacionesJson / proyectosInvestigacionJson / participacionVinculacionJson',
-              entidad: 'Materia / Docente',
+                'horasSemana / tiempoDedicacionGestionSemanal / otrasDedicacionesJson / proyectosInvestigacionJson / participacionVinculacionJson',
+              entidad: 'VinculacionCatedra / Docente',
               descripcion:
-                'Algunas horas no son determinables: materias sin cargaHorariaSemanal, ' +
+                'Algunas horas no son determinables: vinculaciones sin horasSemana (fuente 4.1), ' +
                 'gestión/otras-dedicaciones/investigación/vinculación con ítems sin horas numéricas (FSD §3).',
             },
           ]

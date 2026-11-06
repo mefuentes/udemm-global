@@ -772,9 +772,9 @@ export class ConsultasAcademicasService {
    * - Roles globales y DECANO: toda la facultad (alcanceFacultad=true).
    * - DIRECTOR_CARRERA: solo la carrera solicitada (alcanceFacultad=false → PARCIAL).
    *
-   * Horas de docencia: suma de Materia.cargaHorariaSemanal por vinculación APROBADA.
+   * Horas de docencia: suma de VinculacionCatedra.horasSemana (fuente oficial 4.1).
    * Cada asignación aporta las horas completas (FSD §5.3 — sin deduplicación).
-   * Si alguna materia no tiene cargaHorariaSemanal, tieneMateriaSinHoras=true.
+   * Si alguna vinculación no tiene horasSemana, tieneMateriaSinHoras=true.
    */
   async obtenerDocentesParaR03(
     carreraId: string,
@@ -810,7 +810,7 @@ export class ConsultasAcademicasService {
       },
       select: {
         docenteId: true,
-        materia: { select: { cargaHorariaSemanal: true } },
+        horasSemana: true,
         docente: {
           select: {
             nombre: true,
@@ -852,7 +852,7 @@ export class ConsultasAcademicasService {
         });
       }
       const entry = porDocente.get(v.docenteId)!;
-      const horas = v.materia?.cargaHorariaSemanal;
+      const horas = v.horasSemana;
       if (horas === null || horas === undefined) {
         entry.tieneMateriaSinHoras = true;
       } else {
@@ -921,7 +921,7 @@ export class ConsultasAcademicasService {
       },
       select: {
         docenteId: true,
-        materia: { select: { cargaHorariaSemanal: true } },
+        horasSemana: true,
         docente: {
           select: {
             nombre: true,
@@ -972,7 +972,7 @@ export class ConsultasAcademicasService {
         });
       }
       const entry = porDocente.get(v.docenteId)!;
-      const horas = v.materia?.cargaHorariaSemanal;
+      const horas = v.horasSemana;
       if (horas === null || horas === undefined) {
         entry.tieneMateriaSinHoras = true;
       } else {
