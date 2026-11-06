@@ -1,12 +1,13 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ScopeService } from '../../scopes/scope.service';
+import { ConsultasAcademicasService } from '../consultas-academicas/consultas-academicas.service';
 import { IP09EvaluadorService } from '../indicadores/ip09.evaluador';
 import { IP10EvaluadorService } from '../indicadores/ip10.evaluador';
-import { R03EvaluadorService } from '../indicadores/r03.evaluador';
+import { R03EvaluadorService, parsearCargosAcademicosJson, parsearHorasGestion, parsearHorasNoAcademico } from '../indicadores/r03.evaluador';
 import { R04EvaluadorService } from '../indicadores/r04.evaluador';
 import { R07EvaluadorService } from '../indicadores/r07.evaluador';
-import { R10EvaluadorService, tieneProyectoInvestigacion } from '../indicadores/r10.evaluador';
+import { R10EvaluadorService, tieneProyectoInvestigacion, parsearOtrasDedicaciones, parsearProyectosInvestigacion, parsearParticipacionVinculacion } from '../indicadores/r10.evaluador';
 import { R12EvaluadorService } from '../indicadores/r12.evaluador';
 import { R15EvaluadorService } from '../indicadores/r15.evaluador';
 import { EstadoCalculo } from '../types/estado-calculo.types';
@@ -17,10 +18,13 @@ import { normalizarDedicacionConeau, ORDEN_DEDICACION_CONEAU } from './normaliza
 import { JERARQUIA_POSGRADO } from '../catalogo/tipo-posgrado.service';
 import type {
   AlertasDocente,
+  AuditoriaDedicacionDto,
+  ComponentesAuditoria,
   CondicionesPlantellDto,
   DedicacionConeauItem,
   DedicacionTipoItem,
   DistribucionSemaforosDto,
+  FilaAuditoriaDedicacion,
   FpResumenPlan,
   PosgradoTipoItem,
   DocenteAccionRequerida,
@@ -129,6 +133,7 @@ export class TablroCarreraService {
     private readonly r10: R10EvaluadorService,
     private readonly r03: R03EvaluadorService,
     private readonly r04: R04EvaluadorService,
+    private readonly consultas: ConsultasAcademicasService,
   ) {}
 
   async consultarCarrera(
@@ -1098,6 +1103,121 @@ export class TablroCarreraService {
       auxiliares,
       ratio,
       estadoCalculo: EstadoCalculo.CALCULADO,
+    };
+  }
+
+  // ── Auditoría de dedicación docente ──────────────────────────────────────────
+
+  /**
+   * Devuelve el desglose horario por componente (4.1, 5.1, 5.2, 6.1, 7.2, 7.3) para
+   * cada docente vigente en la carrera, junto con los totales R-10 y R-03 y las
+   * alertas correspondientes a p01TopeH y p02BajaH.
+   *
+   * Fuente de datos: obtenerDocentesParaR10 (incluye los 6 campos JSON de la ficha).
+   * No realiza consultas adicionales: reutiliza los parsers de los evaluadores R-03 y R-10.
+   */
+  async consultarAuditoriaDedicacion(
+    carreraId: string,
+    usuarioId: string,
+    rolNombre: string,
+  ): Promise<AuditoriaDedicacionDto> {
+    if (!ROLES_MODAUT.has(rolNombre)) {
+      throw new ForbiddenException('Rol sin acceso a MOD-AUT');
+    }
+
+    const carrera = await this.prisma.carrera.findUnique({
+      where: { id: carreraId },
+      select: { id: true },
+    });
+    if (!carrera) throw new NotFoundException(`Carrera ${carreraId} no encontrada`);
+
+    const tieneScope = await this.scope.tieneScopeCarrera(usuarioId, rolNombre, carreraId);
+    if (!tieneScope) throw new ForbiddenException();
+
+    const fechaEvaluacion = new Date();
+
+    const [datosR10, config] = await Promise.all([
+      this.consultas.obtenerDocentesParaR10(carreraId, usuarioId, rolNombre),
+      this.consultas.obtenerConfigDeCarrera(carreraId, usuarioId, rolNombre),
+    ]);
+
+    const { docentes } = datosR10;
+    const p01TopeH = config?.p01TopeH ?? null;
+    const p02BajaH = config?.p02BajaH ?? null;
+
+    // Filtrar solo docentes que pertenecen a esta carrera
+    const docenteIdsCarrera = await this.prisma.vinculacionCatedra.findMany({
+      where: { carreraId, estado: 'APROBADA', docente: { activo: true } },
+      select: { docenteId: true },
+      distinct: ['docenteId'],
+    }).then(rows => new Set(rows.map(r => r.docenteId)));
+
+    let hayDatosIndeterminados = false;
+
+    const filas: FilaAuditoriaDedicacion[] = docentes
+      .filter(d => docenteIdsCarrera.has(d.docenteId))
+      .map(d => {
+        const gestionDeclarada = !!(d.funcionGestion?.trim());
+        const g = d.cargosAcademicosJson?.trim()
+          ? parsearCargosAcademicosJson(d.cargosAcademicosJson, fechaEvaluacion)
+          : parsearHorasGestion(d.tiempoDedicacionGestionSemanal, d.fechaFinGestion, fechaEvaluacion, gestionDeclarada);
+        const otras = parsearOtrasDedicaciones(d.otrasDedicacionesJson);
+        const na    = parsearHorasNoAcademico(d.desempenoActualJson);
+        const inv   = parsearProyectosInvestigacion(d.proyectosInvestigacionJson);
+        const vin   = parsearParticipacionVinculacion(d.participacionVinculacionJson);
+
+        const incierto =
+          d.tieneMateriaSinHoras ||
+          g.indeterminado ||
+          otras.indeterminado ||
+          na.tieneIndeterminados ||
+          inv.indeterminado ||
+          vin.indeterminado;
+
+        if (incierto) hayDatosIndeterminados = true;
+
+        const componentes: ComponentesAuditoria = {
+          docencia: d.horasDocenciaConocidas,
+          gestion: g.horas,
+          otras: otras.horas,
+          desempenoNoAcademico: na.horas,
+          investigacion: inv.horas,
+          vinculacion: vin.horas,
+          gestionIndeterminada: g.indeterminado,
+          otrasIndeterminadas: otras.indeterminado,
+          desempenoIndeterminado: na.tieneIndeterminados,
+          investigacionIndeterminada: inv.indeterminado,
+          vinculacionIndeterminada: vin.indeterminado,
+        };
+
+        const dedicacionTotalR10 = d.horasDocenciaConocidas + g.horas + otras.horas + inv.horas + vin.horas;
+        const cargaTopeR03       = d.horasDocenciaConocidas + g.horas + na.horas;
+
+        const alertaR03 = p01TopeH !== null && cargaTopeR03 > p01TopeH;
+        const alertaR10 = p02BajaH !== null && !incierto && dedicacionTotalR10 < p02BajaH;
+
+        return {
+          docenteId: d.docenteId,
+          nombre: `${d.apellido.toUpperCase()}, ${d.nombre}`,
+          componentes,
+          dedicacionTotalR10,
+          cargaTopeR03,
+          alertaR03,
+          alertaR10,
+          incierto,
+        };
+      })
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+    const estadoCalculo = hayDatosIndeterminados ? EstadoCalculo.PARCIAL : EstadoCalculo.CALCULADO;
+
+    return {
+      carreraId,
+      fechaEvaluacion: fechaEvaluacion.toISOString(),
+      p01TopeH,
+      p02BajaH,
+      filas,
+      estadoCalculo,
     };
   }
 }

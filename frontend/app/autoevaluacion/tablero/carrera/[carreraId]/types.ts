@@ -313,3 +313,42 @@ export interface TablroCarreraResponse {
   fpPorPlan?: FpResumenPlan[];
   estadoGeneralCalculo: EstadoCalculo;
 }
+
+// ── Auditoría de dedicación docente ──────────────────────────────────────────
+
+/** Desglose horario por componente de la ficha docente. */
+export interface ComponentesAuditoria {
+  docencia: number;
+  gestion: number;
+  otras: number;
+  desempenoNoAcademico: number;
+  investigacion: number;
+  vinculacion: number;
+  gestionIndeterminada: boolean;
+  otrasIndeterminadas: boolean;
+  desempenoIndeterminado: boolean;
+  investigacionIndeterminada: boolean;
+  vinculacionIndeterminada: boolean;
+}
+
+/** Una fila de la auditoría. R-10 = 4.1+5.1+5.2+7.2+7.3. R-03 = 4.1+5.1+6.1. */
+export interface FilaAuditoriaDedicacion {
+  docenteId: string;
+  /** "APELLIDO, Nombre" */
+  nombre: string;
+  componentes: ComponentesAuditoria;
+  dedicacionTotalR10: number;
+  cargaTopeR03: number;
+  alertaR03: boolean;
+  alertaR10: boolean;
+  incierto: boolean;
+}
+
+export interface AuditoriaDedicacionResponse {
+  carreraId: string;
+  fechaEvaluacion: string;
+  p01TopeH: number | null;
+  p02BajaH: number | null;
+  filas: FilaAuditoriaDedicacion[];
+  estadoCalculo: EstadoCalculo;
+}

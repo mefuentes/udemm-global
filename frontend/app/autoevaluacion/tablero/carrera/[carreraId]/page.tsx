@@ -6,10 +6,13 @@ import Link from 'next/link';
 import { apiFetch, mensajeErrorHttp } from '@/lib/api';
 import type {
   AlertasDocente,
+  AuditoriaDedicacionResponse,
+  ComponentesAuditoria,
   CondicionesPlantellResponse,
   DedicacionConeauItem,
   DedicacionTipoItem,
   DistribucionSemaforosCarrera,
+  FilaAuditoriaDedicacion,
   FpResumenPlan,
   PosgradoTipoItem,
   DocenteAccionRequerida,
@@ -1170,6 +1173,175 @@ function sortDocentes(docentes: FilaDocenteListado[], key: SortKey, asc: boolean
   return copy;
 }
 
+// ── Auditoría de dedicación docente ──────────────────────────────────────────
+
+function FilaAuditoriaRow({ fila, p01TopeH, p02BajaH }: {
+  fila: FilaAuditoriaDedicacion;
+  p01TopeH: number | null;
+  p02BajaH: number | null;
+}) {
+  const c = fila.componentes;
+  const alertColor = fila.alertaR03
+    ? 'text-red-600 font-semibold'
+    : fila.alertaR10
+    ? 'text-amber-600 font-semibold'
+    : 'text-slate-700';
+
+  return (
+    <tr className="border-b border-slate-100 hover:bg-slate-50 text-xs">
+      <td className="py-2 px-3 font-medium text-slate-800 whitespace-nowrap">
+        {fila.nombre}
+        {fila.incierto && (
+          <span className="ml-1 text-[9px] text-amber-500 font-normal">~</span>
+        )}
+      </td>
+      <td className="py-2 px-2 tabular-nums text-right text-slate-600">{c.docencia}</td>
+      <td className="py-2 px-2 tabular-nums text-right text-slate-600">
+        {c.gestion}{c.gestionIndeterminada && <span className="text-amber-400">*</span>}
+      </td>
+      <td className="py-2 px-2 tabular-nums text-right text-slate-600">
+        {c.otras}{c.otrasIndeterminadas && <span className="text-amber-400">*</span>}
+      </td>
+      <td className="py-2 px-2 tabular-nums text-right text-slate-600">
+        {c.desempenoNoAcademico}{c.desempenoIndeterminado && <span className="text-amber-400">*</span>}
+      </td>
+      <td className="py-2 px-2 tabular-nums text-right text-slate-600">
+        {c.investigacion}{c.investigacionIndeterminada && <span className="text-amber-400">*</span>}
+      </td>
+      <td className="py-2 px-2 tabular-nums text-right text-slate-600">
+        {c.vinculacion}{c.vinculacionIndeterminada && <span className="text-amber-400">*</span>}
+      </td>
+      <td className={`py-2 px-2 tabular-nums text-right ${fila.alertaR10 ? 'text-amber-600 font-semibold' : 'text-slate-700'}`}>
+        {fila.dedicacionTotalR10}
+        {p02BajaH !== null && <span className="ml-0.5 text-[9px] text-slate-400">/{p02BajaH}</span>}
+      </td>
+      <td className={`py-2 px-2 tabular-nums text-right ${fila.alertaR03 ? 'text-red-600 font-semibold' : 'text-slate-700'}`}>
+        {fila.cargaTopeR03}
+        {p01TopeH !== null && <span className="ml-0.5 text-[9px] text-slate-400">/{p01TopeH}</span>}
+      </td>
+    </tr>
+  );
+}
+
+function SeccionAuditoriaDedicacion({
+  auditoria, cargando, error, onRetry,
+}: {
+  auditoria: AuditoriaDedicacionResponse | null;
+  cargando: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  const [expandido, setExpandido] = useState(false);
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+          Auditoría de dedicación docente
+        </span>
+        {auditoria && (
+          <span className="ml-auto flex items-center gap-2">
+            <EstadoBadge ec={auditoria.estadoCalculo} />
+          </span>
+        )}
+      </div>
+
+      {cargando && !auditoria && (
+        <div className="flex items-center justify-center gap-2 py-8 text-slate-400">
+          <IcSpinner />
+          <span className="text-sm">Cargando auditoría...</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200">
+          <span className="text-xs text-red-700 flex-1">{error}</span>
+          <button onClick={onRetry} className="text-xs text-red-600 underline whitespace-nowrap">Reintentar</button>
+        </div>
+      )}
+
+      {auditoria && auditoria.filas.length === 0 && (
+        <div className="p-3 rounded-lg bg-sky-50 border border-sky-200">
+          <p className="text-xs text-sky-700">Sin docentes activos con asignaciones aprobadas.</p>
+        </div>
+      )}
+
+      {auditoria && auditoria.filas.length > 0 && (
+        <>
+          {/* Resumen rápido */}
+          <div className="flex flex-wrap gap-3 mb-3 text-xs text-slate-600">
+            <span>{auditoria.filas.length} docentes</span>
+            {(() => {
+              const alertasR03 = auditoria.filas.filter(f => f.alertaR03).length;
+              const alertasR10 = auditoria.filas.filter(f => f.alertaR10).length;
+              const inciertos  = auditoria.filas.filter(f => f.incierto).length;
+              return (
+                <>
+                  {auditoria.p01TopeH !== null && (
+                    <span className={alertasR03 > 0 ? 'text-red-600 font-semibold' : 'text-emerald-600'}>
+                      R-03: {alertasR03} sobre tope ({auditoria.p01TopeH}h)
+                    </span>
+                  )}
+                  {auditoria.p02BajaH !== null && (
+                    <span className={alertasR10 > 0 ? 'text-amber-600 font-semibold' : 'text-emerald-600'}>
+                      R-10: {alertasR10} bajo umbral ({auditoria.p02BajaH}h)
+                    </span>
+                  )}
+                  {inciertos > 0 && (
+                    <span className="text-amber-500">~ {inciertos} con datos indeterminados</span>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+
+          <button
+            onClick={() => setExpandido(e => !e)}
+            className="text-xs text-[#0f4c81] underline mb-3"
+          >
+            {expandido ? 'Ocultar tabla' : 'Ver tabla completa'}
+          </button>
+
+          {expandido && (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[700px] text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-[10px] text-slate-500 uppercase tracking-wide">
+                    <th className="py-2 px-3 text-left">Docente</th>
+                    <th className="py-2 px-2 text-right">4.1 Doc</th>
+                    <th className="py-2 px-2 text-right">5.1 Gest</th>
+                    <th className="py-2 px-2 text-right">5.2 Otras</th>
+                    <th className="py-2 px-2 text-right">6.1 NoAc</th>
+                    <th className="py-2 px-2 text-right">7.2 Inv</th>
+                    <th className="py-2 px-2 text-right">7.3 Vin</th>
+                    <th className="py-2 px-2 text-right">R-10 Total</th>
+                    <th className="py-2 px-2 text-right">R-03 Tope</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditoria.filas.map(fila => (
+                    <FilaAuditoriaRow
+                      key={fila.docenteId}
+                      fila={fila}
+                      p01TopeH={auditoria.p01TopeH}
+                      p02BajaH={auditoria.p02BajaH}
+                    />
+                  ))}
+                </tbody>
+              </table>
+              <p className="mt-2 text-[10px] text-slate-400">
+                * dato declarado sin horas numéricas (indeterminado). ~ docente con al menos un componente indeterminado.
+                Columna R-10: dedicación total (4.1+5.1+5.2+7.2+7.3).
+                Columna R-03: carga para el tope (4.1+5.1+6.1).
+              </p>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function PanelListadoDocentes({
   listado, cargando, error, onRetry,
 }: {
@@ -1399,6 +1571,10 @@ function TablroCarreraInner() {
   const [errorListado,    setErrorListado]    = useState<string | null>(null);
   const [listado,         setListado]         = useState<ListadoDocentesCarreraResponse | null>(null);
 
+  const [cargandoAuditoria, setCargandoAuditoria] = useState(false);
+  const [errorAuditoria,    setErrorAuditoria]    = useState<string | null>(null);
+  const [auditoria,         setAuditoria]         = useState<AuditoriaDedicacionResponse | null>(null);
+
   const [corriendo,       setCorriendo]       = useState(false);
   const [errorAnalisis,   setErrorAnalisis]   = useState<string | null>(null);
   const [ultimaEjecucion, setUltimaEjecucion] = useState<MetadataEjecucion | null>(null);
@@ -1474,6 +1650,21 @@ function TablroCarreraInner() {
     }
   }
 
+  async function cargarAuditoria() {
+    setCargandoAuditoria(true);
+    setErrorAuditoria(null);
+    try {
+      const res  = await apiFetch(`/autoevaluacion/tablero/carrera/${carreraId}/auditoria`, { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(mensajeErrorHttp(res, data, 'Error al cargar la auditoría de dedicación'));
+      setAuditoria(data as AuditoriaDedicacionResponse);
+    } catch (e) {
+      setErrorAuditoria((e as Error).message);
+    } finally {
+      setCargandoAuditoria(false);
+    }
+  }
+
   async function cargar() {
     setCargando(true);
     setError(null);
@@ -1487,8 +1678,9 @@ function TablroCarreraInner() {
     } finally {
       setCargando(false);
     }
-    // Load listado in parallel after the main call
+    // Load listado and auditoria in parallel after the main call
     cargarListado().catch(() => {});
+    cargarAuditoria().catch(() => {});
   }
 
   useEffect(() => { cargar(); }, [carreraId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1659,6 +1851,14 @@ function TablroCarreraInner() {
             cargando={cargandoListado}
             error={errorListado}
             onRetry={cargarListado}
+          />
+
+          {/* AUD — Auditoría de dedicación docente */}
+          <SeccionAuditoriaDedicacion
+            auditoria={auditoria}
+            cargando={cargandoAuditoria}
+            error={errorAuditoria}
+            onRetry={cargarAuditoria}
           />
 
           {/* IP-01 + IP-02 — Plantel vigente (fila compacta) */}

@@ -238,6 +238,22 @@ export class AutoevaluacionController {
     return this.tableroCarrera.consultarListadoDocentes(carreraId, req.user.id, req.user.rol.nombre);
   }
 
+  /**
+   * Devuelve el desglose de horas por componente para cada docente de la carrera.
+   * Incluye totales R-10 y R-03 y alertas según p01TopeH / p02BajaH configurados.
+   *
+   * Seguridad: igual a listadoDocentesCarrera — UUID v4 en path, usuarioId/rol del token.
+   */
+  @Post('tablero/carrera/:carreraId/auditoria')
+  @HttpCode(200)
+  @Roles(...ROLES_MODAUT)
+  async auditoriaDedicacionCarrera(
+    @Param('carreraId', new ParseUUIDPipe({ version: '4' })) carreraId: string,
+    @Req() req: any,
+  ) {
+    return this.tableroCarrera.consultarAuditoriaDedicacion(carreraId, req.user.id, req.user.rol.nombre);
+  }
+
   // ── Tablero por facultad ────────────────────────────────────────────────────
 
   /**

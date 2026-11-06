@@ -184,6 +184,7 @@ function makeSvc(overrides: {
     r10 as any,
     r03 as any,
     r04 as any,
+    { obtenerDocentesParaR10: jest.fn().mockResolvedValue({ docentes: [], alcanceFacultad: true, docentesMultiFacultad: new Set() }), obtenerConfigDeCarrera: jest.fn().mockResolvedValue(null) } as any,
   );
 }
 

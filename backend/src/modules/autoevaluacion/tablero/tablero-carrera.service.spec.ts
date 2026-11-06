@@ -362,6 +362,14 @@ function buildR04Result(planId: string, cargos: { docenteId: string; nombre: str
   };
 }
 
+/** Mock mínimo de ConsultasAcademicasService para tests que no ejercen consultarAuditoriaDedicacion. */
+function makeConsultasMock() {
+  return {
+    obtenerDocentesParaR10: jest.fn().mockResolvedValue({ docentes: [], alcanceFacultad: true, docentesMultiFacultad: new Set() }),
+    obtenerConfigDeCarrera: jest.fn().mockResolvedValue(null),
+  };
+}
+
 function makeSvc(
   prismaOverrides: Parameters<typeof makePrisma>[0] = {},
   scopeValue = true,
@@ -388,6 +396,7 @@ function makeSvc(
     makeR10Mock(r10Estado, r10Options) as any,
     (r03Mock ?? makeR03Mock()) as any,
     (r04Mock ?? makeR04Mock()) as any,
+    makeConsultasMock() as any,
   );
 }
 
@@ -684,6 +693,7 @@ describe('TablroCarreraService', () => {
         makeR10Mock() as any,
         makeR03Mock() as any,
         makeR04Mock() as any,
+        makeConsultasMock() as any,
       );
       await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
       expect(r07Mock.evaluar).toHaveBeenCalledWith(
@@ -770,6 +780,7 @@ describe('TablroCarreraService', () => {
         makeR10Mock() as any,
         makeR03Mock() as any,
         makeR04Mock() as any,
+        makeConsultasMock() as any,
       );
       await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
       expect(ip09Mock.evaluarParaCarrera).toHaveBeenCalledWith(CAR_ID);
@@ -921,6 +932,7 @@ describe('TablroCarreraService', () => {
         makeR10Mock() as any,
         makeR03Mock() as any,
         makeR04Mock() as any,
+        makeConsultasMock() as any,
       );
       await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
       expect(r12Mock.evaluar).toHaveBeenCalledWith(
@@ -1006,6 +1018,7 @@ describe('TablroCarreraService', () => {
         makeR10Mock() as any,
         makeR03Mock() as any,
         makeR04Mock() as any,
+        makeConsultasMock() as any,
       );
       await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
       expect(r15Mock.evaluar).toHaveBeenCalledWith(
@@ -1146,6 +1159,7 @@ describe('TablroCarreraService', () => {
         r10Mock as any,
         makeR03Mock() as any,
         makeR04Mock() as any,
+        makeConsultasMock() as any,
       );
       await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
       expect(r10Mock.evaluar).toHaveBeenCalledWith(
@@ -1237,6 +1251,7 @@ describe('TablroCarreraService', () => {
         makePrisma() as any, makeScope() as any, makeR15Mock() as any, r07Mock as any,
         makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
         r03Mock as any, makeR04Mock() as any,
+        makeConsultasMock() as any,
       );
       const res = await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
@@ -1255,6 +1270,7 @@ describe('TablroCarreraService', () => {
         makePrisma() as any, makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
         makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
         makeR03Mock() as any, r04Mock as any,
+        makeConsultasMock() as any,
       );
       const res = await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
@@ -1274,6 +1290,7 @@ describe('TablroCarreraService', () => {
         makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
         makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
         makeR03Mock() as any, r04Mock as any,
+        makeConsultasMock() as any,
       );
       const res = await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
@@ -1331,6 +1348,7 @@ describe('TablroCarreraService', () => {
         makePrisma() as any, makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
         makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, r10Custom as any,
         makeR03Mock() as any, makeR04Mock() as any,
+        makeConsultasMock() as any,
       );
       const res = await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
@@ -1447,6 +1465,7 @@ describe('TablroCarreraService', () => {
           makePrisma() as any, makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
           makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, r10Custom as any,
           makeR03Mock() as any, makeR04Mock() as any,
+          makeConsultasMock() as any,
         );
         const res = await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
@@ -1481,6 +1500,7 @@ describe('TablroCarreraService', () => {
         makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
         makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
         makeR03Mock() as any, r04Mock as any,
+        makeConsultasMock() as any,
       );
       await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
@@ -1496,6 +1516,7 @@ describe('TablroCarreraService', () => {
         makePrisma() as any, makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
         makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
         makeR03Mock(EstadoCalculo.NO_DETERMINABLE) as any, makeR04Mock() as any,
+        makeConsultasMock() as any,
       );
       const res = await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
@@ -1554,6 +1575,7 @@ describe('TablroCarreraService', () => {
         makeIP09Mock() as any, makeIP10Mock() as any,
         makeR12Mock() as any, makeR10Mock() as any,
         makeR03Mock() as any, makeR04Mock() as any,
+        makeConsultasMock() as any,
       );
       const res = await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
@@ -1639,6 +1661,7 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
       makeR10Mock() as any,
       makeR03Mock() as any,
       makeR04Mock() as any,
+      makeConsultasMock() as any,
     );
   }
 
@@ -1783,6 +1806,7 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
       prisma as any, makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
       makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
       makeR03Mock() as any, makeR04Mock() as any,
+      makeConsultasMock() as any,
     );
     await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
@@ -2044,5 +2068,200 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
       expect(res.ip13).toBeDefined();
       expect(res.estadoGeneralCalculo).toBeDefined();
     });
+  });
+});
+
+// ── Auditoría de dedicación docente ──────────────────────────────────────────
+
+type DocR10Auditoria = {
+  docenteId: string;
+  nombre: string;
+  apellido: string;
+  horasDocenciaConocidas: number;
+  tieneMateriaSinHoras: boolean;
+  tiempoDedicacionGestionSemanal: string | null;
+  fechaFinGestion: string | null;
+  funcionGestion: string | null;
+  desempenoActualJson: string | null;
+  cargosAcademicosJson: string | null;
+  otrasDedicacionesJson: string | null;
+  proyectosInvestigacionJson: string | null;
+  participacionVinculacionJson: string | null;
+};
+
+function makeDocBase(overrides: Partial<DocR10Auditoria> = {}): DocR10Auditoria {
+  return {
+    docenteId: 'd-aud-1',
+    nombre: 'Juan',
+    apellido: 'Pérez',
+    horasDocenciaConocidas: 10,
+    tieneMateriaSinHoras: false,
+    tiempoDedicacionGestionSemanal: null,
+    fechaFinGestion: null,
+    funcionGestion: null,
+    desempenoActualJson: null,
+    cargosAcademicosJson: null,
+    otrasDedicacionesJson: null,
+    proyectosInvestigacionJson: null,
+    participacionVinculacionJson: null,
+    ...overrides,
+  };
+}
+
+function makeSvcAuditoria(
+  docentes: DocR10Auditoria[] = [],
+  config: { p01TopeH?: number | null; p02BajaH?: number | null } | null = null,
+  scopeValue = true,
+  carreraExiste = true,
+) {
+  const consultasMock = {
+    obtenerDocentesParaR10: jest.fn().mockResolvedValue({
+      docentes,
+      alcanceFacultad: true,
+      docentesMultiFacultad: new Set<string>(),
+    }),
+    obtenerConfigDeCarrera: jest.fn().mockResolvedValue(config),
+  };
+
+  const prisma = {
+    carrera: { findUnique: jest.fn().mockResolvedValue(carreraExiste ? { id: CAR_ID } : null) },
+    vinculacionCatedra: {
+      findMany: jest.fn().mockResolvedValue(
+        docentes.map(d => ({ docenteId: d.docenteId })),
+      ),
+    },
+    planEstudio: { findMany: jest.fn().mockResolvedValue([]) },
+    materia: { count: jest.fn().mockResolvedValue(0) },
+  };
+
+  return new TablroCarreraService(
+    prisma as any,
+    makeScope(scopeValue) as any,
+    makeR15Mock() as any,
+    makeR07Mock() as any,
+    makeIP09Mock() as any,
+    makeIP10Mock() as any,
+    makeR12Mock() as any,
+    makeR10Mock() as any,
+    makeR03Mock() as any,
+    makeR04Mock() as any,
+    consultasMock as any,
+  );
+}
+
+describe('TablroCarreraService — consultarAuditoriaDedicacion', () => {
+
+  it('TC-AUD-01: lanza ForbiddenException para rol sin acceso', async () => {
+    await expect(
+      makeSvcAuditoria().consultarAuditoriaDedicacion(CAR_ID, USR.usuarioId, 'DOCENTE'),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('TC-AUD-02: lanza ForbiddenException cuando scope es false', async () => {
+    await expect(
+      makeSvcAuditoria([], null, false).consultarAuditoriaDedicacion(CAR_ID, USR.usuarioId, USR.rolNombre),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('TC-AUD-03: lanza NotFoundException cuando carrera no existe', async () => {
+    await expect(
+      makeSvcAuditoria([], null, true, false).consultarAuditoriaDedicacion(CAR_ID, USR.usuarioId, USR.rolNombre),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('TC-AUD-04: lista vacía cuando no hay docentes', async () => {
+    const res = await makeSvcAuditoria([]).consultarAuditoriaDedicacion(CAR_ID, USR.usuarioId, USR.rolNombre);
+    expect(res.filas).toHaveLength(0);
+    expect(res.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+  });
+
+  it('TC-AUD-05: p01TopeH y p02BajaH son null cuando no hay config', async () => {
+    const res = await makeSvcAuditoria([]).consultarAuditoriaDedicacion(CAR_ID, USR.usuarioId, USR.rolNombre);
+    expect(res.p01TopeH).toBeNull();
+    expect(res.p02BajaH).toBeNull();
+  });
+
+  it('TC-AUD-06: p01TopeH y p02BajaH se toman de la config cuando existe', async () => {
+    const res = await makeSvcAuditoria([], { p01TopeH: 28, p02BajaH: 20 })
+      .consultarAuditoriaDedicacion(CAR_ID, USR.usuarioId, USR.rolNombre);
+    expect(res.p01TopeH).toBe(28);
+    expect(res.p02BajaH).toBe(20);
+  });
+
+  it('TC-AUD-07: componentes correctos para un docente con todos los campos', async () => {
+    const doc = makeDocBase({
+      horasDocenciaConocidas: 4,
+      tiempoDedicacionGestionSemanal: '12',
+      otrasDedicacionesJson: JSON.stringify([{ horasSeman: '5' }]),
+      desempenoActualJson: JSON.stringify([{ dedicacionSeman: '30' }]),
+      proyectosInvestigacionJson: JSON.stringify([{ horasSemanales: '8' }]),
+      participacionVinculacionJson: JSON.stringify([{ horasSemanales: '4' }]),
+    });
+    const res = await makeSvcAuditoria([doc], { p01TopeH: 28, p02BajaH: 20 })
+      .consultarAuditoriaDedicacion(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    expect(res.filas).toHaveLength(1);
+    const f = res.filas[0];
+    // R-10 = 4 + 12 + 5 + 8 + 4 = 33
+    expect(f.dedicacionTotalR10).toBe(33);
+    // R-03 = 4 + 12 + 30 = 46
+    expect(f.cargaTopeR03).toBe(46);
+    expect(f.componentes.docencia).toBe(4);
+    expect(f.componentes.gestion).toBe(12);
+    expect(f.componentes.otras).toBe(5);
+    expect(f.componentes.desempenoNoAcademico).toBe(30);
+    expect(f.componentes.investigacion).toBe(8);
+    expect(f.componentes.vinculacion).toBe(4);
+  });
+
+  it('TC-AUD-08: alertaR03 = true cuando cargaTopeR03 > p01TopeH', async () => {
+    const doc = makeDocBase({
+      horasDocenciaConocidas: 20,
+      tiempoDedicacionGestionSemanal: '10',
+      desempenoActualJson: JSON.stringify([{ dedicacionSeman: '5' }]),
+    });
+    const res = await makeSvcAuditoria([doc], { p01TopeH: 28, p02BajaH: 20 })
+      .consultarAuditoriaDedicacion(CAR_ID, USR.usuarioId, USR.rolNombre);
+    // cargaTopeR03 = 20 + 10 + 5 = 35 > 28
+    expect(res.filas[0].alertaR03).toBe(true);
+  });
+
+  it('TC-AUD-09: alertaR10 = true cuando dedicacionTotalR10 < p02BajaH e incierto = false', async () => {
+    const doc = makeDocBase({ horasDocenciaConocidas: 10 });
+    const res = await makeSvcAuditoria([doc], { p01TopeH: 28, p02BajaH: 20 })
+      .consultarAuditoriaDedicacion(CAR_ID, USR.usuarioId, USR.rolNombre);
+    // dedicacionTotalR10 = 10 < 20
+    expect(res.filas[0].alertaR10).toBe(true);
+    expect(res.filas[0].incierto).toBe(false);
+  });
+
+  it('TC-AUD-10: alertaR10 = false cuando incierto = true aunque horas < umbral', async () => {
+    const doc = makeDocBase({
+      horasDocenciaConocidas: 5,
+      tieneMateriaSinHoras: true,
+    });
+    const res = await makeSvcAuditoria([doc], { p01TopeH: 28, p02BajaH: 20 })
+      .consultarAuditoriaDedicacion(CAR_ID, USR.usuarioId, USR.rolNombre);
+    // incierto = true → alertaR10 debe ser false (conservador)
+    expect(res.filas[0].incierto).toBe(true);
+    expect(res.filas[0].alertaR10).toBe(false);
+  });
+
+  it('TC-AUD-11: estadoCalculo = PARCIAL cuando algún docente es incierto', async () => {
+    const doc = makeDocBase({ tieneMateriaSinHoras: true });
+    const res = await makeSvcAuditoria([doc])
+      .consultarAuditoriaDedicacion(CAR_ID, USR.usuarioId, USR.rolNombre);
+    expect(res.estadoCalculo).toBe(EstadoCalculo.PARCIAL);
+  });
+
+  it('TC-AUD-12: filas ordenadas alfabéticamente por nombre', async () => {
+    const docs = [
+      makeDocBase({ docenteId: 'd-aud-2', nombre: 'María', apellido: 'Zubieta' }),
+      makeDocBase({ docenteId: 'd-aud-1', nombre: 'Juan',  apellido: 'Pérez' }),
+      makeDocBase({ docenteId: 'd-aud-3', nombre: 'Ana',   apellido: 'García' }),
+    ];
+    const res = await makeSvcAuditoria(docs)
+      .consultarAuditoriaDedicacion(CAR_ID, USR.usuarioId, USR.rolNombre);
+    expect(res.filas.map(f => f.docenteId)).toEqual(['d-aud-3', 'd-aud-1', 'd-aud-2']);
   });
 });
