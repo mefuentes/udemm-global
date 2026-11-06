@@ -1106,12 +1106,12 @@ function renderFacB04(doc: PDFKit.PDFDocument, snap: Record<string, unknown>): v
       .text('Docentes con baja dedicación:', MARGIN, doc.y);
     doc.moveDown(0.2);
     renderMiniTable(doc, [
-      { header: 'Docente',       key: 'nombre',         width: 270 },
-      { header: 'Hs. semanales', key: 'horasSemanales', width: 85, align: 'right' },
-      { header: 'Motivo',        key: 'motivo',         width: 95 },
+      { header: 'Docente',          key: 'nombre',         width: 270 },
+      { header: 'Dedicación total', key: 'dedicacionTotal', width: 85, align: 'right' },
+      { header: 'Motivo',           key: 'motivo',         width: 95 },
     ], enAlerta.map(e => ({
       nombre:         String(e['nombre']         ?? '—'),
-      horasSemanales: e['horasSemanales'] !== undefined ? `${e['horasSemanales']} h` : '—',
+      dedicacionTotal: e['dedicacionTotal'] !== undefined ? `${e['dedicacionTotal']} h` : '—',
       motivo:         String(e['motivo']         ?? '—'),
     })));
   }

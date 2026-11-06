@@ -1620,8 +1620,8 @@ describe('ExportacionesService', () => {
           totalBajaDedicacion: 3,
           totalSinDatos: 1,
           enAlerta: [
-            { docenteId: 'd1', nombre: 'García, Ana',    horasSemanales: 8,  motivo: 'BAJA' },
-            { docenteId: 'd2', nombre: 'López, Carlos',  horasSemanales: 12, motivo: 'BAJA' },
+            { docenteId: 'd1', nombre: 'García, Ana',    dedicacionTotal: 8,  motivo: 'BAJA' },
+            { docenteId: 'd2', nombre: 'López, Carlos',  dedicacionTotal: 12, motivo: 'BAJA' },
           ],
           estadoCalculo: 'ADVERTENCIA',
         },
@@ -1829,8 +1829,8 @@ describe('ExportacionesService', () => {
           totalBajaDedicacion: 3,
           totalSinDatos: 1,
           enAlerta: [
-            { docenteId: 'd1', nombre: 'García, Ana',   horasSemanales: 8,  motivo: 'BAJA' },
-            { docenteId: 'd2', nombre: 'López, Carlos', horasSemanales: 12, motivo: 'BAJA' },
+            { docenteId: 'd1', nombre: 'García, Ana',   dedicacionTotal: 8,  motivo: 'BAJA' },
+            { docenteId: 'd2', nombre: 'López, Carlos', dedicacionTotal: 12, motivo: 'BAJA' },
           ],
           estadoCalculo: 'ADVERTENCIA',
         },

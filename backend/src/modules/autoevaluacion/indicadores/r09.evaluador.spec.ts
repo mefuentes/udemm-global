@@ -77,13 +77,13 @@ function makeMateria(
 }
 
 // Replica normalizarBloque() para tests sin depender del servicio real
-function normalizarBloqueTest(v: string | null | undefined): 'CB' | 'TB' | 'TA' | 'CX' | null {
+function normalizarBloqueTest(v: string | null | undefined): 'CB' | 'TB' | 'TA' | 'CTC' | null {
   if (!v) return null;
   const u = v.trim().toUpperCase();
   if (u === 'CB') return 'CB';
   if (u === 'TB') return 'TB';
   if (u === 'TA') return 'TA';
-  if (u === 'CTX' || u === 'CX' || u === 'CTC') return 'CX';
+  if (u === 'CTX' || u === 'CX' || u === 'CTC') return 'CTC';
   return null;
 }
 
@@ -246,25 +246,25 @@ describe('R09EvaluadorService — horas por bloque', () => {
     expect(res.valor!.horasPorBloque.TA).toBe(250);
   });
 
-  it('CX acumula materias con bloque CX', async () => {
-    const materias = [makeMateria({ cargaHorariaTotal: 180, bloqueConocimiento: 'CX' })];
+  it('CTC acumula materias con bloque CTC', async () => {
+    const materias = [makeMateria({ cargaHorariaTotal: 180, bloqueConocimiento: 'CTC' })];
     const ev = makeEv(makeConsultas(materias), makeConfigPlan());
     const res = await ev.evaluar(makeCtx());
-    expect(res.valor!.horasPorBloque.CX).toBe(180);
+    expect(res.valor!.horasPorBloque.CTC).toBe(180);
   });
 
-  it('CTX se normaliza a CX y acumula en el bloque CX', async () => {
+  it('CTX se normaliza a CTC y acumula en el bloque CTC', async () => {
     const materias = [makeMateria({ cargaHorariaTotal: 120, bloqueConocimiento: 'CTX' })];
     const ev = makeEv(makeConsultas(materias), makeConfigPlan());
     const res = await ev.evaluar(makeCtx());
-    expect(res.valor!.horasPorBloque.CX).toBe(120);
+    expect(res.valor!.horasPorBloque.CTC).toBe(120);
   });
 
-  it('CTC se normaliza a CX', async () => {
-    const materias = [makeMateria({ cargaHorariaTotal: 90, bloqueConocimiento: 'CTC' })];
+  it('CX (código anterior) se normaliza a CTC por compatibilidad', async () => {
+    const materias = [makeMateria({ cargaHorariaTotal: 90, bloqueConocimiento: 'CX' })];
     const ev = makeEv(makeConsultas(materias), makeConfigPlan());
     const res = await ev.evaluar(makeCtx());
-    expect(res.valor!.horasPorBloque.CX).toBe(90);
+    expect(res.valor!.horasPorBloque.CTC).toBe(90);
   });
 
   it('código desconocido → materia en conBloqueIndeterminado, no suma a ningún bloque', async () => {
@@ -279,7 +279,7 @@ describe('R09EvaluadorService — horas por bloque', () => {
     expect(res.valor!.horasPorBloque.CB).toBeNull();
     expect(res.valor!.horasPorBloque.TB).toBeNull();
     expect(res.valor!.horasPorBloque.TA).toBeNull();
-    expect(res.valor!.horasPorBloque.CX).toBeNull();
+    expect(res.valor!.horasPorBloque.CTC).toBeNull();
   });
 
   it('bloque null → materia en conBloqueIndeterminado, no suma a ningún bloque', async () => {
@@ -312,7 +312,7 @@ describe('R09EvaluadorService — horas por bloque', () => {
     expect(res.valor!.horasPorBloque.CB).toBe(300);
     expect(res.valor!.horasPorBloque.TB).toBe(0);
     expect(res.valor!.horasPorBloque.TA).toBe(0);
-    expect(res.valor!.horasPorBloque.CX).toBe(0);
+    expect(res.valor!.horasPorBloque.CTC).toBe(0);
     expect(res.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
   });
 
@@ -328,7 +328,7 @@ describe('R09EvaluadorService — horas por bloque', () => {
     expect(res.valor!.horasPorBloque.CB).toBe(200);
     expect(res.valor!.horasPorBloque.TB).toBe(300);
     expect(res.valor!.horasPorBloque.TA).toBe(250);
-    expect(res.valor!.horasPorBloque.CX).toBe(150);
+    expect(res.valor!.horasPorBloque.CTC).toBe(150);
     expect(res.valor!.horasTotal).toBe(900);
   });
 });
@@ -368,7 +368,7 @@ describe('R09EvaluadorService — materias sin horas', () => {
     expect(res.valor!.horasPorBloque.CB).toBeNull();
     expect(res.valor!.horasPorBloque.TB).toBeNull();
     expect(res.valor!.horasPorBloque.TA).toBeNull();
-    expect(res.valor!.horasPorBloque.CX).toBeNull();
+    expect(res.valor!.horasPorBloque.CTC).toBeNull();
   });
 
   it('alguna materia sin horas → estadoCalculo PARCIAL', async () => {
@@ -498,13 +498,13 @@ describe('R09EvaluadorService — comparación con umbrales', () => {
     expect(res.valor!.evaluaciones.TB.diferencia).toBe(-100);
   });
 
-  it('CX evaluado contra horasMinCTX (campo Prisma)', async () => {
+  it('CTC evaluado contra horasMinCTX (campo Prisma)', async () => {
     const materias = [makeMateria({ cargaHorariaTotal: 400, bloqueConocimiento: 'CTX' })];
     const ev = makeEv(makeConsultas(materias), makeConfigPlan(makeUmbrales({ horasMinCTX: 365 })));
     const res = await ev.evaluar(makeCtx());
-    expect(res.valor!.evaluaciones.CX.horasReales).toBe(400);
-    expect(res.valor!.evaluaciones.CX.horasMinimas).toBe(365);
-    expect(res.valor!.evaluaciones.CX.cumple).toBe(true);
+    expect(res.valor!.evaluaciones.CTC.horasReales).toBe(400);
+    expect(res.valor!.evaluaciones.CTC.horasMinimas).toBe(365);
+    expect(res.valor!.evaluaciones.CTC.cumple).toBe(true);
   });
 });
 
@@ -548,7 +548,7 @@ describe('R09EvaluadorService — umbrales NULL', () => {
     expect(evals.CB.cumple).toBeNull();
     expect(evals.TB.cumple).toBeNull();
     expect(evals.TA.cumple).toBeNull();
-    expect(evals.CX.cumple).toBeNull();
+    expect(evals.CTC.cumple).toBeNull();
   });
 
   it('umbral null nunca tratado como cero — horasReales pequeño no falla sin umbral', async () => {

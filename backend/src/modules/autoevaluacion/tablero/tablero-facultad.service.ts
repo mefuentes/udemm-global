@@ -1,6 +1,14 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { R06EvaluadorService } from '../indicadores/r06.evaluador';
+import { parsearHorasGestion, parsearCargosAcademicosJson } from '../indicadores/r03.evaluador';
+import {
+  tieneProyectoInvestigacion,
+  tieneVinculacionConHoras,
+  parsearOtrasDedicaciones,
+  parsearProyectosInvestigacion,
+  parsearParticipacionVinculacion,
+} from '../indicadores/r10.evaluador';
 import { EstadoCalculo } from '../types/estado-calculo.types';
 import type {
   BloqueCargaAcademica,
@@ -84,7 +92,7 @@ export class TablroFacultadService {
         this.calcularComposicion(facultadId),
         this.calcularFormacion(facultadId),
         this.calcularInvestigacion(facultadId),
-        this.calcularDedicaciones(facultadId),
+        this.calcularDedicaciones(facultadId, fechaEvaluacion),
         this.calcularCargaAcademica(facultadId),
         this.calcularDistribucionMaterias(facultadId, fechaEvaluacion),
       ]);
@@ -266,13 +274,13 @@ export class TablroFacultadService {
     const ids = docenteIds.map((d) => d.docenteId);
     const docentes = await this.prisma.docente.findMany({
       where: { id: { in: ids } },
-      select: { id: true, tituloProyectoInvestigacion: true, tituloActividadExtension: true },
+      select: { id: true, proyectosInvestigacionJson: true, participacionVinculacionJson: true },
     });
 
     let conPI = 0, conExt = 0, conAmbas = 0;
     for (const d of docentes) {
-      const tienePI = !!d.tituloProyectoInvestigacion;
-      const tieneExt = !!d.tituloActividadExtension;
+      const tienePI = tieneProyectoInvestigacion(d.proyectosInvestigacionJson);
+      const tieneExt = tieneVinculacionConHoras(d.participacionVinculacionJson);
       if (tienePI) conPI++;
       if (tieneExt) conExt++;
       if (tienePI && tieneExt) conAmbas++;
@@ -290,10 +298,14 @@ export class TablroFacultadService {
 
   /**
    * Bloque 4 — Dedicaciones.
-   * Docentes con cargaHorariaSemanal < p02BajaH (umbral de baja dedicación).
-   * Si no existe config, usa 20h como umbral por defecto.
+   * Docentes con Dedicación Total < p02BajaH (umbral de baja dedicación).
+   * Dedicación Total = docencia(4.1) + gestión(5.1) + otras(5.2) + investigación(7.2) + vinculación(7.3).
+   * Misma fórmula que R-10 (FSD §6). Si no existe config, usa 20h como umbral por defecto.
    */
-  private async calcularDedicaciones(facultadId: string): Promise<BloqueDedicaciones> {
+  private async calcularDedicaciones(
+    facultadId: string,
+    fechaEvaluacion: Date,
+  ): Promise<BloqueDedicaciones> {
     const [docenteIds, config] = await Promise.all([
       this.prisma.vinculacionCatedra.findMany({
         where: { facultadId, estado: 'APROBADA', docente: { activo: true } },
@@ -320,46 +332,72 @@ export class TablroFacultadService {
     }
 
     const ids = docenteIds.map((d) => d.docenteId);
-    const docentes = await this.prisma.docente.findMany({
-      where: { id: { in: ids } },
-      select: { id: true, nombre: true, apellido: true },
-    });
 
-    // cargaHorariaSemanal está en Materia, no en Docente.
-    // Obtenemos la suma de horas por docente via vinculaciones.
-    const horasPorDocente = await this.prisma.vinculacionCatedra.groupBy({
-      by: ['docenteId'],
-      where: {
-        facultadId,
-        estado: 'APROBADA',
-        docente: { activo: true },
-        materia: { cargaHorariaSemanal: { not: null } },
-      },
-      _sum: { horasSemana: true },
-    });
+    const [horasPorDocente, docentes] = await Promise.all([
+      this.prisma.vinculacionCatedra.groupBy({
+        by: ['docenteId'],
+        where: {
+          facultadId,
+          estado: 'APROBADA',
+          docente: { activo: true },
+          materia: { cargaHorariaSemanal: { not: null } },
+        },
+        _sum: { horasSemana: true },
+      }),
+      this.prisma.docente.findMany({
+        where: { id: { in: ids } },
+        select: {
+          id: true,
+          nombre: true,
+          apellido: true,
+          tiempoDedicacionGestionSemanal: true,
+          fechaFinGestion: true,
+          funcionGestion: true,
+          cargosAcademicosJson: true,
+          otrasDedicacionesJson: true,
+          proyectosInvestigacionJson: true,
+          participacionVinculacionJson: true,
+        },
+      }),
+    ]);
 
     const horasMap = new Map(horasPorDocente.map((h) => [h.docenteId, h._sum.horasSemana ?? 0]));
 
     const enAlerta: BloqueDedicaciones['enAlerta'] = [];
     let totalSinDatos = 0;
+    let hayIndeterminados = false;
 
     for (const d of docentes) {
-      const horas = horasMap.get(d.id);
-      if (horas === undefined) {
+      const horasDocencia = horasMap.get(d.id);
+      if (horasDocencia === undefined) {
         totalSinDatos++;
-      } else if (horas < umbral) {
+        continue;
+      }
+
+      const g = d.cargosAcademicosJson?.trim()
+        ? parsearCargosAcademicosJson(d.cargosAcademicosJson, fechaEvaluacion)
+        : parsearHorasGestion(d.tiempoDedicacionGestionSemanal, d.fechaFinGestion, fechaEvaluacion, !!(d.funcionGestion?.trim()));
+      const otras = parsearOtrasDedicaciones(d.otrasDedicacionesJson);
+      const inv   = parsearProyectosInvestigacion(d.proyectosInvestigacionJson);
+      const vin   = parsearParticipacionVinculacion(d.participacionVinculacionJson);
+
+      if (g.indeterminado || otras.indeterminado || inv.indeterminado || vin.indeterminado) {
+        hayIndeterminados = true;
+      }
+
+      const dedicacionTotal = horasDocencia + g.horas + otras.horas + inv.horas + vin.horas;
+
+      if (dedicacionTotal < umbral) {
         enAlerta.push({
           docenteId: d.id,
           nombre: `${d.apellido}, ${d.nombre}`,
-          cargaHorariaSemanal: horas,
+          dedicacionTotal,
         });
       }
     }
 
     const ec =
-      enAlerta.length === 0 && totalSinDatos === 0
-        ? EstadoCalculo.CALCULADO
-        : totalSinDatos > 0 && enAlerta.length === 0
+      totalSinDatos > 0 || hayIndeterminados
         ? EstadoCalculo.PARCIAL
         : EstadoCalculo.CALCULADO;
 

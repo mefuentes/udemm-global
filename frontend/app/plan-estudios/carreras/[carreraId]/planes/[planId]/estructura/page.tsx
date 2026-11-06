@@ -16,7 +16,7 @@ const BLOQUE_NOMBRE: Record<string, string> = {
   CB:  'Ciencias Básicas',
   TB:  'Tecnologías Básicas',
   TA:  'Tecnologías Aplicadas',
-  CX:  'Cs. y Tecn. Complementarias',
+  CTC: 'Cs. y Tecn. Complementarias',
   EL:  'Electivas',
   PI:  'Proyecto Final Integrador',
   PPS: 'Prácticas Profesionales Supervisadas',
@@ -26,7 +26,7 @@ const BLOQUES_CONOCIMIENTO = [
   { codigo: 'CB',  label: 'CB - Ciencias Básicas' },
   { codigo: 'TB',  label: 'TB - Tecnologías Básicas' },
   { codigo: 'TA',  label: 'TA - Tecnologías Aplicadas' },
-  { codigo: 'CX',  label: 'CX - Cs. y Tecn. Complementarias' },
+  { codigo: 'CTC', label: 'CTC - Cs. y Tecn. Complementarias' },
   { codigo: 'EL',  label: 'EL - Electivas' },
   { codigo: 'PI',  label: 'PI - Proyecto Final Integrador' },
   { codigo: 'PPS', label: 'PPS - Prácticas Profesionales Supervisadas' },
@@ -82,7 +82,7 @@ function bloqueColor(b?: string) {
   if (b === 'CB') return 'bg-blue-50 text-blue-700 border-blue-200';
   if (b === 'TB') return 'bg-violet-50 text-violet-700 border-violet-200';
   if (b === 'TA') return 'bg-orange-50 text-orange-700 border-orange-200';
-  if (b === 'CX') return 'bg-teal-50 text-teal-700 border-teal-200';
+  if (b === 'CTC') return 'bg-teal-50 text-teal-700 border-teal-200';
   if (b === 'EL') return 'bg-amber-50 text-amber-700 border-amber-200';
   return 'bg-slate-100 text-slate-500 border-slate-200';
 }

@@ -6,6 +6,7 @@ import type { ContextoEvaluacion } from './indicadores.types';
 import {
   parsearHorasGestion,
   parsearHorasNoAcademico,
+  parsearCargosAcademicosJson,
   R03EvaluadorService,
   type ResultadoR03,
 } from './r03.evaluador';
@@ -37,6 +38,7 @@ function mkDocente(overrides: Partial<DocenteVigenteR03> = {}): DocenteVigenteR0
     fechaFinGestion: null,
     funcionGestion: null,
     desempenoActualJson: null,
+    cargosAcademicosJson: null,
     ...overrides,
   };
 }
@@ -109,6 +111,55 @@ describe('parsearHorasGestion', () => {
   it('TC-G_FUNC2: actividad NO declarada y dedicación vacía → 0h, no indeterminado', () => {
     expect(parsearHorasGestion(null, null, FECHA, false)).toEqual({ horas: 0, indeterminado: false });
     expect(parsearHorasGestion(null, null, FECHA, undefined)).toEqual({ horas: 0, indeterminado: false });
+  });
+});
+
+// ── parsearCargosAcademicosJson ───────────────────────────────────────────────
+
+describe('parsearCargosAcademicosJson', () => {
+  const FECHA_OCT = new Date('2026-10-20T12:00:00.000Z'); // mes=10, año=2026
+
+  it('TC-CA1: null → 0h, no indeterminado', () => {
+    expect(parsearCargosAcademicosJson(null, FECHA_OCT)).toEqual({ horas: 0, indeterminado: false });
+  });
+
+  it('TC-CA2: array vacío → 0h, no indeterminado', () => {
+    expect(parsearCargosAcademicosJson('[]', FECHA_OCT)).toEqual({ horas: 0, indeterminado: false });
+  });
+
+  it('TC-CA3: cargo vigente con periodoHasta futuro acumula horas', () => {
+    const json = JSON.stringify([{ dedicacionSemanal: '12', periodoHasta: '11-2026' }]);
+    expect(parsearCargosAcademicosJson(json, FECHA_OCT)).toEqual({ horas: 12, indeterminado: false });
+  });
+
+  it('TC-CA4: cargo vencido (periodoHasta pasado) se ignora', () => {
+    const json = JSON.stringify([{ dedicacionSemanal: '12', periodoHasta: '09-2026' }]);
+    expect(parsearCargosAcademicosJson(json, FECHA_OCT)).toEqual({ horas: 0, indeterminado: false });
+  });
+
+  it('TC-CA5: cargo vigente sin periodoHasta (campo vacío) acumula horas', () => {
+    const json = JSON.stringify([{ dedicacionSemanal: '8', periodoHasta: '' }]);
+    expect(parsearCargosAcademicosJson(json, FECHA_OCT)).toEqual({ horas: 8, indeterminado: false });
+  });
+
+  it('TC-CA6: múltiples cargos vigentes se suman', () => {
+    const json = JSON.stringify([
+      { dedicacionSemanal: '10', periodoHasta: '12-2026' },
+      { dedicacionSemanal: '5', periodoHasta: '' },
+    ]);
+    expect(parsearCargosAcademicosJson(json, FECHA_OCT)).toEqual({ horas: 15, indeterminado: false });
+  });
+
+  it('TC-CA7: cargo vigente sin dedicacionSemanal → indeterminado', () => {
+    const json = JSON.stringify([{ dedicacionSemanal: '', periodoHasta: '11-2026' }]);
+    const r = parsearCargosAcademicosJson(json, FECHA_OCT);
+    expect(r.indeterminado).toBe(true);
+  });
+
+  it('TC-CA8: cargo vigente con dedicacionSemanal no numérico → indeterminado', () => {
+    const json = JSON.stringify([{ dedicacionSemanal: '20h', periodoHasta: '11-2026' }]);
+    const r = parsearCargosAcademicosJson(json, FECHA_OCT);
+    expect(r.indeterminado).toBe(true);
   });
 });
 
@@ -452,5 +503,34 @@ describe('R03EvaluadorService', () => {
     const v = r.valor as ResultadoR03;
     expect(v.totalEnAlerta).toBe(1);
     expect(v.enAlerta[0].componentes.horasGestion).toBe(15);
+  });
+
+  it('TC-27: gestión desde cargosAcademicosJson vigente tiene precedencia sobre scalar nulo', async () => {
+    const doc = mkDocente({
+      horasDocenciaConocidas: 30,
+      cargosAcademicosJson: JSON.stringify([{ dedicacionSemanal: '20', periodoHasta: '11-2026' }]),
+      tiempoDedicacionGestionSemanal: null,
+      desempenoActualJson: '[{"dedicacionSeman":"10"}]',
+    });
+    const { svc } = makeSvc(mkData({ docentes: [doc] }), mkConfig(55));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR03;
+    // R-03 = 30+20+10 = 60 > 55 → alerta
+    expect(v.totalEnAlerta).toBe(1);
+    expect(v.enAlerta[0].componentes.horasGestion).toBe(20);
+    expect(v.enAlerta[0].componentes.usoTope).toBe(60);
+  });
+
+  it('TC-28: cargosAcademicosJson vencido → gestión=0, scalar ignorado por tener JSON no vacío', async () => {
+    const doc = mkDocente({
+      horasDocenciaConocidas: 10,
+      cargosAcademicosJson: JSON.stringify([{ dedicacionSemanal: '20', periodoHasta: '09-2026' }]),
+    });
+    const { svc } = makeSvc(mkData({ docentes: [doc] }), mkConfig(30));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR03;
+    // cargo vencido (sep 2026 < oct 2026) → gestión=0, total=10 < 30 → no alerta, no indeterminado
+    expect(v.totalEnAlerta).toBe(0);
+    expect(v.totalNoDeterminables).toBe(0);
   });
 });

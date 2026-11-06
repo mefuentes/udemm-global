@@ -6,7 +6,7 @@ import { IP10EvaluadorService } from '../indicadores/ip10.evaluador';
 import { R03EvaluadorService } from '../indicadores/r03.evaluador';
 import { R04EvaluadorService } from '../indicadores/r04.evaluador';
 import { R07EvaluadorService } from '../indicadores/r07.evaluador';
-import { R10EvaluadorService } from '../indicadores/r10.evaluador';
+import { R10EvaluadorService, tieneProyectoInvestigacion } from '../indicadores/r10.evaluador';
 import { R12EvaluadorService } from '../indicadores/r12.evaluador';
 import { R15EvaluadorService } from '../indicadores/r15.evaluador';
 import { EstadoCalculo } from '../types/estado-calculo.types';
@@ -914,7 +914,7 @@ export class TablroCarreraService {
    *
    * Indicadores CONEAU derivados sin modificar esquema:
    *   conPosgrado:          Docente.tituloPosgrado not null (boolean).
-   *   conInvestigacion:     Docente.tituloProyectoInvestigacion not null.
+   *   conInvestigacion:     docentes con al menos un proyecto en Docente.proyectosInvestigacionJson.
    *   conDesignacionRegular: CargoDocente vigente con designacion contiene "Regular".
    *   dedicacionPorTipo:    distribución por Designacion.nombre vía VinculacionCatedra APROBADA.
    */
@@ -947,7 +947,7 @@ export class TablroCarreraService {
     const [docentes, cargosRegulares, cargosInterinos, vincsConDesig] = await Promise.all([
       this.prisma.docente.findMany({
         where: { id: { in: docenteIds } },
-        select: { id: true, tituloPosgrado: true, tituloProyectoInvestigacion: true, dedicacion: true, tipoPosgrado: { select: { nombre: true } } },
+        select: { id: true, tituloPosgrado: true, proyectosInvestigacionJson: true, dedicacion: true, tipoPosgrado: { select: { nombre: true } } },
       }),
       this.prisma.cargoDocente.findMany({
         where: {
@@ -977,7 +977,7 @@ export class TablroCarreraService {
     ]);
 
     const conPosgrado      = docentes.filter(d => !!d.tituloPosgrado).length;
-    const conInvestigacion = docentes.filter(d => !!d.tituloProyectoInvestigacion).length;
+    const conInvestigacion = docentes.filter(d => tieneProyectoInvestigacion(d.proyectosInvestigacionJson)).length;
 
     // D-06: distribución por nivel máximo de posgrado CONEAU (null = no clasificado, no es SIN_POSGRADO)
     const posgradoConteo = new Map<string, number>();

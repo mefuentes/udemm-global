@@ -47,7 +47,7 @@ export interface BloqueInvestigacion {
 export interface DocenteBajaDedicacion {
   docenteId: string;
   nombre: string;
-  cargaHorariaSemanal: number;
+  dedicacionTotal: number;
 }
 
 export interface BloqueDedicaciones {

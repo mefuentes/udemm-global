@@ -202,7 +202,7 @@ export class TablroPlanService {
     let bloquesConUmbral = 0;
     let bloquesCumplen = 0;
 
-    for (const key of ['CB', 'TB', 'TA', 'CX'] as const) {
+    for (const key of ['CB', 'TB', 'TA', 'CTC'] as const) {
       const ev = evs[key];
       if (ev.horasMinimas !== null) {
         bloquesConUmbral++;
@@ -325,7 +325,7 @@ export class TablroPlanService {
     const r09Estado = r09.estadoCalculo ?? EstadoCalculo.NO_DETERMINABLE;
 
     const bloques: EvaluacionBloqueIPL05[] = (
-      ['CB', 'TB', 'TA', 'CX'] as const
+      ['CB', 'TB', 'TA', 'CTC'] as const
     ).map((key) => {
       const ev = evs[key];
       return {

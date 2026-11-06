@@ -131,7 +131,7 @@ function makeR10Mock(
       horasConocidas: umbral - i - 1,
       umbral,
       incierto: i >= nAlerta,
-      componentes: { horasDocencia: umbral - i - 1, horasGestion: 0, horasInvestigacion: 0, horasVinculacion: 0, gestionIndeterminada: false, investigacionIndeterminada: false, vinculacionIndeterminada: false },
+      componentes: { horasDocencia: umbral - i - 1, horasGestion: 0, horasOtrasDedicaciones: 0, horasInvestigacion: 0, horasVinculacion: 0, gestionIndeterminada: false, otrasDedicacionesIndeterminadas: false, investigacionIndeterminada: false, vinculacionIndeterminada: false },
     })),
     alcanceFacultad,
     estadoCalculo,
@@ -1575,7 +1575,7 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
   /** Mock de Prisma extendido con docente, cargoDocente y soporte para vincsConDesig. */
   function makePrismaCP(opts: {
     docenteIds?: string[];
-    docentes?: Array<{ id: string; tituloPosgrado: string | null; tituloProyectoInvestigacion: string | null }>;
+    docentes?: Array<{ id: string; tituloPosgrado: string | null; proyectosInvestigacionJson: string | null }>;
     cargosRegulares?: Array<{ docenteId: string }>;
     cargosInterinos?: Array<{ docenteId: string }>;
     vincsConDesig?: Array<{ docenteId: string; designacion: { nombre: string } }>;
@@ -1584,7 +1584,7 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
   } = {}) {
     const {
       docenteIds = ['d-1'],
-      docentes = [{ id: 'd-1', tituloPosgrado: 'Maestría', tituloProyectoInvestigacion: null }],
+      docentes = [{ id: 'd-1', tituloPosgrado: 'Maestría', proyectosInvestigacionJson: null }],
       cargosRegulares = [{ docenteId: 'd-1' }],
       cargosInterinos = [],
       vincsConDesig = [{ docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } }],
@@ -1662,8 +1662,8 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
     const res = await makeSvcCP({
       docenteIds: ['d-1', 'd-2'],
       docentes: [
-        { id: 'd-1', tituloPosgrado: 'Maestría', tituloProyectoInvestigacion: 'Proyecto X' },
-        { id: 'd-2', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+        { id: 'd-1', tituloPosgrado: 'Maestría', proyectosInvestigacionJson: JSON.stringify([{ titulo: 'Proyecto X' }]) },
+        { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
       ],
       vincsConDesig: [
         { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
@@ -1684,8 +1684,8 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
     const res = await makeSvcCP({
       docenteIds: ['d-1', 'd-2'],
       docentes: [
-        { id: 'd-1', tituloPosgrado: null, tituloProyectoInvestigacion: null },
-        { id: 'd-2', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+        { id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null },
+        { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
       ],
       cargosRegulares: [{ docenteId: 'd-1' }, { docenteId: 'd-2' }],
       cargosInterinos: [],
@@ -1716,7 +1716,7 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
   it('docente con designación regular e interina simultánea: contado en ambos', async () => {
     const res = await makeSvcCP({
       docenteIds: ['d-1'],
-      docentes: [{ id: 'd-1', tituloPosgrado: null, tituloProyectoInvestigacion: null }],
+      docentes: [{ id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null }],
       cargosRegulares: [{ docenteId: 'd-1' }],
       cargosInterinos: [{ docenteId: 'd-1' }],
       vincsConDesig: [{ docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } }],
@@ -1734,8 +1734,8 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
       ],
       docenteIds: ['d-1', 'd-2'],
       docentes: [
-        { id: 'd-1', tituloPosgrado: null, tituloProyectoInvestigacion: null },
-        { id: 'd-2', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+        { id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null },
+        { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
       ],
       vincsConDesig: [
         { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
@@ -1756,8 +1756,8 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
       ],
       docenteIds: ['d-1', 'd-2'],
       docentes: [
-        { id: 'd-1', tituloPosgrado: null, tituloProyectoInvestigacion: null },
-        { id: 'd-2', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+        { id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null },
+        { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
       ],
       vincsConDesig: [
         { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
@@ -1800,9 +1800,9 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
     const res = await makeSvcCP({
       docenteIds: ['d-1', 'd-2', 'd-3'],
       docentes: [
-        { id: 'd-1', tituloPosgrado: null, tituloProyectoInvestigacion: null },
-        { id: 'd-2', tituloPosgrado: null, tituloProyectoInvestigacion: null },
-        { id: 'd-3', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+        { id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null },
+        { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
+        { id: 'd-3', tituloPosgrado: null, proyectosInvestigacionJson: null },
       ],
       vincsConDesig: [
         { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
@@ -1844,10 +1844,10 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
       const res = await makeSvcCP({
         docenteIds: ['d-1', 'd-2', 'd-3', 'd-4'],
         docentes: [
-          { id: 'd-1', tituloPosgrado: 'Maestría', tituloProyectoInvestigacion: null },
-          { id: 'd-2', tituloPosgrado: 'Doctorado', tituloProyectoInvestigacion: null },
-          { id: 'd-3', tituloPosgrado: null, tituloProyectoInvestigacion: null },
-          { id: 'd-4', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+          { id: 'd-1', tituloPosgrado: 'Maestría', proyectosInvestigacionJson: null },
+          { id: 'd-2', tituloPosgrado: 'Doctorado', proyectosInvestigacionJson: null },
+          { id: 'd-3', tituloPosgrado: null, proyectosInvestigacionJson: null },
+          { id: 'd-4', tituloPosgrado: null, proyectosInvestigacionJson: null },
         ],
         cargosRegulares: [],
         vincsConDesig: [
@@ -1873,9 +1873,9 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
       const res = await makeSvcCP({
         docenteIds: ['d-1', 'd-2', 'd-3'],
         docentes: [
-          { id: 'd-1', tituloPosgrado: null, tituloProyectoInvestigacion: 'Proyecto A' },
-          { id: 'd-2', tituloPosgrado: null, tituloProyectoInvestigacion: 'Proyecto B' },
-          { id: 'd-3', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+          { id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: JSON.stringify([{ titulo: 'Proyecto A' }]) },
+          { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: JSON.stringify([{ titulo: 'Proyecto B' }]) },
+          { id: 'd-3', tituloPosgrado: null, proyectosInvestigacionJson: null },
         ],
         cargosRegulares: [],
         vincsConDesig: [
@@ -1900,9 +1900,9 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
       const res = await makeSvcCP({
         docenteIds: ['d-1', 'd-2', 'd-3'],
         docentes: [
-          { id: 'd-1', tituloPosgrado: null, tituloProyectoInvestigacion: null },
-          { id: 'd-2', tituloPosgrado: null, tituloProyectoInvestigacion: null },
-          { id: 'd-3', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+          { id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null },
+          { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
+          { id: 'd-3', tituloPosgrado: null, proyectosInvestigacionJson: null },
         ],
         cargosRegulares: [{ docenteId: 'd-1' }, { docenteId: 'd-2' }],
         cargosInterinos: [],
@@ -1952,7 +1952,7 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
       // 1 de 1 docente con posgrado → porcentaje = 100
       const res = await makeSvcCP({
         docenteIds: ['d-1'],
-        docentes: [{ id: 'd-1', tituloPosgrado: 'Maestría', tituloProyectoInvestigacion: null }],
+        docentes: [{ id: 'd-1', tituloPosgrado: 'Maestría', proyectosInvestigacionJson: null }],
         cargosRegulares: [],
         vincsConDesig: [{ docenteId: 'd-1', designacion: { nombre: 'CONTRATADO' } }],
         cargosVigentes: [{ docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'Titular' } }],
@@ -1966,8 +1966,8 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
       const res = await makeSvcCP({
         docenteIds: ['d-1', 'd-2'],
         docentes: [
-          { id: 'd-1', tituloPosgrado: null, tituloProyectoInvestigacion: null },
-          { id: 'd-2', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+          { id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null },
+          { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
         ],
         cargosRegulares: [],
         vincsConDesig: [
@@ -1993,8 +1993,8 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
       const res = await makeSvcCP({
         docenteIds: ['d-1', 'd-2'],
         docentes: [
-          { id: 'd-1', tituloPosgrado: 'Maestría', tituloProyectoInvestigacion: 'Proyecto' },
-          { id: 'd-2', tituloPosgrado: null, tituloProyectoInvestigacion: null },
+          { id: 'd-1', tituloPosgrado: 'Maestría', proyectosInvestigacionJson: JSON.stringify([{ titulo: 'Proyecto' }]) },
+          { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
         ],
         cargosRegulares: [{ docenteId: 'd-1' }],
         cargosInterinos: [],

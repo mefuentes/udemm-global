@@ -32,7 +32,7 @@ const BLOQUES_CONOCIMIENTO = [
   { codigo: 'CB',  label: 'CB - Ciencias Básicas' },
   { codigo: 'TB',  label: 'TB - Tecnologías Básicas' },
   { codigo: 'TA',  label: 'TA - Tecnologías Aplicadas' },
-  { codigo: 'CX',  label: 'CX - Cs. y Tecn. Complementarias' },
+  { codigo: 'CTC', label: 'CTC - Cs. y Tecn. Complementarias' },
   { codigo: 'EL',  label: 'EL - Electivas' },
   { codigo: 'PI',  label: 'PI - Proyecto Final Integrador' },
   { codigo: 'PPS', label: 'PPS - Prácticas Profesionales Supervisadas' },

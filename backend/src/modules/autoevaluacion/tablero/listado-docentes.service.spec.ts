@@ -117,7 +117,7 @@ function makeR10Mock(enAlerta: { docenteId: string; nombre: string; incierto?: b
   const alertas: DocenteAlertaR10[] = enAlerta.map(d => ({
     docenteId: d.docenteId, nombre: d.nombre,
     horasConocidas: 10, umbral: 20, incierto: d.incierto ?? false,
-    componentes: { horasDocencia: 10, horasGestion: 0, horasInvestigacion: 0, horasVinculacion: 0, gestionIndeterminada: false, investigacionIndeterminada: false, vinculacionIndeterminada: false },
+    componentes: { horasDocencia: 10, horasGestion: 0, horasOtrasDedicaciones: 0, horasInvestigacion: 0, horasVinculacion: 0, gestionIndeterminada: false, otrasDedicacionesIndeterminadas: false, investigacionIndeterminada: false, vinculacionIndeterminada: false },
   }));
   return {
     evaluar: jest.fn().mockResolvedValue({

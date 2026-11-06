@@ -123,13 +123,13 @@ interface ValorR09 {
   materiasSinHoras: MateriaR09[];
   materiasConBloqueIndeterminado: MateriaR09[];
   horasTotal: number | null;
-  horasPorBloque: { CB: number | null; TB: number | null; TA: number | null; CX: number | null };
+  horasPorBloque: { CB: number | null; TB: number | null; TA: number | null; CTC: number | null };
   evaluaciones: {
     total: EvaluacionDimension;
     CB: EvaluacionDimension;
     TB: EvaluacionDimension;
     TA: EvaluacionDimension;
-    CX: EvaluacionDimension;
+    CTC: EvaluacionDimension;
   };
 }
 
@@ -610,7 +610,7 @@ const BLOQUE_NOMBRE: Record<string, string> = {
   CB: 'Ciencias Básicas (CB)',
   TB: 'Tecnologías Básicas (TB)',
   TA: 'Tecnologías Aplicadas (TA)',
-  CX: 'Cs. y Tec. Complementarias (CX)',
+  CTC: 'Cs. y Tec. Complementarias (CTC)',
 };
 
 function FilaDimension({ bloque, dim }: { bloque: string; dim: EvaluacionDimension }) {
@@ -708,7 +708,7 @@ function DetalleR09({
               <FilaDimension bloque="CB" dim={evaluaciones.CB} />
               <FilaDimension bloque="TB" dim={evaluaciones.TB} />
               <FilaDimension bloque="TA" dim={evaluaciones.TA} />
-              <FilaDimension bloque="CX" dim={evaluaciones.CX} />
+              <FilaDimension bloque="CTC" dim={evaluaciones.CTC} />
             </tbody>
           </TablaWrapper>
           <p className="text-[10px] text-slate-400 mt-1">

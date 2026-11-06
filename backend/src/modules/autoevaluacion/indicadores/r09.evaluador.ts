@@ -69,21 +69,21 @@ export interface ResultadoR09 {
     CB: number | null;
     TB: number | null;
     TA: number | null;
-    CX: number | null;
+    CTC: number | null;
   };
   evaluaciones: {
     total: EvaluacionDimension;
     CB: EvaluacionDimension;
     TB: EvaluacionDimension;
     TA: EvaluacionDimension;
-    /** CX corresponde al campo horasMinCTX del plan de estudio */
-    CX: EvaluacionDimension;
+    /** CTC corresponde al campo horasMinCTX del plan de estudio */
+    CTC: EvaluacionDimension;
   };
 }
 
 // ── Evaluador ─────────────────────────────────────────────────────────────────
 
-const BLOQUES_CONOCIDOS: BloqueNormalizado[] = ['CB', 'TB', 'TA', 'CX'];
+const BLOQUES_CONOCIDOS: BloqueNormalizado[] = ['CB', 'TB', 'TA', 'CTC'];
 
 function evalDimension(horasReales: number | null, horasMinimas: number | null): EvaluacionDimension {
   if (horasMinimas === null) {
@@ -105,7 +105,7 @@ function evalDimension(horasReales: number | null, horasMinimas: number | null):
  *
  * Definición:
  *   El plan debe superar las horas mínimas totales y las de cada bloque curricular
- *   (CB, TB, TA, CX). Se compara la suma de cargaHorariaTotal de las materias del plan
+ *   (CB, TB, TA, CTC). Se compara la suma de cargaHorariaTotal de las materias del plan
  *   con los umbrales configurados en los campos horasMin* de PlanEstudio.
  *
  * Unidad de medida: horas totales de la asignatura (cargaHorariaTotal), no semanales.
@@ -177,13 +177,13 @@ export class R09EvaluadorService implements IndicadorEvaluador<ResultadoR09> {
           materiasSinHoras: [],
           materiasConBloqueIndeterminado: [],
           horasTotal: null,
-          horasPorBloque: { CB: null, TB: null, TA: null, CX: null },
+          horasPorBloque: { CB: null, TB: null, TA: null, CTC: null },
           evaluaciones: {
             total: evalDimension(null, umbrales.horasMinTotales),
             CB: evalDimension(null, umbrales.horasMinCB),
             TB: evalDimension(null, umbrales.horasMinTB),
             TA: evalDimension(null, umbrales.horasMinTA),
-            CX: evalDimension(null, umbrales.horasMinCTX),
+            CTC: evalDimension(null, umbrales.horasMinCTX),
           },
         },
         datosFaltantes: [],
@@ -197,9 +197,9 @@ export class R09EvaluadorService implements IndicadorEvaluador<ResultadoR09> {
     const materiasConBloqueIndeterminado: MateriaResumenR09[] = [];
 
     // Acumuladores de horas por bloque
-    const sumaBloque: Record<string, number> = { CB: 0, TB: 0, TA: 0, CX: 0 };
+    const sumaBloque: Record<string, number> = { CB: 0, TB: 0, TA: 0, CTC: 0 };
     // Flags de incertidumbre por bloque
-    const bloqueIncierto: Record<string, boolean> = { CB: false, TB: false, TA: false, CX: false };
+    const bloqueIncierto: Record<string, boolean> = { CB: false, TB: false, TA: false, CTC: false };
 
     let sumaTotal = 0;
     let totalIncierto = false;
@@ -252,7 +252,7 @@ export class R09EvaluadorService implements IndicadorEvaluador<ResultadoR09> {
       CB: bloqueIncierto['CB'] ? null : sumaBloque['CB'],
       TB: bloqueIncierto['TB'] ? null : sumaBloque['TB'],
       TA: bloqueIncierto['TA'] ? null : sumaBloque['TA'],
-      CX: bloqueIncierto['CX'] ? null : sumaBloque['CX'],
+      CTC: bloqueIncierto['CTC'] ? null : sumaBloque['CTC'],
     };
 
     // ── Estado de cálculo ────────────────────────────────────────────────────
@@ -306,7 +306,7 @@ export class R09EvaluadorService implements IndicadorEvaluador<ResultadoR09> {
           CB: evalDimension(horasPorBloque.CB, umbrales.horasMinCB),
           TB: evalDimension(horasPorBloque.TB, umbrales.horasMinTB),
           TA: evalDimension(horasPorBloque.TA, umbrales.horasMinTA),
-          CX: evalDimension(horasPorBloque.CX, umbrales.horasMinCTX),
+          CTC: evalDimension(horasPorBloque.CTC, umbrales.horasMinCTX),
         },
       },
       datosFaltantes,

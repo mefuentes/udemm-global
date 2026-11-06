@@ -63,7 +63,7 @@ export class ConsultasAcademicasService {
    *   "CB"                 → 'CB'
    *   "TB"                 → 'TB'
    *   "TA"                 → 'TA'
-   *   "CX" / "CTX" / "CTC" → 'CX'  (Ciencias y Tecnologías Complementarias)
+   *   "CX" / "CTX" / "CTC" → 'CTC'  (Ciencias y Tecnologías Complementarias)
    *   null o desconocido   → null   (dato no clasificado, no se inventa)
    */
   normalizarBloque(bloqueConocimiento: string | null | undefined): BloqueNormalizado {
@@ -72,7 +72,7 @@ export class ConsultasAcademicasService {
     if (v === 'CB') return 'CB';
     if (v === 'TB') return 'TB';
     if (v === 'TA') return 'TA';
-    if (v === 'CTX' || v === 'CX' || v === 'CTC') return 'CX';
+    if (v === 'CTX' || v === 'CX' || v === 'CTC') return 'CTC';
     return null;
   }
 
@@ -819,6 +819,7 @@ export class ConsultasAcademicasService {
             fechaFinGestion: true,
             funcionGestion: true,
             desempenoActualJson: true,
+            cargosAcademicosJson: true,
           },
         },
       },
@@ -833,6 +834,7 @@ export class ConsultasAcademicasService {
       fechaFinGestion: string | null;
       funcionGestion: string | null;
       desempenoActualJson: string | null;
+      cargosAcademicosJson: string | null;
     }>();
 
     for (const v of rows) {
@@ -846,6 +848,7 @@ export class ConsultasAcademicasService {
           fechaFinGestion: v.docente.fechaFinGestion ?? null,
           funcionGestion: v.docente.funcionGestion ?? null,
           desempenoActualJson: v.docente.desempenoActualJson ?? null,
+          cargosAcademicosJson: v.docente.cargosAcademicosJson ?? null,
         });
       }
       const entry = porDocente.get(v.docenteId)!;
@@ -927,12 +930,10 @@ export class ConsultasAcademicasService {
             fechaFinGestion: true,
             funcionGestion: true,
             desempenoActualJson: true,
-            tiempoInvestigacion: true,
-            tituloProyectoInvestigacion: true,
-            fechaFinProyectoInvestigacion: true,
-            tiempoExtension: true,
-            rolActividadExtension: true,
-            finEstadoActividadExtension: true,
+            cargosAcademicosJson: true,
+            otrasDedicacionesJson: true,
+            proyectosInvestigacionJson: true,
+            participacionVinculacionJson: true,
           },
         },
       },
@@ -947,12 +948,10 @@ export class ConsultasAcademicasService {
       fechaFinGestion: string | null;
       funcionGestion: string | null;
       desempenoActualJson: string | null;
-      tiempoInvestigacion: string | null;
-      tituloProyectoInvestigacion: string | null;
-      fechaFinProyectoInvestigacion: string | null;
-      tiempoExtension: string | null;
-      rolActividadExtension: string | null;
-      finEstadoActividadExtension: string | null;
+      cargosAcademicosJson: string | null;
+      otrasDedicacionesJson: string | null;
+      proyectosInvestigacionJson: string | null;
+      participacionVinculacionJson: string | null;
     }>();
 
     for (const v of rows) {
@@ -966,12 +965,10 @@ export class ConsultasAcademicasService {
           fechaFinGestion: v.docente.fechaFinGestion ?? null,
           funcionGestion: v.docente.funcionGestion ?? null,
           desempenoActualJson: v.docente.desempenoActualJson ?? null,
-          tiempoInvestigacion: v.docente.tiempoInvestigacion ?? null,
-          tituloProyectoInvestigacion: v.docente.tituloProyectoInvestigacion ?? null,
-          fechaFinProyectoInvestigacion: v.docente.fechaFinProyectoInvestigacion ?? null,
-          tiempoExtension: v.docente.tiempoExtension ?? null,
-          rolActividadExtension: v.docente.rolActividadExtension ?? null,
-          finEstadoActividadExtension: v.docente.finEstadoActividadExtension ?? null,
+          cargosAcademicosJson: v.docente.cargosAcademicosJson ?? null,
+          otrasDedicacionesJson: v.docente.otrasDedicacionesJson ?? null,
+          proyectosInvestigacionJson: v.docente.proyectosInvestigacionJson ?? null,
+          participacionVinculacionJson: v.docente.participacionVinculacionJson ?? null,
         });
       }
       const entry = porDocente.get(v.docenteId)!;

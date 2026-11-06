@@ -106,8 +106,8 @@ function mkR08(partial: Partial<ResultadoR08> = {}, estado = EstadoCalculo.CALCU
 
 function mkR09(
   horasTotal: number | null,
-  umbrales: { horasMinTotales?: number | null; CB?: number | null; TB?: number | null; TA?: number | null; CX?: number | null } = {},
-  horas: { CB?: number | null; TB?: number | null; TA?: number | null; CX?: number | null } = {},
+  umbrales: { horasMinTotales?: number | null; CB?: number | null; TB?: number | null; TA?: number | null; CTC?: number | null } = {},
+  horas: { CB?: number | null; TB?: number | null; TA?: number | null; CTC?: number | null } = {},
   estado = EstadoCalculo.CALCULADO,
 ): ResultadoIndicador<ResultadoR09> {
   const ht = horasTotal;
@@ -134,14 +134,14 @@ function mkR09(
         CB: horas.CB ?? null,
         TB: horas.TB ?? null,
         TA: horas.TA ?? null,
-        CX: horas.CX ?? null,
+        CTC: horas.CTC ?? null,
       },
       evaluaciones: {
         total: mkDim(ht, hMinT),
         CB: mkDim(horas.CB ?? null, umbrales.CB ?? null),
         TB: mkDim(horas.TB ?? null, umbrales.TB ?? null),
         TA: mkDim(horas.TA ?? null, umbrales.TA ?? null),
-        CX: mkDim(horas.CX ?? null, umbrales.CX ?? null),
+        CTC: mkDim(horas.CTC ?? null, umbrales.CTC ?? null),
       },
     },
     datosFaltantes: [],
@@ -455,7 +455,7 @@ describe('TablroPlanService', () => {
     it('horas suficientes → cumple=true, diferencia≥0', async () => {
       configEvaluar(
         mkR08(),
-        mkR09(2400, { horasMinTotales: 2000 }, { CB: 600, TB: 700, TA: 700, CX: 400 }),
+        mkR09(2400, { horasMinTotales: 2000 }, { CB: 600, TB: 700, TA: 700, CTC: 400 }),
       );
       const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
       expect(res.ipl01.cumple).toBe(true);
@@ -468,7 +468,7 @@ describe('TablroPlanService', () => {
     it('horas insuficientes → cumple=false, diferencia<0', async () => {
       configEvaluar(
         mkR08(),
-        mkR09(1800, { horasMinTotales: 2000 }, { CB: 400, TB: 500, TA: 500, CX: 400 }),
+        mkR09(1800, { horasMinTotales: 2000 }, { CB: 400, TB: 500, TA: 500, CTC: 400 }),
       );
       const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
       expect(res.ipl01.cumple).toBe(false);
@@ -478,7 +478,7 @@ describe('TablroPlanService', () => {
     it('P-10 sin configurar → cumple=null, horasMinimas=null', async () => {
       configEvaluar(
         mkR08(),
-        mkR09(2400, {}, { CB: 600, TB: 700, TA: 700, CX: 400 }),
+        mkR09(2400, {}, { CB: 600, TB: 700, TA: 700, CTC: 400 }),
       );
       const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
       expect(res.ipl01.cumple).toBeNull();
@@ -504,7 +504,7 @@ describe('TablroPlanService', () => {
     it('todos los bloques cumplen → bloquesCumplen=bloquesConUmbral', async () => {
       configEvaluar(
         mkR08(),
-        mkR09(2400, { horasMinTotales: 2000, CB: 400, TB: 600, TA: 600, CX: 300 }, { CB: 600, TB: 700, TA: 700, CX: 400 }),
+        mkR09(2400, { horasMinTotales: 2000, CB: 400, TB: 600, TA: 600, CTC: 300 }, { CB: 600, TB: 700, TA: 700, CTC: 400 }),
       );
       const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
       expect(res.ipl02.bloquesCumplen).toBe(4);
@@ -514,7 +514,7 @@ describe('TablroPlanService', () => {
     it('CB incumple → bloquesCumplen < bloquesConUmbral', async () => {
       configEvaluar(
         mkR08(),
-        mkR09(2200, { horasMinTotales: 2000, CB: 700, TB: 600, TA: 600, CX: 300 }, { CB: 500, TB: 700, TA: 700, CX: 400 }),
+        mkR09(2200, { horasMinTotales: 2000, CB: 700, TB: 600, TA: 600, CTC: 300 }, { CB: 500, TB: 700, TA: 700, CTC: 400 }),
       );
       const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
       expect(res.ipl02.bloquesConUmbral).toBe(4);
@@ -525,7 +525,7 @@ describe('TablroPlanService', () => {
       // Solo CB y TB tienen umbral configurado
       configEvaluar(
         mkR08(),
-        mkR09(2400, { horasMinTotales: 2000, CB: 400, TB: 600 }, { CB: 600, TB: 700, TA: 700, CX: 400 }),
+        mkR09(2400, { horasMinTotales: 2000, CB: 400, TB: 600 }, { CB: 600, TB: 700, TA: 700, CTC: 400 }),
       );
       const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
       expect(res.ipl02.bloquesConUmbral).toBe(2);
@@ -535,7 +535,7 @@ describe('TablroPlanService', () => {
     it('ningún bloque con umbral → bloquesConUmbral=0, estadoCalculo=NO_APLICA', async () => {
       configEvaluar(
         mkR08(),
-        mkR09(2400, {}, { CB: 600, TB: 700, TA: 700, CX: 400 }),
+        mkR09(2400, {}, { CB: 600, TB: 700, TA: 700, CTC: 400 }),
       );
       const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
       expect(res.ipl02.bloquesConUmbral).toBe(0);
@@ -601,23 +601,23 @@ describe('TablroPlanService', () => {
   // ── IPL-05 — Horas por bloque ────────────────────────────────────────────
 
   describe('IPL-05', () => {
-    it('devuelve los cinco bloques CB, TB, TA, CX y TOTAL', async () => {
+    it('devuelve los cinco bloques CB, TB, TA, CTC y TOTAL', async () => {
       configEvaluar(
         mkR08(),
-        mkR09(2400, { horasMinTotales: 2000, CB: 400, TB: 600, TA: 600, CX: 300 }, { CB: 600, TB: 700, TA: 700, CX: 400 }),
+        mkR09(2400, { horasMinTotales: 2000, CB: 400, TB: 600, TA: 600, CTC: 300 }, { CB: 600, TB: 700, TA: 700, CTC: 400 }),
       );
       const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
       const bloques = res.ipl05.bloques.map(b => b.bloque);
-      expect(bloques).toEqual(['CB', 'TB', 'TA', 'CX', 'TOTAL']);
+      expect(bloques).toEqual(['CB', 'TB', 'TA', 'CTC', 'TOTAL']);
     });
 
-    it('bloque CX tiene bloque="CX" (corresponde a CTC del FSD)', async () => {
+    it('bloque CTC tiene bloque="CTC"', async () => {
       configEvaluar(
         mkR08(),
-        mkR09(2400, { CX: 300 }, { CX: 400 }),
+        mkR09(2400, { CTC: 300 }, { CTC: 400 }),
       );
       const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
-      const cx = res.ipl05.bloques.find(b => b.bloque === 'CX');
+      const cx = res.ipl05.bloques.find(b => b.bloque === 'CTC');
       expect(cx).toBeDefined();
       expect(cx!.horasReales).toBe(400);
       expect(cx!.horasMinimas).toBe(300);
@@ -625,10 +625,10 @@ describe('TablroPlanService', () => {
     });
 
     it('bloque sin umbral → estadoCalculo=NO_APLICA, cumple=null', async () => {
-      // Solo TOTAL y CB tienen umbral; TB, TA, CX no
+      // Solo TOTAL y CB tienen umbral; TB, TA, CTC no
       configEvaluar(
         mkR08(),
-        mkR09(2400, { horasMinTotales: 2000, CB: 400 }, { CB: 600, TB: 700, TA: 700, CX: 400 }),
+        mkR09(2400, { horasMinTotales: 2000, CB: 400 }, { CB: 600, TB: 700, TA: 700, CTC: 400 }),
       );
       const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
       const tb = res.ipl05.bloques.find(b => b.bloque === 'TB');
@@ -680,7 +680,7 @@ describe('TablroPlanService', () => {
     it('todos CALCULADO → estadoGeneralCalculo=CALCULADO', async () => {
       configEvaluar(
         mkR08({ totalMaterias: 3, totalConResponsable: 3 }),
-        mkR09(2400, { horasMinTotales: 2000, CB: 400, TB: 600, TA: 600, CX: 300 }, { CB: 600, TB: 700, TA: 700, CX: 400 }),
+        mkR09(2400, { horasMinTotales: 2000, CB: 400, TB: 600, TA: 600, CTC: 300 }, { CB: 600, TB: 700, TA: 700, CTC: 400 }),
       );
       const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
       expect(res.estadoGeneralCalculo).toBe(EstadoCalculo.CALCULADO);
@@ -689,7 +689,7 @@ describe('TablroPlanService', () => {
     it('cualquier PARCIAL → estadoGeneralCalculo≥PARCIAL', async () => {
       configEvaluar(
         mkR08({}, EstadoCalculo.PARCIAL),
-        mkR09(2400, { horasMinTotales: 2000 }, { CB: 600, TB: 700, TA: 700, CX: 400 }),
+        mkR09(2400, { horasMinTotales: 2000 }, { CB: 600, TB: 700, TA: 700, CTC: 400 }),
       );
       const res = await service.consultarPlan(PLAN_ID, 'u1', 'ADMINISTRADOR_SISTEMA');
       const pesoEstado: Record<string, number> = { CALCULADO: 1, NO_APLICA: 2, PARCIAL: 3, NO_DETERMINABLE: 4 };

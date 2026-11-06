@@ -230,7 +230,7 @@ function FilaBajaDedicacion({ d }: { d: DocenteBajaDedicacion }) {
       <td className="px-3 py-1.5 text-xs text-slate-700">
         <Link href={`/autoevaluacion/ficha-docente/${d.docenteId}`} className="hover:underline text-[#0f4c81]">{d.nombre}</Link>
       </td>
-      <td className="px-3 py-1.5 text-right tabular-nums text-xs text-amber-700 font-semibold">{d.cargaHorariaSemanal} h</td>
+      <td className="px-3 py-1.5 text-right tabular-nums text-xs text-amber-700 font-semibold">{d.dedicacionTotal} h</td>
     </tr>
   );
 }

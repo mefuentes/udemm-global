@@ -56,7 +56,7 @@ export interface ResultadoIPL04 {
 }
 
 export interface EvaluacionBloqueIPL05 {
-  bloque: 'CB' | 'TB' | 'TA' | 'CX' | 'TOTAL';
+  bloque: 'CB' | 'TB' | 'TA' | 'CTC' | 'TOTAL';
   horasReales: number | null;
   horasMinimas: number | null;
   diferencia: number | null;

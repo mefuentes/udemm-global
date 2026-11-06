@@ -381,7 +381,7 @@ export interface DedicacionConeauItem {
  * Bloque "Condiciones del plantel" para indicadores CONEAU (FSD §9.2, B-03).
  *
  * conPosgrado:            docentes con tituloPosgrado declarado (boolean).
- * conInvestigacion:       docentes con tituloProyectoInvestigacion declarado.
+ * conInvestigacion:       docentes con al menos un proyecto en proyectosInvestigacionJson.
  * conDesignacionRegular:  docentes con al menos un CargoDocente vigente cuya
  *                         designacion contiene "Regular" (insensitive).
  * conDesignacionInterina: docentes con al menos un CargoDocente vigente cuya

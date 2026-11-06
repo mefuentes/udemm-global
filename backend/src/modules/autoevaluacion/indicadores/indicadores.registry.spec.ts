@@ -85,8 +85,8 @@ describe('RegistroIndicadores — estado efectivo post-asignación', () => {
     }
   });
 
-  it('todos los indicadores están IMPLEMENTADO tras asignación, excepto R-10 y R-03 que son PARCIAL', () => {
-    const parciales = new Set(['R-10', 'R-03']);
+  it('todos los indicadores están IMPLEMENTADO tras asignación, excepto R-03 que es PARCIAL', () => {
+    const parciales = new Set(['R-03']);
     for (const d of registro.listar()) {
       if (parciales.has(d.codigo)) {
         expect(d.estadoImplementacion).toBe('PARCIAL');
@@ -96,8 +96,8 @@ describe('RegistroIndicadores — estado efectivo post-asignación', () => {
     }
   });
 
-  it('ningún indicador tiene motivoPendiente tras asignación, excepto R-10 y R-03', () => {
-    const conMotivo = new Set(['R-10', 'R-03']);
+  it('ningún indicador tiene motivoPendiente tras asignación, excepto R-03', () => {
+    const conMotivo = new Set(['R-03']);
     for (const d of registro.listar()) {
       if (conMotivo.has(d.codigo)) {
         expect(d.motivoPendiente).toBeDefined();

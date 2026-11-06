@@ -312,16 +312,16 @@ describe('ConsultasAcademicasService — normalización de bloques', () => {
     expect(service.normalizarBloque('TA')).toBe('TA');
   });
 
-  it('bloque "CTX" → normalizado CX (equivalente al valor canonical)', () => {
-    expect(service.normalizarBloque('CTX')).toBe('CX');
+  it('bloque "CTX" → normalizado CTC (campo Prisma equivalente)', () => {
+    expect(service.normalizarBloque('CTX')).toBe('CTC');
   });
 
-  it('bloque "CX" → normalizado CX (convención funcional)', () => {
-    expect(service.normalizarBloque('CX')).toBe('CX');
+  it('bloque "CX" → normalizado CTC (código anterior, compatibilidad)', () => {
+    expect(service.normalizarBloque('CX')).toBe('CTC');
   });
 
-  it('bloque "CTC" → normalizado CX (variante del prototipo HTML)', () => {
-    expect(service.normalizarBloque('CTC')).toBe('CX');
+  it('bloque "CTC" → normalizado CTC (código canónico actual)', () => {
+    expect(service.normalizarBloque('CTC')).toBe('CTC');
   });
 
   it('bloque null → null (sin bloque asignado)', () => {
@@ -335,8 +335,8 @@ describe('ConsultasAcademicasService — normalización de bloques', () => {
 
   it('bloque con espacios o mayúsculas mixtas → normalizado correctamente', () => {
     expect(service.normalizarBloque('  cb  ')).toBe('CB');
-    expect(service.normalizarBloque('cx')).toBe('CX');
-    expect(service.normalizarBloque('ctc')).toBe('CX');
+    expect(service.normalizarBloque('cx')).toBe('CTC');
+    expect(service.normalizarBloque('ctc')).toBe('CTC');
   });
 });
 
@@ -360,7 +360,7 @@ describe('ConsultasAcademicasService — obtenerMateriasDePlan', () => {
     expect(mat.cargaHorariaTotal).toBeNull();
   });
 
-  it('bloque CX en materia → bloqueNormalizado CX, raw preservado', async () => {
+  it('bloque CX en materia → bloqueNormalizado CTC, raw preservado', async () => {
     const prisma = makePrisma({
       materia: { findMany: jest.fn().mockResolvedValue([
         makeMateria({ bloqueConocimiento: 'CX' }),
@@ -368,7 +368,7 @@ describe('ConsultasAcademicasService — obtenerMateriasDePlan', () => {
     });
     const [mat] = await svc(prisma, makeScope()).obtenerMateriasDePlan(PLAN_ID, USR, ADMIN);
     expect(mat.bloqueConocimientoRaw).toBe('CX');
-    expect(mat.bloqueNormalizado).toBe('CX');
+    expect(mat.bloqueNormalizado).toBe('CTC');
   });
 
   it('bloque desconocido → bloqueNormalizado null, raw preservado', async () => {

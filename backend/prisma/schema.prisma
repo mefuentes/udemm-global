@@ -15,16 +15,16 @@ model Universidad {
 }
 
 model Facultad {
-  id                   String                           @id @default(uuid())
+  id                   String                        @id @default(uuid())
   nombre               String
   universidadId        String
-  codigo               String?                          @unique
+  codigo               String?                       @unique
   descripcion          String?
-  estado               String                           @default("ACTIVO")
-  fechaCreacion        DateTime                         @default(now())
-  fechaActualizacion   DateTime                         @updatedAt
+  estado               String                        @default("ACTIVO")
+  fechaCreacion        DateTime                      @default(now())
+  fechaActualizacion   DateTime                      @updatedAt
   carreras             Carrera[]
-  universidad          Universidad                      @relation(fields: [universidadId], references: [id])
+  universidad          Universidad                   @relation(fields: [universidadId], references: [id])
   vinculaciones        VinculacionCatedra[]
   usuariosAsociados    UsuarioFacultad[]
   autoevaluacionConfig AutoevaluacionConfigFacultad?
@@ -49,34 +49,34 @@ model Carrera {
 }
 
 model PlanEstudio {
-  id                    String               @id @default(uuid())
-  nombre                String
-  carreraId             String
-  codigo                String?              @unique
-  descripcion           String?
-  duracionCuatrimestres Int?
-  estado                String               @default("ACTIVO")
-  fechaActualizacion    DateTime             @updatedAt
-  fechaAprobacion       DateTime?
-  fechaCreacion         DateTime             @default(now())
-  resolucionAprobacion  String?
-  totalCreditos         Int?
-  version               String?
-  anio                  Int?
+  id                        String               @id @default(uuid())
+  nombre                    String
+  carreraId                 String
+  codigo                    String?              @unique
+  descripcion               String?
+  duracionCuatrimestres     Int?
+  estado                    String               @default("ACTIVO")
+  fechaActualizacion        DateTime             @updatedAt
+  fechaAprobacion           DateTime?
+  fechaCreacion             DateTime             @default(now())
+  resolucionAprobacion      String?
+  totalCreditos             Int?
+  version                   String?
+  anio                      Int?
   // MOD-AUT G-04: umbrales horarios por bloque (P-10..P-14). NULL = sin umbral configurado → R-09 no evalúa ese bloque.
-  horasMinTotales       Int?
-  horasMinCB            Int?
-  horasMinTB            Int?
-  horasMinTA            Int?
-  horasMinCTX           Int?
+  horasMinTotales           Int?
+  horasMinCB                Int?
+  horasMinTB                Int?
+  horasMinTA                Int?
+  horasMinCTX               Int?
   // MOD-AUT R-13: configuración de formación práctica (FSD §6.3). NULL = no configurado (≠ false = no requerido).
   requierePPS               Boolean?
   requierePI                Boolean?
-  porcentajeMinFormacion    Int?     // deprecated: usar horasMinFormacionPractica
+  porcentajeMinFormacion    Int? // deprecated: usar horasMinFormacionPractica
   horasMinFormacionPractica Int?
-  materias              Materia[]
-  carrera               Carrera              @relation(fields: [carreraId], references: [id])
-  vinculaciones         VinculacionCatedra[]
+  materias                  Materia[]
+  carrera                   Carrera              @relation(fields: [carreraId], references: [id])
+  vinculaciones             VinculacionCatedra[]
 }
 
 model Materia {
@@ -107,54 +107,54 @@ model Materia {
 }
 
 model ProgramaAsignatura {
-  id                         String              @id @default(uuid())
-  materiaId                  String              @unique
-  equipoDocente              String?
-  elaboradoPor               String?
-  anioVigencia               Int?
-  fundamentacion             String?
-  objetivosGenerales         String?
-  objetivosEspecificos       String?
-  contenidosTematicos        String?
-  bibliografiaBasica         String?
-  bibliografiaComplementaria String?
-  recursosDidacticos         String?
-  metodologiaEnsenanza       String?
-  actividadesPracticas       String?
-  cronograma                 String?
-  criteriosEvaluacion        String?
-  instrumentosEvaluacion     String?
-  condicionesAprobacion      String?
-  estadoPrograma             String              @default("PENDIENTE")
-  fechaAprobacion            DateTime?
-  resolucionAprobacion       String?
-  observacionesGenerales     String?
-  vigenciaDesde              Int?
-  vigenciaHasta              Int?
-  estadoS1                   String              @default("PENDIENTE")
-  estadoS2                   String              @default("PENDIENTE")
-  estadoS3                   String              @default("PENDIENTE")
-  estadoS4                   String              @default("PENDIENTE")
-  estadoS5                   String              @default("PENDIENTE")
-  estadoS6                   String              @default("PENDIENTE")
-  fechaCreacion              DateTime            @default(now())
-  fechaActualizacion         DateTime            @default(now()) @updatedAt
-  propositos                 String?
-  contenidosSinteticos       String?
-  tiposFormacionPractica     String?
-  porcentajeTiempoFormacion  String?
-  modalidadEvaluacion        String?
-  requisitosAprobacion       String?
-  fechaVigenciaPrograma      Int?
-  anioAprobacionRevision     String?
-  profesorACargo             String?
-  competenciasVinculadas     String?
-  fechaUltimaActualizacion   String?
-  observacionesGestion       String?
-  aportesPerfilTitulo        String?
-  recomendacionesCursado     String?
-  competenciasResultadosJson String?
-  contenidosGridJson         String?
+  id                           String                        @id @default(uuid())
+  materiaId                    String                        @unique
+  equipoDocente                String?
+  elaboradoPor                 String?
+  anioVigencia                 Int?
+  fundamentacion               String?
+  objetivosGenerales           String?
+  objetivosEspecificos         String?
+  contenidosTematicos          String?
+  bibliografiaBasica           String?
+  bibliografiaComplementaria   String?
+  recursosDidacticos           String?
+  metodologiaEnsenanza         String?
+  actividadesPracticas         String?
+  cronograma                   String?
+  criteriosEvaluacion          String?
+  instrumentosEvaluacion       String?
+  condicionesAprobacion        String?
+  estadoPrograma               String                        @default("PENDIENTE")
+  fechaAprobacion              DateTime?
+  resolucionAprobacion         String?
+  observacionesGenerales       String?
+  vigenciaDesde                Int?
+  vigenciaHasta                Int?
+  estadoS1                     String                        @default("PENDIENTE")
+  estadoS2                     String                        @default("PENDIENTE")
+  estadoS3                     String                        @default("PENDIENTE")
+  estadoS4                     String                        @default("PENDIENTE")
+  estadoS5                     String                        @default("PENDIENTE")
+  estadoS6                     String                        @default("PENDIENTE")
+  fechaCreacion                DateTime                      @default(now())
+  fechaActualizacion           DateTime                      @default(now()) @updatedAt
+  propositos                   String?
+  contenidosSinteticos         String?
+  tiposFormacionPractica       String?
+  porcentajeTiempoFormacion    String?
+  modalidadEvaluacion          String?
+  requisitosAprobacion         String?
+  fechaVigenciaPrograma        Int?
+  anioAprobacionRevision       String?
+  profesorACargo               String?
+  competenciasVinculadas       String?
+  fechaUltimaActualizacion     String?
+  observacionesGestion         String?
+  aportesPerfilTitulo          String?
+  recomendacionesCursado       String?
+  competenciasResultadosJson   String?
+  contenidosGridJson           String?
   unidadesDidacticasJson       String?
   formacionPracticaJson        String?
   actividadesFormacionPractica String?
@@ -165,7 +165,7 @@ model ProgramaAsignatura {
   historial                    HistorialPrograma[]
   solicitudes                  SolicitudAprobacionPrograma[]
   mensajesCorrecion            MensajeCorrecionPrograma[]
-  materia                    Materia             @relation(fields: [materiaId], references: [id], onDelete: Cascade)
+  materia                      Materia                       @relation(fields: [materiaId], references: [id], onDelete: Cascade)
 }
 
 model HistorialPrograma {
@@ -364,27 +364,27 @@ model Subarea {
 }
 
 model Docente {
-  id                                           String               @id @default(uuid())
+  id                                           String                @id @default(uuid())
   nombre                                       String
   apellido                                     String
   tipoDocumento                                String
-  numeroDocumento                              String               @unique
-  correoElectronico                            String               @unique
+  numeroDocumento                              String                @unique
+  correoElectronico                            String                @unique
   tituloGrado                                  String?
   tituloPosgrado                               String?
   cargoDeclarado                               String?
   justificacionPertinencia                     String?
   actividadesProfesionales                     String?
   antecedentesAcademicos                       String?
-  activo                                       Boolean              @default(true)
+  activo                                       Boolean               @default(true)
   // MOD-AUT D2: flag de relevamiento de cargos institucionales para R-04.
   // false = el relevamiento de CargoDocente aún no fue completado por secretaría.
   // true  = secretaría confirmó que los cargos en CargoDocente son exhaustivos.
   // Permite distinguir "sin cargos cargados" (C) de "confirmado sin cargos" (D).
-  relevamientoCargosCompleto                   Boolean              @default(false)
-  fechaCreacion                                DateTime             @default(now())
-  fechaActualizacion                           DateTime             @updatedAt
-  usuarioId                                    String?              @unique
+  relevamientoCargosCompleto                   Boolean               @default(false)
+  fechaCreacion                                DateTime              @default(now())
+  fechaActualizacion                           DateTime              @updatedAt
+  usuarioId                                    String?               @unique
   codigoPostal                                 String?
   cuit                                         String?
   fechaNacimiento                              DateTime?
@@ -464,11 +464,11 @@ model Docente {
   // D-06: nivel de posgrado para conteo CONEAU (CIERRE-03 Fase B). Null = no clasificado.
   // No reemplaza ni modifica tituloPosgrado (texto libre).
   tipoPosgradoId                               String?
-  areaDisciplinarRel                           AreaDisciplinar?     @relation(fields: [areaDisciplinarId], references: [id])
-  subareaRel                                   Subarea?             @relation(fields: [subareaId], references: [id])
+  areaDisciplinarRel                           AreaDisciplinar?      @relation(fields: [areaDisciplinarId], references: [id])
+  subareaRel                                   Subarea?              @relation(fields: [subareaId], references: [id])
   tipoDedicacionConeau                         TipoDedicacionConeau? @relation(fields: [tipoDedicacionConeauId], references: [id])
-  tipoPosgrado                                 TipoPosgrado?        @relation(fields: [tipoPosgradoId], references: [id])
-  usuario                                      Usuario?             @relation(fields: [usuarioId], references: [id])
+  tipoPosgrado                                 TipoPosgrado?         @relation(fields: [tipoPosgradoId], references: [id])
+  usuario                                      Usuario?              @relation(fields: [usuarioId], references: [id])
   notificaciones                               Notificacion[]
   vinculaciones                                VinculacionCatedra[]
   cargosInstitucionales                        CargoDocente[]
@@ -582,8 +582,8 @@ model TipoPosgrado {
 // La columna 'codigo' es el identificador estable que el código del sistema debe referenciar.
 model TipoDedicacionConeau {
   id                 String    @id @default(uuid())
-  nombre             String    @unique  // "Exclusiva", "Semiexclusiva", "Simple"
-  codigo             String    @unique  // "EXCLUSIVA", "SEMIEXCLUSIVA", "SIMPLE"
+  nombre             String    @unique // "Exclusiva", "Semiexclusiva", "Simple"
+  codigo             String    @unique // "EXCLUSIVA", "SEMIEXCLUSIVA", "SIMPLE"
   activo             Boolean   @default(true)
   fechaCreacion      DateTime  @default(now())
   fechaActualizacion DateTime  @updatedAt
@@ -608,79 +608,79 @@ model TipoAreaEmisora {
 }
 
 model Normativa {
-  id                    String        @id @default(uuid())
-  titulo                String
-  fechaEmision          DateTime
-  areaEmisora           String
-  vigencia              String        @default("VIGENTE")
-  numeroNorma           String
-  anio                  Int
-  palabrasClave         String?
-  tipoNormativaId       String
-  rutaArchivoOriginal   String?
-  rutaArchivoCuarentena String?
-  nombreArchivoOriginal String?
-  nombreArchivoFisico   String?
-  tamanioArchivo        Int?
-  mimeType              String?
-  eliminado             Boolean       @default(false)
-  fechaEliminacion      DateTime?
-  eliminadoPorUsuarioId String?
-  motivoEliminacion     String?
-  fechaCreacion         DateTime      @default(now())
-  fechaActualizacion    DateTime      @updatedAt
-  normativaSucesoraId   String?
-  tipoNormativa         TipoNormativa  @relation(fields: [tipoNormativaId], references: [id])
-  normativaSucesora     Normativa?     @relation("NormativaSucesora", fields: [normativaSucesoraId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  normativasReemplazadas Normativa[]   @relation("NormativaSucesora")
-  historialEstados      HistorialEstadoNormativa[]
+  id                     String                     @id @default(uuid())
+  titulo                 String
+  fechaEmision           DateTime
+  areaEmisora            String
+  vigencia               String                     @default("VIGENTE")
+  numeroNorma            String
+  anio                   Int
+  palabrasClave          String?
+  tipoNormativaId        String
+  rutaArchivoOriginal    String?
+  rutaArchivoCuarentena  String?
+  nombreArchivoOriginal  String?
+  nombreArchivoFisico    String?
+  tamanioArchivo         Int?
+  mimeType               String?
+  eliminado              Boolean                    @default(false)
+  fechaEliminacion       DateTime?
+  eliminadoPorUsuarioId  String?
+  motivoEliminacion      String?
+  fechaCreacion          DateTime                   @default(now())
+  fechaActualizacion     DateTime                   @updatedAt
+  normativaSucesoraId    String?
+  tipoNormativa          TipoNormativa              @relation(fields: [tipoNormativaId], references: [id])
+  normativaSucesora      Normativa?                 @relation("NormativaSucesora", fields: [normativaSucesoraId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  normativasReemplazadas Normativa[]                @relation("NormativaSucesora")
+  historialEstados       HistorialEstadoNormativa[]
 
   @@unique([numeroNorma, anio])
 }
 
 model HistorialEstadoNormativa {
-  id                  String   @id @default(uuid())
+  id                  String    @id @default(uuid())
   normativaId         String
   estadoAnterior      String
   estadoNuevo         String
   motivo              String
   normativaSucesoraId String?
   usuarioId           String?
-  fechaCambio         DateTime @default(now())
+  fechaCambio         DateTime  @default(now())
   normativa           Normativa @relation(fields: [normativaId], references: [id])
 }
 
 model Notificacion {
-  id                   String    @id @default(uuid())
-  tipo                 String
-  titulo               String
-  cuerpo               String
-  leida                Boolean   @default(false)
-  fechaLectura         DateTime?
-  docenteId            String?
-  usuarioId            String?
-  vinculacionId        String?
-  solicitudProgramaId  String?
-  fechaCreacion        DateTime  @default(now())
-  fechaActualizacion   DateTime  @updatedAt
-  docente              Docente?  @relation(fields: [docenteId], references: [id])
-  usuario              Usuario?  @relation(fields: [usuarioId], references: [id])
+  id                  String    @id @default(uuid())
+  tipo                String
+  titulo              String
+  cuerpo              String
+  leida               Boolean   @default(false)
+  fechaLectura        DateTime?
+  docenteId           String?
+  usuarioId           String?
+  vinculacionId       String?
+  solicitudProgramaId String?
+  fechaCreacion       DateTime  @default(now())
+  fechaActualizacion  DateTime  @updatedAt
+  docente             Docente?  @relation(fields: [docenteId], references: [id])
+  usuario             Usuario?  @relation(fields: [usuarioId], references: [id])
 
   @@index([usuarioId])
 }
 
 model AuditLogNormativa {
-  id               String   @id @default(uuid())
-  fecha            DateTime @default(now())
-  usuarioId        String?
-  usuarioNombre    String?
-  accion           String
-  normativaId      String?
-  normativaTitulo  String?
-  normativaNumero  String?
-  normativaAnio    Int?
-  detalle          Json?
-  ipOrigen         String?
+  id              String   @id @default(uuid())
+  fecha           DateTime @default(now())
+  usuarioId       String?
+  usuarioNombre   String?
+  accion          String
+  normativaId     String?
+  normativaTitulo String?
+  normativaNumero String?
+  normativaAnio   Int?
+  detalle         Json?
+  ipOrigen        String?
 
   @@index([fecha])
   @@index([usuarioId])
@@ -723,15 +723,15 @@ model UsuarioFacultad {
 // alcanza 100% de avance. Los roles aprobadores son los definidos en RBAC.
 
 model SolicitudAprobacionPrograma {
-  id              String                      @id @default(uuid())
+  id              String                     @id @default(uuid())
   programaId      String
-  estado          String                      @default("PENDIENTE_APROBACION")
-  fechaCreacion   DateTime                    @default(now())
+  estado          String                     @default("PENDIENTE_APROBACION")
+  fechaCreacion   DateTime                   @default(now())
   fechaResolucion DateTime?
   aprobadorId     String?
   observaciones   String?
-  programa        ProgramaAsignatura          @relation(fields: [programaId], references: [id], onDelete: Cascade)
-  aprobador       Usuario?                    @relation("SolicitudProgramaAprobador", fields: [aprobadorId], references: [id])
+  programa        ProgramaAsignatura         @relation(fields: [programaId], references: [id], onDelete: Cascade)
+  aprobador       Usuario?                   @relation("SolicitudProgramaAprobador", fields: [aprobadorId], references: [id])
   mensajes        MensajeCorrecionPrograma[]
 
   @@index([programaId, estado])
@@ -783,21 +783,21 @@ model AutoevaluacionConfigFacultad {
 }
 
 model AnalisisEjecucion {
-  id                String    @id @default(uuid())
-  ambito            String    // 'FACULTAD' | 'CARRERA' | 'PLAN'
-  entidadId         String    // facultadId | carreraId | planEstudioId según ambito
-  facultadId        String    // siempre la facultad de contexto, para scope de acceso
-  usuarioId         String
-  versionFormato    String    @default("1")
-  fechaInicio       DateTime  @default(now())
-  fechaFin          DateTime?
-  estado            String    // 'COMPLETADO' | 'ERROR'
-  snapshot          Json?
-  errores           String?
-  fechaCreacion     DateTime  @default(now())
-  fechaActualizacion DateTime @updatedAt
-  usuario           Usuario   @relation(fields: [usuarioId], references: [id])
-  facultad          Facultad  @relation(fields: [facultadId], references: [id])
+  id                 String    @id @default(uuid())
+  ambito             String // 'FACULTAD' | 'CARRERA' | 'PLAN'
+  entidadId          String // facultadId | carreraId | planEstudioId según ambito
+  facultadId         String // siempre la facultad de contexto, para scope de acceso
+  usuarioId          String
+  versionFormato     String    @default("1")
+  fechaInicio        DateTime  @default(now())
+  fechaFin           DateTime?
+  estado             String // 'COMPLETADO' | 'ERROR'
+  snapshot           Json?
+  errores            String?
+  fechaCreacion      DateTime  @default(now())
+  fechaActualizacion DateTime  @updatedAt
+  usuario            Usuario   @relation(fields: [usuarioId], references: [id])
+  facultad           Facultad  @relation(fields: [facultadId], references: [id])
 
   @@index([ambito, entidadId, fechaInicio(sort: Desc)])
   @@index([facultadId, fechaInicio(sort: Desc)])

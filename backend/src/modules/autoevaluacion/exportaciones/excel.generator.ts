@@ -1205,7 +1205,7 @@ function buildHojaFacB04(ws: ExcelJS.Worksheet, snap: Record<string, unknown>): 
   ws.autoFilter = { from: { row: hdr.number, column: 1 }, to: { row: hdr.number, column: 4 } };
 
   for (const e of enAlerta) {
-    const hs = e['horasSemanales'] as number | undefined;
+    const hs = e['dedicacionTotal'] as number | undefined;
     const r = ws.addRow([
       safeStr(e['nombre']),
       typeof hs === 'number' ? hs : '—',

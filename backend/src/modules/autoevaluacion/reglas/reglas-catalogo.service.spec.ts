@@ -253,8 +253,8 @@ describe('ReglasCatalogoService', () => {
 
     it('motivoPendiente solo aparece cuando esta definido', () => {
       const cat = service.listarCatalogo();
-      // Post-CIERRE-01: R-10 y R-03 tienen motivoPendiente (ambos PARCIAL)
-      const conMotivo = new Set(['R-10', 'R-03']);
+      // Solo R-03 tiene motivoPendiente (PARCIAL); R-10 ahora es IMPLEMENTADO
+      const conMotivo = new Set(['R-03']);
       for (const r of cat) {
         if (conMotivo.has(r.codigo)) {
           expect(r.motivoPendiente).toBeDefined();
@@ -286,11 +286,11 @@ describe('ReglasCatalogoService', () => {
       }
     });
 
-    it('R-10 tiene estadoImplementacion PARCIAL con motivoPendiente (post-IMPL-19B.1)', () => {
+    it('R-10 tiene estadoImplementacion IMPLEMENTADO sin motivoPendiente (fórmula completa 4.1+5.1+5.2+7.2+7.3)', () => {
       const cat = service.listarCatalogo();
       const r10 = cat.find((r) => r.codigo === 'R-10')!;
-      expect(r10.estadoImplementacion).toBe('PARCIAL');
-      expect(r10.motivoPendiente).toBeDefined();
+      expect(r10.estadoImplementacion).toBe('IMPLEMENTADO');
+      expect(r10.motivoPendiente).toBeUndefined();
     });
   });
 });

@@ -18,11 +18,11 @@
  *   CB  → horasMinCB
  *   TB  → horasMinTB
  *   TA  → horasMinTA
- *   CX  → horasMinCTX  (Ciencias y Tecnologías Complementarias)
+ *   CTC → horasMinCTX  (Ciencias y Tecnologías Complementarias)
  *
- * Se reconocen como equivalentes a CX: "CTX" (nombre del campo Prisma) y "CTC" (prototipo HTML v5.1).
+ * Se reconocen como equivalentes a CTC: "CTX" (nombre del campo Prisma) y "CX" (código anterior).
  */
-export type BloqueNormalizado = 'CB' | 'TB' | 'TA' | 'CX' | null;
+export type BloqueNormalizado = 'CB' | 'TB' | 'TA' | 'CTC' | null;
 
 // ── Estructura institucional ──────────────────────────────────────────────────
 
@@ -47,7 +47,7 @@ export interface UmbralesAut {
   horasMinCB: number | null;
   horasMinTB: number | null;
   horasMinTA: number | null;
-  /** Umbral del bloque CX (Ciencias y Tecnologías Complementarias). El campo Prisma conserva el nombre horasMinCTX. */
+  /** Umbral del bloque CTC (Ciencias y Tecnologías Complementarias). El campo Prisma conserva el nombre horasMinCTX. */
   horasMinCTX: number | null;
 }
 
@@ -298,35 +298,36 @@ export interface DocenteVigenteR03 {
   /** Función de gestión declarada (p. ej. "Secretario Académico"). null = sin gestión. */
   funcionGestion: string | null;
   desempenoActualJson: string | null;
+  /**
+   * Sección 5.1 en formato JSON (nuevo formato multi-cargo).
+   * JSON: [{dedicacionSemanal: string, periodoHasta: string "MM-YYYY", ...}].
+   * Cuando no es null/vacío, tiene precedencia sobre tiempoDedicacionGestionSemanal.
+   */
+  cargosAcademicosJson: string | null;
 }
 
 /**
  * Datos de un docente activo para evaluar R-10 (FSD §8.1: Dedicación total).
  *
- * Extiende DocenteVigenteR03 con los componentes de investigación y vinculación
- * que conforman la "dedicación total" = docencia + gestión + investigación + vinculación.
+ * Extiende DocenteVigenteR03 con los componentes que conforman la dedicación total:
+ *   DEDICACIÓN TOTAL = docencia(4.1) + gestión(5.1) + otras(5.2) + investigación(7.2) + vinculación(7.3)
  *
  * Nota: desempenoActualJson NO forma parte de la dedicación total (es parte de la
- * "carga para el tope" de R-03). R-10 usa investigación y vinculación.
+ * "carga para el tope" de R-03, que incluye 4.1 + 5.1 + 6.1). R-10 usa 5.2 + 7.2 + 7.3.
  *
- * tiempoInvestigacion: horas semanales de investigación (String?).
- * tituloProyectoInvestigacion: indica si hay proyecto declarado; si no es null/vacío
- *   y tiempoInvestigacion es null/vacío, la investigación es indeterminada.
- * tiempoExtension: horas semanales de vinculación/extensión (String?).
- * rolActividadExtension: indica si hay actividad de extensión declarada; si no es null/vacío
- *   y tiempoExtension es null/vacío, la vinculación es indeterminada.
+ * otrasDedicacionesJson: JSON de sección 5.2; ítems {horasSeman: string}.
+ * proyectosInvestigacionJson: JSON de sección 7.2; ítems {titulo, horasSemanales: string, ...}.
+ *   Item en array = actividad declarada; horasSemanales vacío → indeterminado (FSD §3).
+ * participacionVinculacionJson: JSON de sección 7.3; ítems {actividad, horasSemanales: string, ...}.
+ *   horasSemanales vacío → indeterminado; horasSemanales = "0" → 0h determinados.
  */
 export interface DocenteVigenteR10 extends DocenteVigenteR03 {
-  tiempoInvestigacion: string | null;
-  /** Título del proyecto de investigación; presencia indica actividad declarada. */
-  tituloProyectoInvestigacion: string | null;
-  /** Fecha de fin del proyecto de investigación para verificar vigencia. */
-  fechaFinProyectoInvestigacion: string | null;
-  tiempoExtension: string | null;
-  /** Rol en actividad de extensión/vinculación; presencia indica actividad declarada. */
-  rolActividadExtension: string | null;
-  /** Fecha de fin del estado de actividad de extensión para verificar vigencia. */
-  finEstadoActividadExtension: string | null;
+  /** Sección 5.2: otras dedicaciones universitarias. JSON: [{horasSeman: string}] */
+  otrasDedicacionesJson: string | null;
+  /** Sección 7.2: proyectos de investigación. JSON: [{titulo, horasSemanales: string, ...}] */
+  proyectosInvestigacionJson: string | null;
+  /** Sección 7.3: participación en vinculación/extensión. JSON: [{actividad, horasSemanales: string, ...}] */
+  participacionVinculacionJson: string | null;
 }
 
 /**

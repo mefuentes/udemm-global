@@ -42,8 +42,13 @@ function makeDocente(
     apellido: 'Apellido',
     tituloGrado,
     tituloPosgrado,
-    tituloProyectoInvestigacion: tituloPI,
-    tituloActividadExtension: tituloExt,
+    tiempoDedicacionGestionSemanal: null as string | null,
+    fechaFinGestion: null as string | null,
+    funcionGestion: null as string | null,
+    cargosAcademicosJson: null as string | null,
+    otrasDedicacionesJson: null as string | null,
+    proyectosInvestigacionJson: tituloPI ? JSON.stringify([{ titulo: tituloPI, horasSemanales: '0' }]) : null,
+    participacionVinculacionJson: tituloExt ? JSON.stringify([{ actividad: tituloExt, horasSemanales: '4' }]) : null,
   };
 }
 
@@ -274,12 +279,14 @@ describe('TablroFacultadService — Bloque 3 investigación', () => {
 // ── Bloque 4 — Dedicaciones ───────────────────────────────────────────────────
 
 describe('TablroFacultadService — Bloque 4 dedicaciones', () => {
-  it('docente con horas < umbral → totalBajaDedicacion=1', async () => {
-    // DOC2 tiene 10h < 20h (umbral por defecto)
+  it('docente con dedicaciónTotal < umbral → totalBajaDedicacion=1', async () => {
+    // DOC1: 25h (docencia) + 0 (resto) = 25 ≥ 20 → no alerta
+    // DOC2: 10h (docencia) + 4h (vin desde participacionVinculacionJson) = 14 < 20 → alerta
     const svc = makeService();
     const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
     expect(res.dedicaciones.totalBajaDedicacion).toBe(1);
     expect(res.dedicaciones.enAlerta[0]?.docenteId).toBe(DOC2_ID);
+    expect(res.dedicaciones.enAlerta[0]?.dedicacionTotal).toBe(14);
   });
 
   it('sin config → usa umbral 20h por defecto', async () => {
@@ -290,6 +297,51 @@ describe('TablroFacultadService — Bloque 4 dedicaciones', () => {
     });
     const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
     expect(res.dedicaciones.umbral).toBe(20);
+  });
+
+  it('TC-B04-3: gestión desde cargosAcademicosJson suma correctamente → docente supera umbral', async () => {
+    // Docente con 10h docencia + 12h gestión (JSON) = 22h ≥ 20h → NO alerta
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([makeVinc(DOC1_ID)]),
+        groupBy: jest.fn().mockResolvedValue([
+          { docenteId: DOC1_ID, _sum: { horasSemana: 10 } },
+        ]),
+      } as any,
+      docente: {
+        findMany: jest.fn().mockResolvedValue([{
+          ...makeDocente(DOC1_ID, 'Ing.', null, null, null),
+          cargosAcademicosJson: JSON.stringify([{ dedicacionSemanal: '12', periodoHasta: '' }]),
+        }]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.dedicaciones.totalBajaDedicacion).toBe(0);
+    expect(res.dedicaciones.enAlerta).toHaveLength(0);
+  });
+
+  it('TC-B04-4: dedicación total incluye todas las secciones (R-10 completo)', async () => {
+    // docencia=4, gestión=12, otras=5, inv=8, vin=4 → total=33 ≥ 20 → NO alerta
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([makeVinc(DOC1_ID)]),
+        groupBy: jest.fn().mockResolvedValue([
+          { docenteId: DOC1_ID, _sum: { horasSemana: 4 } },
+        ]),
+      } as any,
+      docente: {
+        findMany: jest.fn().mockResolvedValue([{
+          ...makeDocente(DOC1_ID, 'Ing.', null, null, null),
+          cargosAcademicosJson: JSON.stringify([{ dedicacionSemanal: '12', periodoHasta: '' }]),
+          otrasDedicacionesJson: JSON.stringify([{ horasSeman: '5' }]),
+          proyectosInvestigacionJson: JSON.stringify([{ horasSemanales: '8' }]),
+          participacionVinculacionJson: JSON.stringify([{ horasSemanales: '4' }]),
+        }]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.dedicaciones.totalBajaDedicacion).toBe(0);
+    expect(res.dedicaciones.enAlerta).toHaveLength(0);
   });
 });
 

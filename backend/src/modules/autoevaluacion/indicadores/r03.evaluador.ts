@@ -95,6 +95,62 @@ export function parsearHorasGestion(
   return { horas: parseInt(dedicacion, 10), indeterminado: false };
 }
 
+/**
+ * Parsea cargosAcademicosJson (sección 5.1, nuevo formato multi-cargo).
+ * Estructura: [{dedicacionSemanal: string, periodoHasta: "MM-YYYY", ...}].
+ *
+ * Vigencia por ítem: periodoHasta vacío = vigente; "MM-YYYY" < fechaCalculo = vencido (se ignora).
+ * Ítem vigente sin dedicacionSemanal numérico → indeterminado (FSD §3).
+ * Tiene precedencia sobre tiempoDedicacionGestionSemanal cuando el JSON es no vacío.
+ */
+export function parsearCargosAcademicosJson(
+  cargosAcademicosJson: string | null | undefined,
+  fechaCalculo: Date,
+): ResultadoParseoGestion {
+  if (!cargosAcademicosJson?.trim()) return { horas: 0, indeterminado: false };
+
+  let items: Array<Record<string, unknown>>;
+  try {
+    const parsed: unknown = JSON.parse(cargosAcademicosJson);
+    if (!Array.isArray(parsed) || parsed.length === 0) return { horas: 0, indeterminado: false };
+    items = parsed as Array<Record<string, unknown>>;
+  } catch {
+    return { horas: 0, indeterminado: false };
+  }
+
+  const año = fechaCalculo.getFullYear();
+  const mes = fechaCalculo.getMonth() + 1;
+
+  let horas = 0;
+  let indeterminado = false;
+
+  for (const item of items) {
+    const periodoHasta = String(item['periodoHasta'] ?? '').trim();
+
+    if (periodoHasta !== '') {
+      const partes = periodoHasta.split('-');
+      if (partes.length === 2) {
+        const mm = parseInt(partes[0], 10);
+        const yyyy = parseInt(partes[1], 10);
+        if (!isNaN(mm) && !isNaN(yyyy) && (yyyy < año || (yyyy === año && mm < mes))) {
+          continue; // cargo vencido
+        }
+      }
+    }
+
+    const raw = String(item['dedicacionSemanal'] ?? '').trim();
+    if (raw === '') {
+      indeterminado = true;
+    } else if (/^\d+(\.\d+)?$/.test(raw)) {
+      horas += parseFloat(raw);
+    } else {
+      indeterminado = true;
+    }
+  }
+
+  return { horas, indeterminado };
+}
+
 export interface ResultadoParseoNoAcademico {
   horas: number;
   tieneIndeterminados: boolean;
@@ -259,12 +315,9 @@ export class R03EvaluadorService implements IndicadorEvaluador<ResultadoR03> {
       const gestionDeclarada = (d.funcionGestion?.trim() ?? '') !== '';
 
       if (alcanceFacultad && docentesMultiFacultad.has(d.docenteId)) {
-        const g = parsearHorasGestion(
-          d.tiempoDedicacionGestionSemanal,
-          d.fechaFinGestion,
-          contexto.fechaEvaluacion,
-          gestionDeclarada,
-        );
+        const g = d.cargosAcademicosJson?.trim()
+          ? parsearCargosAcademicosJson(d.cargosAcademicosJson, contexto.fechaEvaluacion)
+          : parsearHorasGestion(d.tiempoDedicacionGestionSemanal, d.fechaFinGestion, contexto.fechaEvaluacion, gestionDeclarada);
         const na = parsearHorasNoAcademico(d.desempenoActualJson);
         const sumaParcial = d.horasDocenciaConocidas + g.horas + na.horas;
         noDeterminables.push({
@@ -280,12 +333,9 @@ export class R03EvaluadorService implements IndicadorEvaluador<ResultadoR03> {
         continue;
       }
 
-      const g = parsearHorasGestion(
-        d.tiempoDedicacionGestionSemanal,
-        d.fechaFinGestion,
-        contexto.fechaEvaluacion,
-        gestionDeclarada,
-      );
+      const g = d.cargosAcademicosJson?.trim()
+        ? parsearCargosAcademicosJson(d.cargosAcademicosJson, contexto.fechaEvaluacion)
+        : parsearHorasGestion(d.tiempoDedicacionGestionSemanal, d.fechaFinGestion, contexto.fechaEvaluacion, gestionDeclarada);
       const na = parsearHorasNoAcademico(d.desempenoActualJson);
       const tieneIndeterminados =
         d.tieneMateriaSinHoras || g.indeterminado || na.tieneIndeterminados;

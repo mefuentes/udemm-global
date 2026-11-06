@@ -95,12 +95,12 @@ function makeR09Result(
       materiasSinHoras: [],
       materiasConBloqueIndeterminado: [],
       horasTotal,
-      horasPorBloque: { CB: 600, TB: 800, TA: 900, CX: 400 },
+      horasPorBloque: { CB: 600, TB: 800, TA: 900, CTC: 400 },
       evaluaciones: {
         CB: { horasReales: 600, horasMinimas: 500, diferencia: 100, cumple: true },
         TB: { horasReales: 800, horasMinimas: 700, diferencia: 100, cumple: true },
         TA: { horasReales: 900, horasMinimas: 800, diferencia: 100, cumple: true },
-        CX: { horasReales: 400, horasMinimas: 300, diferencia: 100, cumple: true },
+        CTC: { horasReales: 400, horasMinimas: 300, diferencia: 100, cumple: true },
         total: {
           horasReales: horasTotal,
           horasMinimas: horasMinTotales,

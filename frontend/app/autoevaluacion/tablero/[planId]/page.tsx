@@ -25,7 +25,7 @@ const BLOQUE_NOMBRE: Record<string, string> = {
   CB:    'Ciencias Básicas (CB)',
   TB:    'Tecnologías Básicas (TB)',
   TA:    'Tecnologías Aplicadas (TA)',
-  CX:    'Cs. y Tec. Complementarias (CX)',
+  CTC:   'Cs. y Tec. Complementarias (CTC)',
   TOTAL: 'Total del plan',
 };
 

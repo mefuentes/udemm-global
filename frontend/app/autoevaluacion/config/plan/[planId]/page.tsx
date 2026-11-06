@@ -52,8 +52,8 @@ const PARAMETROS: Array<{ campo: CampoUmbral; codigo: string; nombre: string; de
   {
     campo: 'horasMinCTX',
     codigo: 'P-14',
-    nombre: 'Horas mínimas — Cs. y Tec. Complementarias (CTC/CX)',
-    descripcion: 'Umbral del bloque CTC/CX.',
+    nombre: 'Horas mínimas — Cs. y Tec. Complementarias (CTC)',
+    descripcion: 'Umbral del bloque CTC.',
   },
 ];
 

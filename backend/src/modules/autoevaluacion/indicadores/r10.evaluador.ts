@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConsultasAcademicasService } from '../consultas-academicas/consultas-academicas.service';
 import { EstadoCalculo } from '../types/estado-calculo.types';
-import { parsearHorasGestion } from './r03.evaluador';
+import { parsearHorasGestion, parsearCargosAcademicosJson } from './r03.evaluador';
 import type {
   ContextoEvaluacion,
   IndicadorEvaluador,
@@ -14,26 +14,138 @@ import type { DocentesParaR10 } from '../consultas-academicas/consultas-academic
 /** Umbral por defecto cuando p02BajaH no está configurado (FSD §5.3). */
 const UMBRAL_DEFAULT = 20;
 
+// ── Parsers de secciones JSON de ficha docente ────────────────────────────────
+
+/**
+ * Resultado común de los parsers de arrays JSON de dedicación.
+ * horas: suma de horas determinadas; indeterminado: algún ítem declarado sin horas parseables.
+ */
+interface ResultadoParserJson {
+  horas: number;
+  indeterminado: boolean;
+}
+
+const REGEX_HORAS = /^\d+(\.\d+)?$/;
+
+/**
+ * Parsea otrasDedicacionesJson (sección 5.2).
+ * Estructura: [{horasSeman: string}]. Si un ítem existe sin horasSeman numérico → indeterminado.
+ */
+export function parsearOtrasDedicaciones(json: string | null | undefined): ResultadoParserJson {
+  if (!json?.trim()) return { horas: 0, indeterminado: false };
+  let items: Array<{ horasSeman?: unknown }>;
+  try { items = JSON.parse(json); } catch { return { horas: 0, indeterminado: false }; }
+  if (!Array.isArray(items) || items.length === 0) return { horas: 0, indeterminado: false };
+  let horas = 0;
+  let indeterminado = false;
+  for (const item of items) {
+    const raw = String(item?.horasSeman ?? '').trim();
+    if (REGEX_HORAS.test(raw)) {
+      horas += parseFloat(raw);
+    } else {
+      indeterminado = true;
+    }
+  }
+  return { horas, indeterminado };
+}
+
+/**
+ * Parsea proyectosInvestigacionJson (sección 7.2).
+ * Estructura: [{horasSemanales: string, ...}]. Ítem en array = actividad declarada.
+ * horasSemanales vacío/no numérico en cualquier ítem → indeterminado (FSD §3).
+ */
+export function parsearProyectosInvestigacion(json: string | null | undefined): ResultadoParserJson {
+  if (!json?.trim()) return { horas: 0, indeterminado: false };
+  let items: Array<{ horasSemanales?: unknown }>;
+  try { items = JSON.parse(json); } catch { return { horas: 0, indeterminado: false }; }
+  if (!Array.isArray(items) || items.length === 0) return { horas: 0, indeterminado: false };
+  let horas = 0;
+  let indeterminado = false;
+  for (const item of items) {
+    const raw = String(item?.horasSemanales ?? '').trim();
+    if (REGEX_HORAS.test(raw)) {
+      horas += parseFloat(raw);
+    } else {
+      indeterminado = true;
+    }
+  }
+  return { horas, indeterminado };
+}
+
+/**
+ * Parsea participacionVinculacionJson (sección 7.3).
+ * Estructura: [{horasSemanales: string, ...}]. Mismo criterio que investigación.
+ */
+export function parsearParticipacionVinculacion(json: string | null | undefined): ResultadoParserJson {
+  if (!json?.trim()) return { horas: 0, indeterminado: false };
+  let items: Array<{ horasSemanales?: unknown }>;
+  try { items = JSON.parse(json); } catch { return { horas: 0, indeterminado: false }; }
+  if (!Array.isArray(items) || items.length === 0) return { horas: 0, indeterminado: false };
+  let horas = 0;
+  let indeterminado = false;
+  for (const item of items) {
+    const raw = String(item?.horasSemanales ?? '').trim();
+    if (REGEX_HORAS.test(raw)) {
+      horas += parseFloat(raw);
+    } else {
+      indeterminado = true;
+    }
+  }
+  return { horas, indeterminado };
+}
+
+/**
+ * Verifica si un docente tiene al menos un proyecto de investigación declarado (IP-06).
+ * Participante = al menos un ítem en el array JSON.
+ */
+export function tieneProyectoInvestigacion(json: string | null | undefined): boolean {
+  if (!json?.trim()) return false;
+  try {
+    const items = JSON.parse(json);
+    return Array.isArray(items) && items.length > 0;
+  } catch { return false; }
+}
+
+/**
+ * Verifica si un docente tiene participación de vinculación con horas > 0 (IP-06 vinculación).
+ * Participante = al menos un ítem con horasSemanales > 0.
+ */
+export function tieneVinculacionConHoras(json: string | null | undefined): boolean {
+  if (!json?.trim()) return false;
+  try {
+    const items: Array<{ horasSemanales?: unknown }> = JSON.parse(json);
+    if (!Array.isArray(items)) return false;
+    return items.some((item) => {
+      const raw = String(item?.horasSemanales ?? '').trim();
+      return REGEX_HORAS.test(raw) && parseFloat(raw) > 0;
+    });
+  } catch { return false; }
+}
+
 // ── Tipos de resultado ────────────────────────────────────────────────────────
 
 /**
  * Desglose de componentes horarios para R-10 (FSD §6: dedicación total).
- * Dedicación total = docencia + gestión + investigación + vinculación.
+ * DEDICACIÓN TOTAL = docencia(4.1) + gestión(5.1) + otras(5.2) + investigación(7.2) + vinculación(7.3).
  *
- * NOTA: desempeño no académico (desempenoActualJson) NO forma parte de esta fórmula;
- * pertenece a R-03 (carga para el tope). Ver FSD §6 distinción entre R-03 y R-10.
+ * NOTA: desempeño no académico (desempenoActualJson, sección 6.1) NO forma parte de esta fórmula;
+ * pertenece a R-03 (carga para el tope = 4.1 + 5.1 + 6.1). Ver FSD §6 distinción entre R-03 y R-10.
  */
 export interface ComponentesHorasR10 {
   horasDocencia: number;
   horasGestion: number;
+  /** Sección 5.2: otras dedicaciones universitarias. */
+  horasOtrasDedicaciones: number;
   horasInvestigacion: number;
   horasVinculacion: number;
   /** true = tiempoDedicacionGestionSemanal tiene valor pero no es numérico parseable,
    *  O funcionGestion declarada pero tiempoDedicacionGestionSemanal vacía (FSD §3). */
   gestionIndeterminada: boolean;
-  /** true = tiempoInvestigacion no numérico, o proyecto declarado sin horas (FSD §3). */
+  /** true = algún ítem en otrasDedicacionesJson sin horasSeman numérico (FSD §3). */
+  otrasDedicacionesIndeterminadas: boolean;
+  /** true = algún ítem en proyectosInvestigacionJson sin horasSemanales numérico (FSD §3). */
   investigacionIndeterminada: boolean;
-  /** true = tiempoExtension no numérico, o actividad declarada sin horas (FSD §3). */
+  /** true = algún ítem en participacionVinculacionJson sin horasSemanales numérico (FSD §3). */
   vinculacionIndeterminada: boolean;
 }
 
@@ -79,16 +191,14 @@ export interface ResultadoR10 {
 /**
  * Evaluador de R-10: Docentes con baja dedicación horaria total (FSD §6).
  *
- * Fórmula: dedicación total = docencia + gestión + investigación + vinculación.
+ * Fórmula: DEDICACIÓN TOTAL = docencia(4.1) + gestión(5.1) + otras(5.2) + investigación(7.2) + vinculación(7.3).
  * Umbral: p02BajaH de AutoevaluacionConfigFacultad; 20h semanales si no configurado.
  *
  * Reglas de indeterminación (FSD §3 — no asumir 0h):
- *   - Campo de horas no numérico → indeterminado.
- *   - Actividad declarada (funcionGestion / tituloProyectoInvestigacion /
- *     rolActividadExtension) pero campo de horas vacío → indeterminado.
- *   - Actividad no declarada y campo de horas vacío → 0h (opcional ausente).
+ *   - Array JSON con al menos un ítem sin horasSeman/horasSemanales numérico → indeterminado.
+ *   - Array JSON vacío o null → 0h (sección no declarada).
  *
- * Fuente: obtenerDocentesParaR10 (agrega por docenteId, incluye campos investigación/vinculación).
+ * Fuente: obtenerDocentesParaR10 (agrega por docenteId, incluye otrasDedicacionesJson, proyectosInvestigacionJson, participacionVinculacionJson).
  */
 @Injectable()
 export class R10EvaluadorService implements IndicadorEvaluador<ResultadoR10> {
@@ -147,31 +257,20 @@ export class R10EvaluadorService implements IndicadorEvaluador<ResultadoR10> {
 
       const esCrossFacultad = docentesMultiFacultad.has(d.docenteId);
 
-      const g = parsearHorasGestion(
-        d.tiempoDedicacionGestionSemanal,
-        d.fechaFinGestion,
-        contexto.fechaEvaluacion,
-        !!(d.funcionGestion?.trim()),
-      );
-      const inv = parsearHorasGestion(
-        d.tiempoInvestigacion,
-        d.fechaFinProyectoInvestigacion,
-        contexto.fechaEvaluacion,
-        !!(d.tituloProyectoInvestigacion?.trim()),
-      );
-      const vin = parsearHorasGestion(
-        d.tiempoExtension,
-        d.finEstadoActividadExtension,
-        contexto.fechaEvaluacion,
-        !!(d.rolActividadExtension?.trim()),
-      );
+      const g = d.cargosAcademicosJson?.trim()
+        ? parsearCargosAcademicosJson(d.cargosAcademicosJson, contexto.fechaEvaluacion)
+        : parsearHorasGestion(d.tiempoDedicacionGestionSemanal, d.fechaFinGestion, contexto.fechaEvaluacion, !!(d.funcionGestion?.trim()));
+      const otras = parsearOtrasDedicaciones(d.otrasDedicacionesJson);
+      const inv   = parsearProyectosInvestigacion(d.proyectosInvestigacionJson);
+      const vin   = parsearParticipacionVinculacion(d.participacionVinculacionJson);
 
       const tieneComponentesIndeterminados =
-        g.indeterminado || inv.indeterminado || vin.indeterminado;
+        g.indeterminado || otras.indeterminado || inv.indeterminado || vin.indeterminado;
       if (tieneComponentesIndeterminados) hayDatosIncompletos = true;
 
+      // DEDICACIÓN TOTAL = docencia(4.1) + gestión(5.1) + otras(5.2) + investigación(7.2) + vinculación(7.3)
       const horasConocidas =
-        d.horasDocenciaConocidas + g.horas + inv.horas + vin.horas;
+        d.horasDocenciaConocidas + g.horas + otras.horas + inv.horas + vin.horas;
 
       if (horasConocidas < umbral) {
         const incierto =
@@ -185,9 +284,11 @@ export class R10EvaluadorService implements IndicadorEvaluador<ResultadoR10> {
           componentes: {
             horasDocencia: d.horasDocenciaConocidas,
             horasGestion: g.horas,
+            horasOtrasDedicaciones: otras.horas,
             horasInvestigacion: inv.horas,
             horasVinculacion: vin.horas,
             gestionIndeterminada: g.indeterminado,
+            otrasDedicacionesIndeterminadas: otras.indeterminado,
             investigacionIndeterminada: inv.indeterminado,
             vinculacionIndeterminada: vin.indeterminado,
           },
@@ -209,11 +310,11 @@ export class R10EvaluadorService implements IndicadorEvaluador<ResultadoR10> {
         ? [
             {
               campo:
-                'cargaHorariaSemanal / tiempoDedicacionGestionSemanal / tiempoInvestigacion / tiempoExtension',
+                'cargaHorariaSemanal / tiempoDedicacionGestionSemanal / otrasDedicacionesJson / proyectosInvestigacionJson / participacionVinculacionJson',
               entidad: 'Materia / Docente',
               descripcion:
                 'Algunas horas no son determinables: materias sin cargaHorariaSemanal, ' +
-                'gestión/investigación/vinculación con valores no numéricos o actividades declaradas sin horas.',
+                'gestión/otras-dedicaciones/investigación/vinculación con ítems sin horas numéricas (FSD §3).',
             },
           ]
         : [];

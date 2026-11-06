@@ -6,7 +6,15 @@ import type {
   ConfigFacultadAut,
 } from '../consultas-academicas/consultas-academicas.types';
 import type { ContextoEvaluacion } from './indicadores.types';
-import { R10EvaluadorService, type ResultadoR10 } from './r10.evaluador';
+import {
+  R10EvaluadorService,
+  parsearOtrasDedicaciones,
+  parsearProyectosInvestigacion,
+  parsearParticipacionVinculacion,
+  tieneProyectoInvestigacion,
+  tieneVinculacionConHoras,
+  type ResultadoR10,
+} from './r10.evaluador';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -34,12 +42,10 @@ function mkDocente(overrides: Partial<DocenteVigenteR10> = {}): DocenteVigenteR1
     fechaFinGestion: null,
     funcionGestion: null,
     desempenoActualJson: null,
-    tiempoInvestigacion: null,
-    tituloProyectoInvestigacion: null,
-    fechaFinProyectoInvestigacion: null,
-    tiempoExtension: null,
-    rolActividadExtension: null,
-    finEstadoActividadExtension: null,
+    cargosAcademicosJson: null,
+    otrasDedicacionesJson: null,
+    proyectosInvestigacionJson: null,
+    participacionVinculacionJson: null,
     ...overrides,
   };
 }
@@ -201,30 +207,34 @@ describe('R10EvaluadorService', () => {
     expect(v.enAlerta).toHaveLength(0);
   });
 
-  // ── FSD §6: fórmula correcta docencia + gestión + investigación + vinculación ─
+  // ── FSD §6: fórmula correcta — DEDICACIÓN TOTAL = docencia + gestión + otras + investigación + vinculación ─
 
-  it('TC-13: docencia + gestión + investigación + vinculación sacan al docente del umbral', async () => {
+  it('TC-13: docencia + gestión + otras + investigación + vinculación suman al docente fuera del umbral', async () => {
     const data = mkData({
       docentes: [
         mkDocente({
           horasDocenciaConocidas: 6,
           tiempoDedicacionGestionSemanal: '4',
-          tiempoInvestigacion: '5',
-          tiempoExtension: '6',
+          otrasDedicacionesJson: JSON.stringify([{ horasSeman: '3' }]),
+          proyectosInvestigacionJson: JSON.stringify([{ titulo: 'IA', horasSemanales: '4' }]),
+          participacionVinculacionJson: JSON.stringify([{ actividad: 'Ext', horasSemanales: '4' }]),
         }),
       ],
     });
     const { svc } = makeSvc(data, mkConfig({ p02BajaH: 20 }));
     const r = await svc.evaluar(mkCtx());
     const v = r.valor as ResultadoR10;
-    // 6 + 4 + 5 + 6 = 21 ≥ 20 → sin alerta
+    // 6 + 4 + 3 + 4 + 4 = 21 ≥ 20 → sin alerta
     expect(v.enAlerta).toHaveLength(0);
     expect(r.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
   });
 
   it('TC-14: investigación "0" explícito → horas=0, no indeterminado → incierto=false', async () => {
     const data = mkData({
-      docentes: [mkDocente({ horasDocenciaConocidas: 5, tiempoInvestigacion: '0' })],
+      docentes: [mkDocente({
+        horasDocenciaConocidas: 5,
+        proyectosInvestigacionJson: JSON.stringify([{ titulo: 'IA', horasSemanales: '0' }]),
+      })],
     });
     const { svc } = makeSvc(data, mkConfig({ p02BajaH: 20 }));
     const r = await svc.evaluar(mkCtx());
@@ -236,12 +246,11 @@ describe('R10EvaluadorService', () => {
     expect(r.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
   });
 
-  it('TC-15: investigación null sin actividad declarada → 0h, no indeterminado', async () => {
+  it('TC-15: proyectosInvestigacionJson null (sin proyectos) → 0h, no indeterminado', async () => {
     const data = mkData({
       docentes: [mkDocente({
         horasDocenciaConocidas: 5,
-        tiempoInvestigacion: null,
-        tituloProyectoInvestigacion: null, // sin actividad declarada
+        proyectosInvestigacionJson: null,
       })],
     });
     const { svc } = makeSvc(data, mkConfig({ p02BajaH: 20 }));
@@ -252,10 +261,13 @@ describe('R10EvaluadorService', () => {
     expect(v.enAlerta[0].incierto).toBe(false);
   });
 
-  it('TC-16: investigación con valor no numérico → investigacionIndeterminada=true → incierto=true, PARCIAL', async () => {
+  it('TC-16: proyecto con horasSemanales no numérico → investigacionIndeterminada=true → incierto=true, PARCIAL', async () => {
     const data = mkData({
       docentes: [
-        mkDocente({ horasDocenciaConocidas: 5, tiempoInvestigacion: 'N/A' }),
+        mkDocente({
+          horasDocenciaConocidas: 5,
+          proyectosInvestigacionJson: JSON.stringify([{ titulo: 'X', horasSemanales: 'N/A' }]),
+        }),
       ],
     });
     const { svc } = makeSvc(data, mkConfig({ p02BajaH: 20 }));
@@ -269,13 +281,12 @@ describe('R10EvaluadorService', () => {
     expect(r.datosFaltantes).toHaveLength(1);
   });
 
-  it('TC-17: proyecto investigación declarado (tituloProyectoInvestigacion) sin horas → INDETERMINADO (FSD §3)', async () => {
+  it('TC-17: proyecto declarado con horasSemanales vacío → INDETERMINADO (FSD §3)', async () => {
     const data = mkData({
       docentes: [
         mkDocente({
           horasDocenciaConocidas: 8,
-          tiempoInvestigacion: null,
-          tituloProyectoInvestigacion: 'Proyecto IA aplicada',
+          proyectosInvestigacionJson: JSON.stringify([{ titulo: 'IA aplicada', horasSemanales: '' }]),
         }),
       ],
     });
@@ -292,54 +303,56 @@ describe('R10EvaluadorService', () => {
       docentes: [
         mkDocente({
           horasDocenciaConocidas: 10,
-          tiempoInvestigacion: '6',
-          tiempoExtension: '4',
+          proyectosInvestigacionJson: JSON.stringify([{ titulo: 'X', horasSemanales: '6' }]),
+          participacionVinculacionJson: JSON.stringify([{ actividad: 'Y', horasSemanales: '4' }]),
         }),
       ],
     });
     const { svc } = makeSvc(data, mkConfig({ p02BajaH: 20 }));
     const r = await svc.evaluar(mkCtx());
     const v = r.valor as ResultadoR10;
-    // 10 + 0 + 6 + 4 = 20 → no estrictamente menor
+    // 10 + 0 + 0 + 6 + 4 = 20 → no estrictamente menor
     expect(v.enAlerta).toHaveLength(0);
     expect(r.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
   });
 
-  it('TC-19: componentes refleja los cuatro valores (docencia+gestión+inv+vin) en entrada de alerta', async () => {
+  it('TC-19: componentes refleja los cinco valores (docencia+gestión+otras+inv+vin) en entrada de alerta', async () => {
     const data = mkData({
       docentes: [
         mkDocente({
           horasDocenciaConocidas: 3,
           tiempoDedicacionGestionSemanal: '2',
-          tiempoInvestigacion: '2',
-          tiempoExtension: '1',
+          otrasDedicacionesJson: JSON.stringify([{ horasSeman: '1' }]),
+          proyectosInvestigacionJson: JSON.stringify([{ titulo: 'X', horasSemanales: '2' }]),
+          participacionVinculacionJson: JSON.stringify([{ actividad: 'Y', horasSemanales: '1' }]),
         }),
       ],
     });
     const { svc } = makeSvc(data, mkConfig({ p02BajaH: 20 }));
     const r = await svc.evaluar(mkCtx());
     const v = r.valor as ResultadoR10;
-    // 3 + 2 + 2 + 1 = 8 < 20 → en alerta
+    // 3 + 2 + 1 + 2 + 1 = 9 < 20 → en alerta
     expect(v.enAlerta).toHaveLength(1);
     const comp = v.enAlerta[0].componentes;
     expect(comp.horasDocencia).toBe(3);
     expect(comp.horasGestion).toBe(2);
+    expect(comp.horasOtrasDedicaciones).toBe(1);
     expect(comp.horasInvestigacion).toBe(2);
     expect(comp.horasVinculacion).toBe(1);
     expect(comp.gestionIndeterminada).toBe(false);
+    expect(comp.otrasDedicacionesIndeterminadas).toBe(false);
     expect(comp.investigacionIndeterminada).toBe(false);
     expect(comp.vinculacionIndeterminada).toBe(false);
-    expect(v.enAlerta[0].horasConocidas).toBe(8);
+    expect(v.enAlerta[0].horasConocidas).toBe(9);
     expect(v.enAlerta[0].incierto).toBe(false);
   });
 
-  it('TC-20: vinculación con actividad declarada (rolActividadExtension) sin horas → INDETERMINADO (FSD §3)', async () => {
+  it('TC-20: vinculación con horasSemanales vacío → vinculacionIndeterminada=true, PARCIAL (FSD §3)', async () => {
     const data = mkData({
       docentes: [
         mkDocente({
           horasDocenciaConocidas: 6,
-          tiempoExtension: null,
-          rolActividadExtension: 'Coordinador extensión',
+          participacionVinculacionJson: JSON.stringify([{ actividad: 'Coordinación', horasSemanales: '' }]),
         }),
       ],
     });
@@ -349,5 +362,172 @@ describe('R10EvaluadorService', () => {
     expect(v.enAlerta[0].incierto).toBe(true);
     expect(v.enAlerta[0].componentes.vinculacionIndeterminada).toBe(true);
     expect(r.estadoCalculo).toBe(EstadoCalculo.PARCIAL);
+  });
+
+  // ── Parsers de JSON — tests unitarios ─────────────────────────────────────────
+
+  describe('parsearOtrasDedicaciones', () => {
+    it('null → {horas:0, indeterminado:false}', () => {
+      expect(parsearOtrasDedicaciones(null)).toEqual({ horas: 0, indeterminado: false });
+    });
+    it('array vacío → {horas:0, indeterminado:false}', () => {
+      expect(parsearOtrasDedicaciones('[]')).toEqual({ horas: 0, indeterminado: false });
+    });
+    it('suma ítems numéricos', () => {
+      const json = JSON.stringify([{ horasSeman: '3' }, { horasSeman: '2' }]);
+      expect(parsearOtrasDedicaciones(json)).toEqual({ horas: 5, indeterminado: false });
+    });
+    it('ítem con horasSeman vacío → indeterminado=true', () => {
+      const json = JSON.stringify([{ horasSeman: '' }]);
+      expect(parsearOtrasDedicaciones(json)).toEqual({ horas: 0, indeterminado: true });
+    });
+    it('JSON inválido → {horas:0, indeterminado:false}', () => {
+      expect(parsearOtrasDedicaciones('no-json')).toEqual({ horas: 0, indeterminado: false });
+    });
+  });
+
+  describe('parsearProyectosInvestigacion', () => {
+    it('null → {horas:0, indeterminado:false}', () => {
+      expect(parsearProyectosInvestigacion(null)).toEqual({ horas: 0, indeterminado: false });
+    });
+    it('suma ítems numéricos', () => {
+      const json = JSON.stringify([{ horasSemanales: '8' }, { horasSemanales: '4' }]);
+      expect(parsearProyectosInvestigacion(json)).toEqual({ horas: 12, indeterminado: false });
+    });
+    it('ítem con horasSemanales vacío → indeterminado=true', () => {
+      const json = JSON.stringify([{ titulo: 'X', horasSemanales: '' }]);
+      expect(parsearProyectosInvestigacion(json)).toEqual({ horas: 0, indeterminado: true });
+    });
+    it('"0" explícito → horas=0, no indeterminado', () => {
+      const json = JSON.stringify([{ horasSemanales: '0' }]);
+      expect(parsearProyectosInvestigacion(json)).toEqual({ horas: 0, indeterminado: false });
+    });
+  });
+
+  describe('parsearParticipacionVinculacion', () => {
+    it('null → {horas:0, indeterminado:false}', () => {
+      expect(parsearParticipacionVinculacion(null)).toEqual({ horas: 0, indeterminado: false });
+    });
+    it('suma ítems numéricos', () => {
+      const json = JSON.stringify([{ horasSemanales: '5' }, { horasSemanales: '3' }]);
+      expect(parsearParticipacionVinculacion(json)).toEqual({ horas: 8, indeterminado: false });
+    });
+    it('ítem no numérico → indeterminado=true', () => {
+      const json = JSON.stringify([{ horasSemanales: 'parcial' }]);
+      expect(parsearParticipacionVinculacion(json)).toEqual({ horas: 0, indeterminado: true });
+    });
+  });
+
+  describe('tieneProyectoInvestigacion', () => {
+    it('null → false', () => expect(tieneProyectoInvestigacion(null)).toBe(false));
+    it('array vacío → false', () => expect(tieneProyectoInvestigacion('[]')).toBe(false));
+    it('un ítem → true', () => {
+      expect(tieneProyectoInvestigacion(JSON.stringify([{ titulo: 'X' }]))).toBe(true);
+    });
+  });
+
+  describe('tieneVinculacionConHoras', () => {
+    it('null → false', () => expect(tieneVinculacionConHoras(null)).toBe(false));
+    it('"0" → false (no tiene horas > 0)', () => {
+      expect(tieneVinculacionConHoras(JSON.stringify([{ horasSemanales: '0' }]))).toBe(false);
+    });
+    it('"5" → true', () => {
+      expect(tieneVinculacionConHoras(JSON.stringify([{ horasSemanales: '5' }]))).toBe(true);
+    });
+    it('varios ítems: al menos uno > 0 → true', () => {
+      const json = JSON.stringify([{ horasSemanales: '0' }, { horasSemanales: '3' }]);
+      expect(tieneVinculacionConHoras(json)).toBe(true);
+    });
+  });
+
+  // ── Separación de fórmulas R-03 / R-10 ───────────────────────────────────────
+
+  it('TC-INT-6: secciones 5.2+7.2+7.3 acumulan DedicaciónTotal alta sin afectar Carga R-03', async () => {
+    // docencia=5h, otras(5.2)=25h, inv(7.2)=20h, vin(7.3)=15h
+    // → DedTotal R-10 = 5+0+25+20+15 = 65h ≥ 20 → sin alerta R-10
+    // → Carga R-03 = docencia(5)+gestión(0)+desempeño(0) = 5h < 60 → sin alerta R-03
+    // (DocenteVigenteR03 no expone otrasDedicacionesJson/proyectosInvestigacionJson/
+    //  participacionVinculacionJson → R-03 no puede contarlos: garantía de tipo TS)
+    const data = mkData({
+      docentes: [
+        mkDocente({
+          horasDocenciaConocidas: 5,
+          otrasDedicacionesJson: JSON.stringify([{ horasSeman: '25' }]),
+          proyectosInvestigacionJson: JSON.stringify([{ titulo: 'IA', horasSemanales: '20' }]),
+          participacionVinculacionJson: JSON.stringify([{ actividad: 'Ext', horasSemanales: '15' }]),
+        }),
+      ],
+    });
+    const { svc } = makeSvc(data, mkConfig({ p02BajaH: 20 }));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR10;
+    // DedTotal = 65 ≥ 20 → sin alerta
+    expect(v.enAlerta).toHaveLength(0);
+    expect(r.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+  });
+
+  it('TC-INT-7: sección 6.1 (desempeño no académico) no contribuye a Dedicación Total R-10', async () => {
+    // docencia=20h, gestión=20h, desempeño(6.1)=25h
+    // → Carga R-03 = 20+20+25 = 65h > 60 → alerta R-03
+    // → DedTotal R-10 = 20+20+0+0+0 = 40h (desempeñoActualJson ignorado por R-10)
+    const data = mkData({
+      docentes: [
+        mkDocente({
+          horasDocenciaConocidas: 20,
+          tiempoDedicacionGestionSemanal: '20',
+          desempenoActualJson: '[{"dedicacionSeman":"25"}]',
+        }),
+      ],
+    });
+    const { svc } = makeSvc(data, mkConfig({ p02BajaH: 50 }));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR10;
+    // R-10 ignora desempenoActualJson: DedTotal = 40 < 50 → alerta
+    expect(v.enAlerta).toHaveLength(1);
+    expect(v.enAlerta[0].horasConocidas).toBe(40);
+    const comp = v.enAlerta[0].componentes;
+    expect(comp.horasDocencia).toBe(20);
+    expect(comp.horasGestion).toBe(20);
+    expect(comp.horasOtrasDedicaciones).toBe(0);
+    expect(comp.horasInvestigacion).toBe(0);
+    expect(comp.horasVinculacion).toBe(0);
+  });
+
+  it('TC-INT-8: gestión desde cargosAcademicosJson vigente suma correctamente (caso PROFE INDUSTRIAL)', async () => {
+    const data = mkData({
+      docentes: [
+        mkDocente({
+          horasDocenciaConocidas: 4,
+          cargosAcademicosJson: JSON.stringify([{ dedicacionSemanal: '12', periodoHasta: '11-2026' }]),
+          otrasDedicacionesJson: JSON.stringify([{ horasSeman: '5' }]),
+          proyectosInvestigacionJson: JSON.stringify([{ titulo: 'PROY-TEC', horasSemanales: '8' }]),
+          participacionVinculacionJson: JSON.stringify([{ actividad: 'PVF-001', horasSemanales: '4' }]),
+        }),
+      ],
+    });
+    const { svc } = makeSvc(data, mkConfig({ p02BajaH: 30 }));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR10;
+    // R-10 = 4+12+5+8+4 = 33 ≥ 30 → NO alerta
+    expect(v.enAlerta).toHaveLength(0);
+    expect(r.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+  });
+
+  it('TC-INT-9: cargosAcademicosJson vencido se ignora y el scalar también nulo → gestion=0', async () => {
+    const data = mkData({
+      docentes: [
+        mkDocente({
+          horasDocenciaConocidas: 4,
+          cargosAcademicosJson: JSON.stringify([{ dedicacionSemanal: '12', periodoHasta: '09-2026' }]),
+        }),
+      ],
+    });
+    const { svc } = makeSvc(data, mkConfig({ p02BajaH: 10 }));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR10;
+    // cargo vencido (sep 2026 < oct 2026) → gestión=0, total=4 < 10 → alerta
+    expect(v.enAlerta).toHaveLength(1);
+    expect(v.enAlerta[0].componentes.horasGestion).toBe(0);
+    expect(v.enAlerta[0].horasConocidas).toBe(4);
   });
 });

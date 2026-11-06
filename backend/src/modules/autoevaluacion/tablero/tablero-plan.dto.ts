@@ -78,11 +78,11 @@ export interface ResultadoIPL03 {
 
 /**
  * Evaluación de un bloque curricular para IPL-05.
- * CX en este backend corresponde al bloque CTC del FSD (P-14, horasMinCTX en Prisma).
+ * CTC corresponde al campo horasMinCTX del plan de estudio (Ciencias y Tecn. Complementarias).
  */
 export interface EvaluacionBloqueIPL05 {
-  /** Código del bloque. CX = CTC del FSD §4.2. TOTAL = suma del plan completo. */
-  bloque: 'CB' | 'TB' | 'TA' | 'CX' | 'TOTAL';
+  /** Código del bloque. CTC = Ciencias y Tecnologías Complementarias (FSD §4.2). TOTAL = suma del plan completo. */
+  bloque: 'CB' | 'TB' | 'TA' | 'CTC' | 'TOTAL';
   horasReales: number | null;
   /** null = umbral no configurado para este bloque. */
   horasMinimas: number | null;
@@ -94,7 +94,7 @@ export interface EvaluacionBloqueIPL05 {
 
 /** FSD §8, Tabla 25, IPL-05 — Horas por tipo de bloque curricular. Derivado de R-09. */
 export interface ResultadoIPL05 {
-  /** Bloques CB, TB, TA, CX y TOTAL (en ese orden). */
+  /** Bloques CB, TB, TA, CTC y TOTAL (en ese orden). */
   bloques: EvaluacionBloqueIPL05[];
   estadoCalculo: EstadoCalculo;
 }

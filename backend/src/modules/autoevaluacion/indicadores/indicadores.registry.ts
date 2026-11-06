@@ -221,13 +221,7 @@ export class RegistroIndicadores {
       severidad: 'INFORMATIVA',
       alcance: 'DOCENTE',
       grupo: 'DOCENTES',
-      estadoImplementacion: 'PARCIAL',
-      motivoPendiente:
-        'FSD §6.2 exige dedicación total (docencia + gestión + investigación + vinculación). ' +
-        'CIERRE-03 Fase A: evaluador incluye docencia (cargaHorariaSemanal), gestión ' +
-        '(tiempoDedicacionGestionSemanal) y desempeño no académico (desempenoActualJson). ' +
-        'Pendiente: horas de investigación y vinculación no disponibles en el modelo actual; ' +
-        'D-09 confirmación institucional del umbral P-02.',
+      estadoImplementacion: 'IMPLEMENTADO',
       parametros: [
         {
           codigo: 'P-02',
@@ -287,7 +281,7 @@ export class RegistroIndicadores {
       codigo: 'R-09',
       nombre: 'Umbrales horarios del plan de estudios',
       descripcion:
-        'El plan debe superar las horas mínimas totales (horasMinTotales) y las de cada bloque curricular (CB, TB, TA, CX → horasMinCTX).',
+        'El plan debe superar las horas mínimas totales (horasMinTotales) y las de cada bloque curricular (CB, TB, TA, CTC → horasMinCTX).',
       tipo: 'ALERTA',
       severidad: 'ALTA',
       alcance: 'PLAN',

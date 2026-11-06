@@ -274,8 +274,8 @@ describe('RegistroIndicadores', () => {
     expect(codigos).not.toContain('R-05');
   });
 
-  it('estado inicial post-CIERRE-01: 11 indicadores IMPLEMENTADO, R-10 y R-03 PARCIAL con motivoPendiente', () => {
-    const parciales = new Set(['R-10', 'R-03']);
+  it('estado inicial: 12 indicadores IMPLEMENTADO, solo R-03 PARCIAL con motivoPendiente', () => {
+    const parciales = new Set(['R-03']);
     for (const d of registro.listar()) {
       if (parciales.has(d.codigo)) {
         expect(d.estadoImplementacion).toBe('PARCIAL');
@@ -289,10 +289,10 @@ describe('RegistroIndicadores', () => {
     const r13 = registro.obtener('R-13')!;
     expect(r13.estadoImplementacion).toBe('IMPLEMENTADO');
     expect(r13.motivoPendiente).toBeUndefined();
-    // R-10: PARCIAL — cobertura FSD §6.2 incompleta (solo cargaHorariaSemanal, falta investigación/vinculación)
+    // R-10: IMPLEMENTADO — fórmula completa (docencia + gestión + otras + investigación + vinculación)
     const r10 = registro.obtener('R-10')!;
-    expect(r10.estadoImplementacion).toBe('PARCIAL');
-    expect(r10.motivoPendiente).toBeDefined();
+    expect(r10.estadoImplementacion).toBe('IMPLEMENTADO');
+    expect(r10.motivoPendiente).toBeUndefined();
     // R-03: PARCIAL — evaluador carrera-scope implementado, falta evaluador docente-céntrico global
     const r03 = registro.obtener('R-03')!;
     expect(r03.estadoImplementacion).toBe('PARCIAL');
