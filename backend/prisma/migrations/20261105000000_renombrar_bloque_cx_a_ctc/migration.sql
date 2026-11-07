@@ -1,4 +1,4 @@
-﻿-- Migracion: renombrar codigo de bloque de conocimiento CX -> CTC
+-- Migracion: renombrar codigo de bloque de conocimiento CX -> CTC
 --
 -- El bloque "Ciencias y Tecnologias Complementarias" usaba el codigo "CX" en registros
 -- existentes. A partir de esta migracion el codigo canonico es "CTC", alineado con el FSD.
