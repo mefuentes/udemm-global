@@ -514,3 +514,31 @@ describe('R08EvaluadorService — integración con RegistroIndicadores', () => {
     expect(def.evaluador).toBe(ev);
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// E.2 — universo de materias vigentes (ACTIVO)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('R08EvaluadorService — E.2 universo de materias vigentes (ACTIVO)', () => {
+
+  it('totalMaterias refleja exactamente las N materias devueltas por consultas', async () => {
+    const ev = makeEvaluador(makeConsultas([makeMateria(MAT_A), makeMateria(MAT_B)], []));
+    const res = await ev.evaluar(makeCtx());
+    expect(res.valor?.totalMaterias).toBe(2);
+    expect(res.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+  });
+
+  it('materia fuera del universo vigente no afecta cobertura — guard materiasMap', async () => {
+    // mat-inactivo no está en el universo; su vinculación APROBADA debe ser ignorada
+    const ev = makeEvaluador(makeConsultas(
+      [makeMateria(MAT_A)],
+      [
+        makeVinc('mat-inactivo', 'APROBADA', null),
+        makeVinc(MAT_A, 'APROBADA', true),
+      ],
+    ));
+    const res = await ev.evaluar(makeCtx());
+    expect(res.valor?.totalMaterias).toBe(1);
+    expect(res.valor?.materiasConAlerta).toHaveLength(0);
+  });
+});

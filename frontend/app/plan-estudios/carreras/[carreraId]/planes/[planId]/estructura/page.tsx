@@ -28,11 +28,9 @@ const BLOQUES_CONOCIMIENTO = [
   { codigo: 'TA',  label: 'TA - Tecnologías Aplicadas' },
   { codigo: 'CTC', label: 'CTC - Cs. y Tecn. Complementarias' },
   { codigo: 'EL',  label: 'EL - Electivas' },
-  { codigo: 'PI',  label: 'PI - Proyecto Final Integrador' },
-  { codigo: 'PPS', label: 'PPS - Prácticas Profesionales Supervisadas' },
 ];
 
-const TIPOS_ASIGNATURA   = ['OBLIGATORIA', 'ELECTIVA'];
+const TIPOS_ASIGNATURA   = ['OBLIGATORIA', 'ELECTIVA', 'OPTATIVA', 'PPS', 'PI'];
 const ESTADOS_ASIGNATURA = ['ACTIVO', 'INACTIVO'];
 const MODALIDADES_DICTADO = [
   { value: 'PRESENCIAL', label: 'Presencial' },
@@ -40,10 +38,18 @@ const MODALIDADES_DICTADO = [
   { value: 'HÍBRIDA',    label: 'Híbrida' },
 ];
 
+const REGIMENES = ['Cuatrimestral', 'Anual'];
+
+function calcularSemanales(total: string, regimen: string): number | null {
+  const t = parseInt(total, 10);
+  if (!t || !regimen) return null;
+  return Math.round(t / (regimen === 'Anual' ? 32 : 16));
+}
+
 const MATERIA_VACIA = {
   codigo: '', nombre: '', descripcion: '', anio: '',
   cuatrimestre: '', bloqueConocimiento: '', modalidadDictado: '',
-  cargaHorariaSemanal: '', cargaHorariaTotal: '', creditos: '',
+  regimenCursado: '', cargaHorariaTotal: '', creditos: '',
   tipoAsignatura: 'OBLIGATORIA', estado: 'ACTIVO', observaciones: '',
 };
 type FormMateria = typeof MATERIA_VACIA;
@@ -68,7 +74,7 @@ interface Materia {
   bloqueConocimiento?: string; modalidadDictado?: string;
   cargaHorariaSemanal?: number; cargaHorariaTotal?: number;
   creditos: number; tipoAsignatura: string; estado: string;
-  descripcion?: string; observaciones?: string; planEstudioId: string;
+  descripcion?: string; observaciones?: string; regimenCursado?: string; planEstudioId: string;
   vinculaciones?: { docente: DocenteVinculado }[];
 }
 interface CorrelativaItem {
@@ -308,8 +314,8 @@ export default function EstructuraCurricularPage() {
       codigo: m.codigo, nombre: m.nombre, descripcion: m.descripcion ?? '',
       anio: m.anio?.toString() ?? '', cuatrimestre: m.cuatrimestre?.toString() ?? '',
       bloqueConocimiento: m.bloqueConocimiento ?? '', modalidadDictado: m.modalidadDictado ?? '',
-      cargaHorariaSemanal: m.cargaHorariaSemanal?.toString() ?? '',
       cargaHorariaTotal: m.cargaHorariaTotal?.toString() ?? '',
+      regimenCursado: m.regimenCursado ?? '',
       creditos: m.creditos?.toString() ?? '',
       tipoAsignatura: m.tipoAsignatura, estado: m.estado, observaciones: m.observaciones ?? '',
     });
@@ -323,6 +329,9 @@ export default function EstructuraCurricularPage() {
     if (!formMateria.codigo.trim() || !formMateria.nombre.trim()) {
       alert('El código y el nombre son obligatorios.'); return;
     }
+    if (formMateria.regimenCursado === 'Cuatrimestral' && (formMateria.cuatrimestre === '' || formMateria.cuatrimestre === '0')) {
+      alert('Seleccioná 1° o 2° Cuatrimestre antes de guardar una asignatura cuatrimestral.'); return;
+    }
     setGuardando(true);
     try {
       if (materiaEditar) {
@@ -332,10 +341,10 @@ export default function EstructuraCurricularPage() {
           descripcion: formMateria.descripcion.trim() || null,
           bloqueConocimiento: formMateria.bloqueConocimiento || null,
           modalidadDictado: formMateria.modalidadDictado || null,
+          regimenCursado: formMateria.regimenCursado || null,
           observaciones: formMateria.observaciones.trim() || null,
           anio:               formMateria.anio               !== '' ? parseInt(formMateria.anio)               : null,
           cuatrimestre:       formMateria.cuatrimestre       !== '' ? parseInt(formMateria.cuatrimestre)       : null,
-          cargaHorariaSemanal:formMateria.cargaHorariaSemanal!== '' ? parseInt(formMateria.cargaHorariaSemanal) : null,
           cargaHorariaTotal:  formMateria.cargaHorariaTotal  !== '' ? parseInt(formMateria.cargaHorariaTotal)  : null,
           creditos: formMateria.creditos !== '' ? parseInt(formMateria.creditos) : 0,
         };
@@ -351,7 +360,7 @@ export default function EstructuraCurricularPage() {
         if (formMateria.cuatrimestre !== '')  payload.cuatrimestre         = parseInt(formMateria.cuatrimestre);
         if (formMateria.bloqueConocimiento)   payload.bloqueConocimiento   = formMateria.bloqueConocimiento;
         if (formMateria.modalidadDictado)     payload.modalidadDictado     = formMateria.modalidadDictado;
-        if (formMateria.cargaHorariaSemanal)  payload.cargaHorariaSemanal  = parseInt(formMateria.cargaHorariaSemanal);
+        if (formMateria.regimenCursado)        payload.regimenCursado       = formMateria.regimenCursado;
         if (formMateria.cargaHorariaTotal)    payload.cargaHorariaTotal    = parseInt(formMateria.cargaHorariaTotal);
         if (formMateria.creditos)             payload.creditos             = parseInt(formMateria.creditos);
         if (formMateria.observaciones.trim()) payload.observaciones        = formMateria.observaciones.trim();
@@ -626,7 +635,7 @@ export default function EstructuraCurricularPage() {
                     {cuatrisOrdenados.map((cuatri, cidx) => {
                       const materiasGrupo = sortarMaterias(cuatrisDelAnio[cuatri], ordenCol, ordenAsc);
                       const esCuatriNum = !isNaN(parseInt(cuatri));
-                      const cuatriLabel = esCuatriNum ? `${cuatri}° Cuatrimestre` : cuatri;
+                      const cuatriLabel = cuatri === '0' ? 'Anual' : esCuatriNum ? `${cuatri}° Cuatrimestre` : cuatri;
 
                       return (
                         <div key={cuatri} className={cidx > 0 ? 'border-t border-slate-100' : ''}>
@@ -883,17 +892,36 @@ function ModalMateria({ editando, form, setF, guardando, onGuardar, onCerrar }: 
                 onChange={e => setF('anio', e.target.value)} placeholder="1" className={inp} />
             </div>
             <div>
-              <label className={lbl}>Cuatrimestre</label>
-              <input type="number" min="1" max="2" value={form.cuatrimestre}
-                onChange={e => setF('cuatrimestre', e.target.value)} placeholder="1" className={inp} />
+              <label className={lbl}>Régimen de Cursado</label>
+              <select value={form.regimenCursado} onChange={e => {
+                const r = e.target.value;
+                setF('regimenCursado', r);
+                if (r === 'Anual') setF('cuatrimestre', '0');
+                else if (r === 'Cuatrimestral' && form.cuatrimestre === '0') setF('cuatrimestre', '');
+              }} className={sel}>
+                <option value="">—</option>
+                {REGIMENES.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
             </div>
             <div>
-              <label className={lbl}>Créditos</label>
-              <input type="number" min="0" value={form.creditos}
-                onChange={e => setF('creditos', e.target.value)} placeholder="4" className={inp} />
+              <label className={lbl}>Cuatrimestre</label>
+              <select value={form.cuatrimestre}
+                onChange={e => setF('cuatrimestre', e.target.value)}
+                disabled={form.regimenCursado === 'Anual'}
+                className={`${sel} disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400`}>
+                {form.regimenCursado === 'Anual' ? (
+                  <option value="0">Anual</option>
+                ) : (
+                  <>
+                    <option value="">—</option>
+                    <option value="1">1° Cuatrimestre</option>
+                    <option value="2">2° Cuatrimestre</option>
+                  </>
+                )}
+              </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className={lbl}>Tipo de Asignatura</label>
               <select value={form.tipoAsignatura} onChange={e => setF('tipoAsignatura', e.target.value)} className={sel}>
@@ -907,12 +935,21 @@ function ModalMateria({ editando, form, setF, guardando, onGuardar, onCerrar }: 
                 {BLOQUES_CONOCIMIENTO.map(b => <option key={b.codigo} value={b.codigo}>{b.label}</option>)}
               </select>
             </div>
+            <div>
+              <label className={lbl}>Créditos</label>
+              <input type="number" min="0" value={form.creditos}
+                onChange={e => setF('creditos', e.target.value)} placeholder="4" className={inp} />
+            </div>
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className={lbl}>H/Semana</label>
-              <input type="number" min="0" value={form.cargaHorariaSemanal}
-                onChange={e => setF('cargaHorariaSemanal', e.target.value)} placeholder="4" className={inp} />
+              {(() => {
+                const v = calcularSemanales(form.cargaHorariaTotal, form.regimenCursado);
+                return <input type="text" readOnly value={v !== null ? String(v) : '—'}
+                  className={`${inp} bg-slate-50 cursor-default text-slate-500`}
+                  title="Calculado: H/Total ÷ 16 (cuatrimestral) o ÷ 32 (anual)" />;
+              })()}
             </div>
             <div>
               <label className={lbl}>H/Total</label>

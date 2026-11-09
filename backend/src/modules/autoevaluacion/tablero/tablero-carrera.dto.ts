@@ -336,6 +336,33 @@ export interface TotalesListadoDocentes {
   fichaIncompleta: number;
 }
 
+/** Semáforo del Programa de Asignatura en el listado (H.2-C). Basado en completitud de las 6 secciones. */
+export type EstadoProgramaListado = 'VERDE' | 'AMARILLO' | 'ROJO' | 'NO_VERIFICABLE';
+
+/**
+ * Una fila del listado Docente–Asignatura (H.2-B).
+ * Una entrada por combinación única (docenteId, materiaId) con vinculación APROBADA y docente activo.
+ */
+export interface FilaDocenteMateria {
+  docenteId: string;
+  /** "APELLIDO, Nombre" */
+  nombreDocente: string;
+  materiaId: string;
+  nombreMateria: string;
+  /** Suma de cargaHorariaSemanal de todas las materias del docente en la carrera. */
+  horasCarreraConocidas: number;
+  tieneHorasIncompletas: boolean;
+  /**
+   * Número de secciones con estadoSX = 'COMPLETO' en ProgramaAsignatura (0–6).
+   * null cuando no existe ProgramaAsignatura para esta materia.
+   */
+  seccionesCompletas: number | null;
+  /** Math.round(seccionesCompletas / 6 * 100). null cuando seccionesCompletas es null. */
+  completitudPrograma: number | null;
+  estadoPrograma: EstadoProgramaListado;
+  alertas: AlertasDocente;
+}
+
 /**
  * Respuesta del endpoint POST /autoevaluacion/tablero/carrera/:carreraId/listado.
  *
@@ -347,6 +374,8 @@ export interface ListadoDocentesCarreraDto {
   carreraId: string;
   fechaEvaluacion: string;
   docentes: FilaDocenteListado[];
+  /** Una fila por (docenteId, materiaId). Campo aditivo; docentes[] permanece para retrocompatibilidad. */
+  filas: FilaDocenteMateria[];
   totales: TotalesListadoDocentes;
   distribucionSemaforos: DistribucionSemaforosDto;
   estadoCalculo: EstadoCalculo;
@@ -356,6 +385,34 @@ export interface ListadoDocentesCarreraDto {
 export interface DedicacionTipoItem {
   tipo: string;
   docentes: number;
+}
+
+/** Un ítem del desglose de designaciones con porcentaje sobre el plantel total (H.3). */
+export interface DesignacionDetalleItem {
+  tipo: string;
+  docentes: number;
+  porcentaje: number;
+}
+
+/** Un tipo de cargo con su conteo de asignaciones (pares docenteId/cargoId) (H.3). */
+export interface JerarquiaCargoItem {
+  cargo: string;
+  cargos: number;
+}
+
+/**
+ * Desglose de jerarquía docente por tipo de cargo (FSD IP-08, H.3).
+ *
+ * Profesores: TITULAR/PROFESOR TITULAR, ASOCIADO/PROFESOR ASOCIADO, ADJUNTO/PROFESOR ADJUNTO.
+ * Auxiliares: JTP, JEFE DE TRABAJOS PRÁCTICOS, AYUDANTE GRADUADO, AYUDANTE NO GRADUADO.
+ * otros:      cargos no clasificables en P ni A.
+ */
+export interface JerarquiaDetalleDto {
+  profesores: JerarquiaCargoItem[];
+  totalProfesores: number;
+  auxiliares: JerarquiaCargoItem[];
+  totalAuxiliares: number;
+  otros: number;
 }
 
 /** Un ítem de la distribución de docentes por nivel de posgrado CONEAU (D-06). */
@@ -382,19 +439,21 @@ export interface DedicacionConeauItem {
  *
  * conPosgrado:            docentes con tituloPosgrado declarado (boolean).
  * conInvestigacion:       docentes con al menos un proyecto en proyectosInvestigacionJson.
- * conDesignacionRegular:  docentes con al menos un CargoDocente vigente cuya
- *                         designacion contiene "Regular" (insensitive).
- * conDesignacionInterina: docentes con al menos un CargoDocente vigente cuya
- *                         designacion contiene "Interino" (insensitive).
- *                         No es el complemento de regulares — se consulta explícitamente.
+ * conDesignacionRegular:  docentes con al menos una VinculacionCatedra APROBADA cuya
+ *                         Designacion.nombre contiene "REGULAR" (p.ej. REGULAR RENTADO,
+ *                         REGULAR AD HONOREM).
+ * conDesignacionInterina: docentes con al menos una VinculacionCatedra APROBADA cuya
+ *                         Designacion.nombre contiene "INTERINO" (p.ej. INTERINO RENTADO,
+ *                         INTERINO AD HONOREM). No es el complemento de regulares.
  * relacionPA:             cargos P y A según IP-08 (FSD §9.2). Ausente cuando
  *                         ip08.estadoCalculo = NO_APLICA (sin cargos en la carrera).
  * dedicacionPorTipo:      distribución de docentes por Designacion.nombre
- *                         (VinculacionCatedra APROBADA). NOTA: la fuente actual
- *                         contiene categorías de designación académica
- *                         (REGULAR RENTADO, INTERINO RENTADO, etc.), no rangos de
- *                         dedicación horaria. Fuente de dedicación pendiente de
- *                         decisión institucional (PD-1, IMPL-19B.3-B.0).
+ *                         (VinculacionCatedra APROBADA). NOTA: contiene categorías de
+ *                         designación académica (REGULAR RENTADO, INTERINO RENTADO, etc.),
+ *                         no rangos de dedicación horaria (PD-1, IMPL-19B.3-B.0).
+ * designacionDetalle:     igual que dedicacionPorTipo pero con porcentaje por tipo (H.3).
+ * jerarquia:              desglose de cargos (pares docenteId/cargoId) por tipo CONEAU (H.3).
+ *                         Mismo universo que IP-08. Ausente cuando estadoCalculo = NO_APLICA.
  * dedicacionConeau:       distribución de docentes por categoría CONEAU, derivada de
  *                         Docente.dedicacion con normalización conservadora (CIERRE-03 Fase A).
  *                         Incluye NO_DETERMINADA para valores ausentes o no reconocidos.
@@ -407,7 +466,6 @@ export interface CondicionesPlantellDto {
   conPosgrado: number;
   conInvestigacion: number;
   conDesignacionRegular: number;
-  /** Docentes con al menos un CargoDocente vigente cuya designacion contiene "Interino". */
   conDesignacionInterina: number;
   /**
    * Cargos profesores y auxiliares según IP-08.
@@ -415,6 +473,10 @@ export interface CondicionesPlantellDto {
    */
   relacionPA?: { profesores: number; auxiliares: number };
   dedicacionPorTipo: DedicacionTipoItem[];
+  /** Desglose de designaciones con porcentaje (H.3). Mismo universo que dedicacionPorTipo. */
+  designacionDetalle?: DesignacionDetalleItem[];
+  /** Desglose de cargos por jerarquía CONEAU (H.3). Mismo universo que IP-08. */
+  jerarquia?: JerarquiaDetalleDto;
   /**
    * Distribución CONEAU de dedicación docente (CIERRE-03 Fase A).
    * Fuente: Docente.dedicacion normalizado. Incluye las cuatro categorías siempre.

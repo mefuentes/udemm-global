@@ -223,10 +223,32 @@ export interface DistribucionSemaforosCarrera {
   total: number;
 }
 
+/** Semáforo del Programa de Asignatura en el listado (H.2-C). Basado en completitud de las 6 secciones. */
+export type EstadoProgramaListado = 'VERDE' | 'AMARILLO' | 'ROJO' | 'NO_VERIFICABLE';
+
+/** Una fila del listado Docente–Asignatura (H.2-B). Una entrada por (docenteId, materiaId). */
+export interface FilaDocenteMateria {
+  docenteId: string;
+  /** "APELLIDO, Nombre" */
+  nombreDocente: string;
+  materiaId: string;
+  nombreMateria: string;
+  horasCarreraConocidas: number;
+  tieneHorasIncompletas: boolean;
+  /** Secciones completas (0–6). null si no existe ProgramaAsignatura. */
+  seccionesCompletas: number | null;
+  /** Math.round(seccionesCompletas / 6 * 100). null si no hay programa. */
+  completitudPrograma: number | null;
+  estadoPrograma: EstadoProgramaListado;
+  alertas: AlertasDocente;
+}
+
 export interface ListadoDocentesCarreraResponse {
   carreraId: string;
   fechaEvaluacion: string;
   docentes: FilaDocenteListado[];
+  /** Una fila por (docenteId, materiaId). Presente en respuestas ≥ H.2-B. */
+  filas?: FilaDocenteMateria[];
   totales: TotalesListadoDocentes;
   /** Distribución de semáforos del plantel (B-04). Presente en respuestas ≥ v2.1. */
   distribucionSemaforos?: DistribucionSemaforosCarrera;
@@ -237,6 +259,28 @@ export interface ListadoDocentesCarreraResponse {
 export interface DedicacionTipoItem {
   tipo: string;
   docentes: number;
+}
+
+/** Un ítem del desglose de designaciones con porcentaje sobre el plantel total (H.3). */
+export interface DesignacionDetalleItem {
+  tipo: string;
+  docentes: number;
+  porcentaje: number;
+}
+
+/** Un tipo de cargo con su conteo de asignaciones (H.3). */
+export interface JerarquiaCargoItem {
+  cargo: string;
+  cargos: number;
+}
+
+/** Desglose de jerarquía docente por tipo de cargo CONEAU (H.3). */
+export interface JerarquiaDetalleDto {
+  profesores: JerarquiaCargoItem[];
+  totalProfesores: number;
+  auxiliares: JerarquiaCargoItem[];
+  totalAuxiliares: number;
+  otros: number;
 }
 
 /** Categoría CONEAU de dedicación docente (CIERRE-03 Fase A). */
@@ -261,11 +305,14 @@ export interface CondicionesPlantellResponse {
   conPosgrado: number;
   conInvestigacion: number;
   conDesignacionRegular: number;
-  /** Docentes con al menos un CargoDocente vigente con designación interina. */
   conDesignacionInterina: number;
   /** Cargos P/A (IP-08). Ausente cuando estadoCalculo = NO_APLICA. */
   relacionPA?: { profesores: number; auxiliares: number };
   dedicacionPorTipo: DedicacionTipoItem[];
+  /** Desglose de designaciones con porcentaje (H.3). Presente en respuestas ≥ v2.5. */
+  designacionDetalle?: DesignacionDetalleItem[];
+  /** Desglose de cargos por jerarquía CONEAU (H.3). Presente en respuestas ≥ v2.5. */
+  jerarquia?: JerarquiaDetalleDto;
   /** Distribución por categoría CONEAU de dedicación (CIERRE-03 Fase A). Presente en respuestas ≥ v2.2. */
   dedicacionConeau?: DedicacionConeauItem[];
   /** Distribución por nivel máximo de posgrado CONEAU (D-06). Solo docentes clasificados. Presente en respuestas ≥ v2.3. */

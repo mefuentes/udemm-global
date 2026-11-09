@@ -54,6 +54,7 @@ function makeMateria(
     cargaHorariaSemanal?: number | null;
     estado?: string;
     anio?: number;
+    tipoAsignatura?: string;
   } = {},
 ): MateriaAut {
   _matCounter++;
@@ -72,7 +73,7 @@ function makeMateria(
     bloqueNormalizado: normalizarBloqueTest(bloque),
     cargaHorariaSemanal: overrides.cargaHorariaSemanal ?? null,
     cargaHorariaTotal: overrides.cargaHorariaTotal !== undefined ? overrides.cargaHorariaTotal : 100,
-    tipoAsignatura: 'OBLIGATORIA',
+    tipoAsignatura: overrides.tipoAsignatura ?? 'OBLIGATORIA',
   };
 }
 
@@ -691,5 +692,89 @@ describe('R09EvaluadorService — integración con RegistroIndicadores', () => {
   it('alcance de R-09 es PLAN', () => {
     const registro = new RegistroIndicadores();
     expect(registro.obtener('R-09')!.alcance).toBe('PLAN');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// 13. TIPO DE ASIGNATURA NO AFECTA EL CÓMPUTO DE BLOQUES  (Fase B.3)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('R09EvaluadorService — tipoAsignatura no afecta el cómputo de bloques', () => {
+
+  it('materia PPS con bloque TA y 200 horas → 200 h acumuladas en TA', async () => {
+    const materias = [
+      makeMateria({ bloqueConocimiento: 'TA', cargaHorariaTotal: 200, tipoAsignatura: 'PPS' }),
+    ];
+    const ev = makeEv(makeConsultas(materias), makeConfigPlan());
+    const res = await ev.evaluar(makeCtx());
+    expect(res.valor?.evaluaciones.TA.horasReales).toBe(200);
+    expect(res.valor?.evaluaciones.CB.horasReales).toBe(0);
+  });
+
+  it('materia PI con bloque CTC y 120 horas → 120 h acumuladas en CTC', async () => {
+    const materias = [
+      makeMateria({ bloqueConocimiento: 'CTC', cargaHorariaTotal: 120, tipoAsignatura: 'PI' }),
+    ];
+    const ev = makeEv(makeConsultas(materias), makeConfigPlan());
+    const res = await ev.evaluar(makeCtx());
+    expect(res.valor?.evaluaciones.CTC.horasReales).toBe(120);
+    expect(res.valor?.evaluaciones.TA.horasReales).toBe(0);
+  });
+
+  it('materia ELECTIVA con bloque CB y 160 horas → horas contabilizadas en CB', async () => {
+    const materias = [
+      makeMateria({ bloqueConocimiento: 'CB', cargaHorariaTotal: 160, tipoAsignatura: 'ELECTIVA' }),
+    ];
+    const ev = makeEv(makeConsultas(materias), makeConfigPlan());
+    const res = await ev.evaluar(makeCtx());
+    expect(res.valor?.evaluaciones.CB.horasReales).toBe(160);
+  });
+
+  it('materia con bloque desconocido y horas > 0 → incertidumbre propagada, estadoCalculo PARCIAL', async () => {
+    const materias = [
+      makeMateria({ bloqueConocimiento: 'DESCONOCIDO', cargaHorariaTotal: 100 }),
+    ];
+    const ev = makeEv(makeConsultas(materias), makeConfigPlan());
+    const res = await ev.evaluar(makeCtx());
+    expect(res.estadoCalculo).toBe(EstadoCalculo.PARCIAL);
+    expect(res.datosFaltantes.some(d => d.campo === 'bloqueConocimiento')).toBe(true);
+  });
+
+  it('materia PPS sin bloque y con horas → dato faltante, no excluida del cálculo', async () => {
+    const materias = [
+      makeMateria({ bloqueConocimiento: null, cargaHorariaTotal: 150, tipoAsignatura: 'PPS' }),
+    ];
+    const ev = makeEv(makeConsultas(materias), makeConfigPlan());
+    const res = await ev.evaluar(makeCtx());
+    expect(res.datosFaltantes.some(d => d.campo === 'bloqueConocimiento')).toBe(true);
+    expect(res.estadoCalculo).not.toBe(EstadoCalculo.NO_APLICA);
+  });
+
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// E.2 — universo de materias vigentes (ACTIVO)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('R09EvaluadorService — E.2 universo de materias vigentes (ACTIVO)', () => {
+
+  it('horasTotal refleja sólo las materias devueltas por consultas (ya filtradas por ACTIVO)', async () => {
+    const materias = [
+      makeMateria({ bloqueConocimiento: 'CB', cargaHorariaTotal: 100 }),
+      makeMateria({ bloqueConocimiento: 'TA', cargaHorariaTotal: 80 }),
+    ];
+    const ev = makeEv(makeConsultas(materias), makeConfigPlan());
+    const res = await ev.evaluar(makeCtx());
+    expect(res.valor?.horasTotal).toBe(180);
+    expect(res.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+  });
+
+  it('suma por bloque excluye automáticamente materias ajenas al universo vigente', async () => {
+    // Consultas sólo devuelve 1 materia CB (las INACTIVO quedaron fuera del mock)
+    const materias = [makeMateria({ bloqueConocimiento: 'CB', cargaHorariaTotal: 64 })];
+    const ev = makeEv(makeConsultas(materias), makeConfigPlan());
+    const res = await ev.evaluar(makeCtx());
+    expect(res.valor?.horasPorBloque?.CB).toBe(64);
+    expect(res.valor?.horasTotal).toBe(64);
   });
 });

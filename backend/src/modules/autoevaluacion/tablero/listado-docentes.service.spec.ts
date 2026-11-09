@@ -22,6 +22,11 @@ const ROL     = 'ADMINISTRADOR_SISTEMA';
 
 // ── Docente mínimo con ficha completa ─────────────────────────────────────────
 
+type ProgramaRow = {
+  estadoS1: string | null; estadoS2: string | null; estadoS3: string | null;
+  estadoS4: string | null; estadoS5: string | null; estadoS6: string | null;
+} | null;
+
 function makeDocRow(overrides: Partial<{
   docenteId: string;
   nombre: string;
@@ -37,6 +42,7 @@ function makeDocRow(overrides: Partial<{
   materiaId: string;
   materiaNombre: string;
   cargaHorariaSemanal: number | null;
+  programa: ProgramaRow;
 }> = {}) {
   const {
     docenteId    = 'd-001',
@@ -55,9 +61,11 @@ function makeDocRow(overrides: Partial<{
     cargaHorariaSemanal = 6,
   } = overrides;
 
+  const programa: ProgramaRow = overrides.programa !== undefined ? overrides.programa : null;
+
   return {
     docenteId,
-    materia: { id: materiaId, nombre: materiaNombre, cargaHorariaSemanal },
+    materia: { id: materiaId, nombre: materiaNombre, cargaHorariaSemanal, programa },
     docente: {
       nombre, apellido, sexo, fechaNacimiento, cuit, pisoDepto, residencia,
       tipoDocumento, tituloGrado, areaDisciplinarId,
@@ -562,5 +570,296 @@ describe('LD-18 — distribucionSemaforos: conteo por semáforo del plantel', ()
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
     expect(res.docentes).toHaveLength(1);
     expect(res.distribucionSemaforos!.total).toBe(1);
+  });
+});
+
+// ── LD-19: 1 docente / 1 materia con programa completo (6/6) ─────────────────
+
+describe('LD-19 — filas: 1 docente / 1 materia con ProgramaAsignatura completo (6/6)', () => {
+  it('devuelve 1 fila con seccionesCompletas=6, completitudPrograma=100 y estadoPrograma=VERDE', async () => {
+    const prog: ProgramaRow = {
+      estadoS1: 'COMPLETO', estadoS2: 'COMPLETO', estadoS3: 'COMPLETO',
+      estadoS4: 'COMPLETO', estadoS5: 'COMPLETO', estadoS6: 'COMPLETO',
+    };
+    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas).toHaveLength(1);
+    expect(res.filas[0].seccionesCompletas).toBe(6);
+    expect(res.filas[0].completitudPrograma).toBe(100);
+    expect(res.filas[0].estadoPrograma).toBe('VERDE');
+  });
+});
+
+// ── LD-20: 1 docente / 3 materias → 3 filas con misma dedicación total ───────
+
+describe('LD-20 — filas: 1 docente / 3 materias devuelve 3 filas con dedicación total en cada una', () => {
+  it('3 filas para el docente; horasCarreraConocidas es el total en cada fila; docentes tiene 1 entrada', async () => {
+    const rows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', materiaNombre: 'Mat A', cargaHorariaSemanal: 4 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', materiaNombre: 'Mat B', cargaHorariaSemanal: 3 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-3', materiaNombre: 'Mat C', cargaHorariaSemanal: 2 }),
+    ];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.docentes).toHaveLength(1);
+    expect(res.filas).toHaveLength(3);
+    for (const f of res.filas) {
+      expect(f.horasCarreraConocidas).toBe(9); // total 4+3+2, igual en todas las filas
+      expect(f.docenteId).toBe('d-001');
+    }
+  });
+});
+
+// ── LD-21: 2 docentes / 1 materia cada uno ───────────────────────────────────
+
+describe('LD-21 — filas: 2 docentes / 1 materia cada uno devuelve 2 filas', () => {
+  it('devuelve 2 filas, una por docente', async () => {
+    const rows = [
+      makeDocRow({ docenteId: 'd-001', apellido: 'García', nombre: 'Juan', materiaId: 'm-1' }),
+      makeDocRow({ docenteId: 'd-002', apellido: 'López', nombre: 'Ana', materiaId: 'm-2' }),
+    ];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas).toHaveLength(2);
+    expect(res.filas.map(f => f.docenteId).sort()).toEqual(['d-001', 'd-002']);
+  });
+});
+
+// ── LD-22: deduplica vinculaciones con mismo (docenteId, materiaId) ───────────
+
+describe('LD-22 — filas: 2 vinculaciones con mismo (docenteId, materiaId) → 1 fila', () => {
+  it('no duplica filas cuando hay dos vinculaciones APROBADA con la misma materia', async () => {
+    const rows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 4 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 4 }),
+    ];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas).toHaveLength(1);
+    expect(res.filas[0].horasCarreraConocidas).toBe(4);
+  });
+});
+
+// ── LD-23: materia sin ProgramaAsignatura → seccionesCompletas=null ───────────
+
+describe('LD-23 — filas: materia sin ProgramaAsignatura → seccionesCompletas null, completitudPrograma null', () => {
+  it('devuelve seccionesCompletas=null y completitudPrograma=null cuando no existe ProgramaAsignatura', async () => {
+    const svc = makeSvc({ rows: [makeDocRow({ programa: null })] });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].seccionesCompletas).toBeNull();
+    expect(res.filas[0].completitudPrograma).toBeNull();
+  });
+});
+
+// ── LD-24: programa parcial 3/6 → completitudPrograma=50 ─────────────────────
+
+describe('LD-24 — filas: programa 3/6 → completitudPrograma=Math.round(3/6*100)=50', () => {
+  it('calcula completitudPrograma=50 con 3 secciones completas y 3 pendientes', async () => {
+    const prog: ProgramaRow = {
+      estadoS1: 'COMPLETO', estadoS2: 'COMPLETO', estadoS3: 'COMPLETO',
+      estadoS4: 'PENDIENTE', estadoS5: 'PENDIENTE', estadoS6: 'PENDIENTE',
+    };
+    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].seccionesCompletas).toBe(3);
+    expect(res.filas[0].completitudPrograma).toBe(50);
+  });
+});
+
+// ── LD-25: dedicación del docente no se duplica por materia ──────────────────
+
+describe('LD-25 — filas: horasCarreraConocidas es la suma total del docente (no por materia)', () => {
+  it('todas las filas del docente muestran el total de horas, no las de cada materia individual', async () => {
+    const rows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', cargaHorariaSemanal: 4 }),
+    ];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas).toHaveLength(2);
+    expect(res.filas[0].horasCarreraConocidas).toBe(10);
+    expect(res.filas[1].horasCarreraConocidas).toBe(10);
+  });
+});
+
+// ── LD-26: contadores de totales son únicos por docente, no por filas ─────────
+
+describe('LD-26 — totales: contadores basados en docentes únicos, no en filas', () => {
+  it('total=1 aunque el docente tenga 3 materias (docentes únicos, no filas)', async () => {
+    const rows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 4 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', cargaHorariaSemanal: 3 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-3', cargaHorariaSemanal: 2 }),
+    ];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.totales.total).toBe(1);       // 1 docente único
+    expect(res.filas).toHaveLength(3);       // 3 filas
+    expect(res.docentes).toHaveLength(1);    // 1 docente en docentes[]
+  });
+});
+
+// ── LD-27: retorno vacío incluye filas=[] ─────────────────────────────────────
+
+describe('LD-27 — retorno vacío: filas=[] cuando no hay docentes activos', () => {
+  it('devuelve filas=[] junto a docentes=[] cuando estadoCalculo=NO_APLICA', async () => {
+    const svc = makeSvc({ rows: [] });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.estadoCalculo).toBe(EstadoCalculo.NO_APLICA);
+    expect(res.filas).toEqual([]);
+  });
+});
+
+// ── LD-28: orden de filas por nombreDocente asc, luego nombreMateria asc ──────
+
+describe('LD-28 — filas ordenadas por nombreDocente asc, luego nombreMateria asc', () => {
+  it('filas ordenadas alfabéticamente por docente, luego por materia', async () => {
+    const rows = [
+      makeDocRow({ docenteId: 'd-002', apellido: 'López', nombre: 'Ana', materiaId: 'm-1', materiaNombre: 'Zeta' }),
+      makeDocRow({ docenteId: 'd-002', apellido: 'López', nombre: 'Ana', materiaId: 'm-2', materiaNombre: 'Alpha' }),
+      makeDocRow({ docenteId: 'd-001', apellido: 'García', nombre: 'Juan', materiaId: 'm-3', materiaNombre: 'Beta' }),
+    ];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    // GARCÍA, Juan → 'd-001' first; LÓPEZ, Ana → 'd-002' x2
+    expect(res.filas[0].docenteId).toBe('d-001');
+    expect(res.filas[1].docenteId).toBe('d-002');
+    expect(res.filas[1].nombreMateria).toBe('Alpha');  // Alpha < Zeta
+    expect(res.filas[2].nombreMateria).toBe('Zeta');
+  });
+});
+
+// ── LD-29: alertas en filas coinciden con alertas del docente ─────────────────
+
+describe('LD-29 — filas: alertas en fila coinciden con las alertas del docente en docentes[]', () => {
+  it('fila hereda las alertas del docente calculadas en docentes[]', async () => {
+    const rows = [makeDocRow()];
+    const svc = makeSvc({
+      rows,
+      r03: makeR03Mock([{ docenteId: 'd-001', nombre: 'García Juan' }]),
+    });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    const docAlerta = res.docentes[0].alertas;
+    const filaAlerta = res.filas[0].alertas;
+    expect(filaAlerta.altaTope).toBe(docAlerta.altaTope);
+    expect(filaAlerta.altaTope).toBe(true);
+    expect(filaAlerta.altaSinActividad).toBe(docAlerta.altaSinActividad);
+  });
+});
+
+// ── LD-30 a LD-37: semáforo del Programa de Asignatura (H.2-C) ───────────────
+
+describe('LD-30 — semáforo programa: 0/6 → ROJO', () => {
+  it('devuelve estadoPrograma=ROJO cuando seccionesCompletas=0', async () => {
+    const prog: ProgramaRow = {
+      estadoS1: 'PENDIENTE', estadoS2: 'PENDIENTE', estadoS3: 'PENDIENTE',
+      estadoS4: 'PENDIENTE', estadoS5: 'PENDIENTE', estadoS6: 'PENDIENTE',
+    };
+    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].seccionesCompletas).toBe(0);
+    expect(res.filas[0].estadoPrograma).toBe('ROJO');
+  });
+});
+
+describe('LD-31 — semáforo programa: 1/6 → ROJO', () => {
+  it('devuelve estadoPrograma=ROJO cuando seccionesCompletas=1', async () => {
+    const prog: ProgramaRow = {
+      estadoS1: 'COMPLETO',  estadoS2: 'PENDIENTE', estadoS3: 'PENDIENTE',
+      estadoS4: 'PENDIENTE', estadoS5: 'PENDIENTE', estadoS6: 'PENDIENTE',
+    };
+    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].seccionesCompletas).toBe(1);
+    expect(res.filas[0].estadoPrograma).toBe('ROJO');
+  });
+});
+
+describe('LD-32 — semáforo programa: 2/6 → ROJO', () => {
+  it('devuelve estadoPrograma=ROJO cuando seccionesCompletas=2', async () => {
+    const prog: ProgramaRow = {
+      estadoS1: 'COMPLETO',  estadoS2: 'COMPLETO',  estadoS3: 'PENDIENTE',
+      estadoS4: 'PENDIENTE', estadoS5: 'PENDIENTE', estadoS6: 'PENDIENTE',
+    };
+    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].seccionesCompletas).toBe(2);
+    expect(res.filas[0].estadoPrograma).toBe('ROJO');
+  });
+});
+
+describe('LD-33 — semáforo programa: 3/6 → ROJO', () => {
+  it('devuelve estadoPrograma=ROJO cuando seccionesCompletas=3', async () => {
+    const prog: ProgramaRow = {
+      estadoS1: 'COMPLETO',  estadoS2: 'COMPLETO',  estadoS3: 'COMPLETO',
+      estadoS4: 'PENDIENTE', estadoS5: 'PENDIENTE', estadoS6: 'PENDIENTE',
+    };
+    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].seccionesCompletas).toBe(3);
+    expect(res.filas[0].estadoPrograma).toBe('ROJO');
+  });
+});
+
+describe('LD-34 — semáforo programa: 4/6 → AMARILLO', () => {
+  it('devuelve estadoPrograma=AMARILLO cuando seccionesCompletas=4', async () => {
+    const prog: ProgramaRow = {
+      estadoS1: 'COMPLETO',  estadoS2: 'COMPLETO',  estadoS3: 'COMPLETO',
+      estadoS4: 'COMPLETO',  estadoS5: 'PENDIENTE', estadoS6: 'PENDIENTE',
+    };
+    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].seccionesCompletas).toBe(4);
+    expect(res.filas[0].estadoPrograma).toBe('AMARILLO');
+  });
+});
+
+describe('LD-35 — semáforo programa: 5/6 → AMARILLO', () => {
+  it('devuelve estadoPrograma=AMARILLO cuando seccionesCompletas=5', async () => {
+    const prog: ProgramaRow = {
+      estadoS1: 'COMPLETO',  estadoS2: 'COMPLETO',  estadoS3: 'COMPLETO',
+      estadoS4: 'COMPLETO',  estadoS5: 'COMPLETO',  estadoS6: 'PENDIENTE',
+    };
+    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].seccionesCompletas).toBe(5);
+    expect(res.filas[0].estadoPrograma).toBe('AMARILLO');
+  });
+});
+
+describe('LD-36 — semáforo programa: 6/6 → VERDE (confirmado H.2-C)', () => {
+  it('devuelve estadoPrograma=VERDE cuando seccionesCompletas=6', async () => {
+    const prog: ProgramaRow = {
+      estadoS1: 'COMPLETO', estadoS2: 'COMPLETO', estadoS3: 'COMPLETO',
+      estadoS4: 'COMPLETO', estadoS5: 'COMPLETO', estadoS6: 'COMPLETO',
+    };
+    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].seccionesCompletas).toBe(6);
+    expect(res.filas[0].estadoPrograma).toBe('VERDE');
+  });
+});
+
+describe('LD-37 — semáforo programa: sin ProgramaAsignatura → NO_VERIFICABLE', () => {
+  it('devuelve estadoPrograma=NO_VERIFICABLE cuando no existe ProgramaAsignatura', async () => {
+    const svc = makeSvc({ rows: [makeDocRow({ programa: null })] });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].seccionesCompletas).toBeNull();
+    expect(res.filas[0].estadoPrograma).toBe('NO_VERIFICABLE');
+  });
+});
+
+describe('LD-38 — semáforo programa: 6/6 siempre VERDE aunque R-11 tenga inconsistencias', () => {
+  it('estadoPrograma=VERDE con 6/6 incluso si R-11 detectaría inconsistencias de prioridad ALTA', async () => {
+    // R-11 evalúa inconsistencias por secciones específicas, pero NO afecta estadoPrograma.
+    // La regla H.2-C: solo seccionesCompletas determina el semáforo.
+    const prog: ProgramaRow = {
+      estadoS1: 'COMPLETO', estadoS2: 'COMPLETO', estadoS3: 'COMPLETO',
+      estadoS4: 'COMPLETO', estadoS5: 'COMPLETO', estadoS6: 'COMPLETO',
+    };
+    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].seccionesCompletas).toBe(6);
+    expect(res.filas[0].estadoPrograma).toBe('VERDE');
   });
 });

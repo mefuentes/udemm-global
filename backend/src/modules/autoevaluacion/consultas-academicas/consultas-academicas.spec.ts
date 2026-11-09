@@ -391,6 +391,65 @@ describe('ConsultasAcademicasService — obtenerMateriasDePlan', () => {
   });
 });
 
+// ── E.2 — filtro estado: ACTIVO en obtenerMateriasDePlan ──────────────────
+
+describe('ConsultasAcademicasService — obtenerMateriasDePlan — estado ACTIVO (E.2)', () => {
+
+  it('consulta Prisma con where.estado = ACTIVO', async () => {
+    const findMany = jest.fn().mockResolvedValue([makeMateria()]);
+    const prisma = makePrisma({ materia: { findMany, findUnique: jest.fn() } });
+    await svc(prisma, makeScope()).obtenerMateriasDePlan(PLAN_ID, USR, ADMIN);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ planEstudioId: PLAN_ID, estado: 'ACTIVO' }),
+      }),
+    );
+  });
+
+  it('devuelve las N materias que Prisma retornó — universo ya filtrado por ACTIVO', async () => {
+    const activaA = makeMateria({ id: 'mat-activa-a', codigo: 'A01' });
+    const activaB = makeMateria({ id: 'mat-activa-b', codigo: 'A02' });
+    const prisma = makePrisma({
+      materia: { findMany: jest.fn().mockResolvedValue([activaA, activaB]), findUnique: jest.fn() },
+    });
+    const result = await svc(prisma, makeScope()).obtenerMateriasDePlan(PLAN_ID, USR, ADMIN);
+    expect(result).toHaveLength(2);
+    expect(result.map((m) => m.id)).toEqual(['mat-activa-a', 'mat-activa-b']);
+  });
+});
+
+// ── E.2 — filtro estado: ACTIVO en obtenerMateriasProgramasDePlan ─────────
+
+describe('ConsultasAcademicasService — obtenerMateriasProgramasDePlan — estado ACTIVO (E.2)', () => {
+
+  function makeRawMateriaProg(id: string) {
+    return {
+      id, codigo: `COD-${id}`, nombre: `Materia ${id}`,
+      tipoAsignatura: 'OBLIGATORIA', cargaHorariaTotal: 64,
+      programa: null,
+    };
+  }
+
+  it('consulta Prisma con where.estado = ACTIVO', async () => {
+    const findMany = jest.fn().mockResolvedValue([makeRawMateriaProg('mat-01')]);
+    const prisma = makePrisma({ materia: { findMany, findUnique: jest.fn() } });
+    await svc(prisma, makeScope()).obtenerMateriasProgramasDePlan(PLAN_ID, USR, ADMIN);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ planEstudioId: PLAN_ID, estado: 'ACTIVO' }),
+      }),
+    );
+  });
+
+  it('devuelve las N materias que Prisma retornó — universo ya filtrado por ACTIVO', async () => {
+    const rows = [makeRawMateriaProg('mat-p-a'), makeRawMateriaProg('mat-p-b')];
+    const prisma = makePrisma({ materia: { findMany: jest.fn().mockResolvedValue(rows), findUnique: jest.fn() } });
+    const result = await svc(prisma, makeScope()).obtenerMateriasProgramasDePlan(PLAN_ID, USR, ADMIN);
+    expect(result).toHaveLength(2);
+    expect(result.map((m) => m.materiaId)).toEqual(['mat-p-a', 'mat-p-b']);
+  });
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 // C y D. DOCENTES Y VINCULACIONES
 // ════════════════════════════════════════════════════════════════════════════

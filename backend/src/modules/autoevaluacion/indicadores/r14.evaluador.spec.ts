@@ -287,3 +287,28 @@ describe('R14EvaluadorService — D07 hsFormacionPractica (fuente primaria)', ()
     expect(res.valor?.enAlerta[0].horasFormacionPractica).toBe(80);
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// E.2 — universo de materias vigentes (ACTIVO)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('R14EvaluadorService — E.2 universo de materias vigentes (ACTIVO)', () => {
+
+  it('totalMaterias refleja exactamente las N materias devueltas por consultas', async () => {
+    const materias = [
+      makeMateria('m1', 'Álgebra', 64, null),
+      makeMateria('m2', 'Física',  64, null),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalMaterias).toBe(2);
+    expect(res.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+  });
+
+  it('materia con exceso de FP sólo genera alerta si está en el universo vigente', async () => {
+    // Consultas devuelve sólo 1 materia ACTIVO con exceso (carga=64, FP=80)
+    const materias = [makeMateriaD07('m1', 'PPS I', 64, 80)];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalConAlerta).toBe(1);
+    expect(res.valor?.totalMaterias).toBe(1);
+  });
+});

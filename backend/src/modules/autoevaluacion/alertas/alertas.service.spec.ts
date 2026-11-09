@@ -432,7 +432,7 @@ describe('AlertasService — filtro grupoAmbito (B-05)', () => {
     });
     const snapP = makeSnapPlan({
       ipl01: { cumple: false, horasTotal: 2000, horasMinimas: 2400 }, // IPL-01 → PLANES
-      ipl02: { bloquesCumplen: 1, bloquesConUmbral: 2 },              // IPL-02 → PLANES
+      ipl02: { bloquesCumplen: 1, bloquesConUmbral: 2, bloquesDebajo: 1, bloquesInciertos: 0 },  // IPL-02 → PLANES
       ipl03: { sinResponsable: 1 },  // IPL-03 → CRUZADAS
       ipl04: { paresConAlerta: 1 },  // IPL-04 → CRUZADAS
     });

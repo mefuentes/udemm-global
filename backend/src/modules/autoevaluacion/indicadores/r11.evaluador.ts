@@ -12,19 +12,15 @@ import type {
 /**
  * Materia con programa inconsistente detectado por R-11.
  *
- * Inconsistencia ALTA: estadoPrograma='APROBADO' con ≥1 sección PENDIENTE.
- *   Un programa no puede estar aprobado con contenido faltante.
- *
- * Inconsistencia MEDIA: estadoPrograma≠'APROBADO' con ≥1 sección PENDIENTE.
- *   El programa está incompleto (en proceso normal, pero alertable para evaluación).
- *
- * También MEDIA: estadoPrograma≠'APROBADO' con 0 secciones PENDIENTE.
- *   El programa está completo pero aún no fue incorporado al circuito de aprobación.
+ * Prioridad basada exclusivamente en secciones completas (estadoPrograma irrelevante):
+ *   ALTA  — 0–2 secciones completas (programa muy incompleto).
+ *   MEDIA — 3–5 secciones completas (progreso parcial).
+ *   Sin inconsistencia — 6/6 secciones completas.
  */
 export interface ProgramaInconsistenteR11 {
   materiaId: string;
-  nombre: string;
-  codigo: string;
+  materiaNombre: string;
+  materiaCodigo: string;
   estadoPrograma: string;
   seccionesCompletas: number;
   seccionesPendientes: number;
@@ -33,8 +29,8 @@ export interface ProgramaInconsistenteR11 {
 
 export interface MateriaSinProgramaR11 {
   materiaId: string;
-  nombre: string;
-  codigo: string;
+  materiaNombre: string;
+  materiaCodigo: string;
 }
 
 /**
@@ -71,11 +67,10 @@ export interface ResultadoR11 {
  *   Detecta contradicciones entre el estadoPrograma y el estado de las seis secciones
  *   (estadoS1–estadoS6) almacenadas en ProgramaAsignatura.
  *
- * Clasificación:
- *   ALTA  — estadoPrograma='APROBADO' con ≥1 sección en estado 'PENDIENTE'.
- *   MEDIA — estadoPrograma≠'APROBADO' con ≥1 sección en estado 'PENDIENTE'.
- *   MEDIA — estadoPrograma≠'APROBADO' con todas las secciones 'COMPLETO'
- *            (programa listo pero no incorporado al circuito de aprobación).
+ * Clasificación (basada en secciones completas, independiente del estado administrativo):
+ *   ALTA  — 0–2 secciones completas (programa muy incompleto).
+ *   MEDIA — 3–5 secciones completas (progreso parcial).
+ *   Sin inconsistencia — 6/6 secciones completas (programa íntegro).
  *
  * Materias sin programa: se listan en sinPrograma, no se cuentan como inconsistencias.
  *
@@ -135,41 +130,31 @@ export class R11EvaluadorService implements IndicadorEvaluador<ResultadoR11> {
       if (!mp.tienePrograma) {
         sinPrograma.push({
           materiaId: mp.materiaId,
-          nombre: mp.materiaNombre,
-          codigo: mp.materiaCodigo,
+          materiaNombre: mp.materiaNombre,
+          materiaCodigo: mp.materiaCodigo,
         });
         continue;
       }
 
       hayContenido = true;
       const pendientes = 6 - mp.seccionesCompletas;
-      const estado = mp.estadoPrograma!;
 
-      if (estado === 'APROBADO' && pendientes > 0) {
-        totalAlta++;
-        inconsistencias.push({
-          materiaId: mp.materiaId,
-          nombre: mp.materiaNombre,
-          codigo: mp.materiaCodigo,
-          estadoPrograma: estado,
-          seccionesCompletas: mp.seccionesCompletas,
-          seccionesPendientes: pendientes,
-          prioridad: 'ALTA',
-        });
-      } else if (estado !== 'APROBADO') {
-        // MEDIA: incomplete (pendientes > 0) OR complete but not yet submitted (pendientes = 0)
-        totalMedia++;
-        inconsistencias.push({
-          materiaId: mp.materiaId,
-          nombre: mp.materiaNombre,
-          codigo: mp.materiaCodigo,
-          estadoPrograma: estado,
-          seccionesCompletas: mp.seccionesCompletas,
-          seccionesPendientes: pendientes,
-          prioridad: 'MEDIA',
-        });
-      }
-      // estadoPrograma='APROBADO' && pendientes=0 → consistent, no issue
+      // 6/6 secciones completas → programa íntegro, sin inconsistencia
+      if (pendientes === 0) continue;
+
+      const prioridad: 'ALTA' | 'MEDIA' = mp.seccionesCompletas <= 2 ? 'ALTA' : 'MEDIA';
+      if (prioridad === 'ALTA') totalAlta++;
+      else totalMedia++;
+
+      inconsistencias.push({
+        materiaId: mp.materiaId,
+        materiaNombre: mp.materiaNombre,
+        materiaCodigo: mp.materiaCodigo,
+        estadoPrograma: mp.estadoPrograma!,
+        seccionesCompletas: mp.seccionesCompletas,
+        seccionesPendientes: pendientes,
+        prioridad,
+      });
     }
 
     const datosFaltantes = hayContenido

@@ -99,14 +99,21 @@ function alertasPlan(snap: Record<string, unknown>): AlertaRaw[] {
     });
   }
 
-  const ipl02 = snap['ipl02'] as Record<string, unknown> | undefined;
-  const conUmbral  = (ipl02?.['bloquesConUmbral'] as number) ?? 0;
-  const cumplen    = (ipl02?.['bloquesCumplen'] as number) ?? 0;
-  if (conUmbral > 0 && cumplen < conUmbral) {
+  const ipl02      = snap['ipl02'] as Record<string, unknown> | undefined;
+  const debajo     = (ipl02?.['bloquesDebajo']    as number) ?? 0;
+  const inciertos  = (ipl02?.['bloquesInciertos'] as number) ?? 0;
+  if (debajo > 0) {
+    alerts.push({
+      regla: 'IPL-02',
+      prioridad: 'ALTA',
+      descripcion: `${debajo} bloque(s) curricular(es) por debajo del umbral horario mínimo`,
+    });
+  }
+  if (inciertos > 0) {
     alerts.push({
       regla: 'IPL-02',
       prioridad: 'MEDIA',
-      descripcion: `${conUmbral - cumplen} bloque(s) curricular(es) por debajo del umbral horario mínimo`,
+      descripcion: `${inciertos} bloque(s) curricular(es) con horas no determinadas — revisar clasificación de materias`,
     });
   }
 

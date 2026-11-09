@@ -245,7 +245,7 @@ export class ConsultasAcademicasService {
     if (!tieneScope) throw new ForbiddenException();
 
     const materias = await this.prisma.materia.findMany({
-      where: { planEstudioId },
+      where: { planEstudioId, estado: 'ACTIVO' },
       select: {
         id: true, codigo: true, nombre: true, planEstudioId: true, estado: true,
         anio: true, cuatrimestre: true, bloqueConocimiento: true,
@@ -1234,7 +1234,7 @@ export class ConsultasAcademicasService {
     if (!tieneScope) throw new ForbiddenException();
 
     const materias = await this.prisma.materia.findMany({
-      where: { planEstudioId },
+      where: { planEstudioId, estado: 'ACTIVO' },
       select: {
         id: true, codigo: true, nombre: true,
         tipoAsignatura: true, cargaHorariaTotal: true,

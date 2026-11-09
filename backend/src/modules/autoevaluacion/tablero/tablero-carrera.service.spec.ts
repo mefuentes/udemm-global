@@ -19,7 +19,7 @@ type CargoPair = { docenteId: string; cargoId: string; cargo: { nombre: string }
 
 function makePrisma(overrides: {
   carrera?: { id: string } | null;
-  planes?: { id: string; nombre?: string; materias?: Array<{ programa: { hsFormacionPractica: number | null; formacionPracticaJson: string | null } | null }> }[];
+  planes?: { id: string; nombre?: string; materias?: Array<{ tipoAsignatura?: string; programa: { hsFormacionPractica: number | null; formacionPracticaJson: string | null } | null }> }[];
   totalMaterias?: number;
   materiasCubiertasIds?: { materiaId: string }[];
   docentesVigentesIds?: DocenteId[];
@@ -56,8 +56,10 @@ function makePrisma(overrides: {
         const distinct = (args.distinct ?? []) as string[];
         const hasDocenteActivo = args.where?.docente?.activo === true;
 
-        if (distinct.includes('materiaId')) return Promise.resolve(materiasCubiertasIds);
+        // IP-03 tiene materiaId pero no cargoId; jerarquía H.3.2 tiene ambos → distinguir
+        if (distinct.includes('materiaId') && !distinct.includes('cargoId')) return Promise.resolve(materiasCubiertasIds);
         if (!distinct.includes('cargoId'))  return Promise.resolve(docentesVigentesIds);   // IP-01
+        if (args.where?.materia?.estado === 'ACTIVO') return Promise.resolve(cargosVigentes); // jerarquía H.3.2
         if (hasDocenteActivo)               return Promise.resolve(cargosActivosConCategoria); // IP-02
         return Promise.resolve(cargosVigentes); // IP-08
       }),
@@ -460,6 +462,31 @@ describe('TablroCarreraService', () => {
       expect(res.ip03.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
       expect(res.ip03.cubiertas).toBe(0);
       expect(res.ip03.total).toBe(5);
+    });
+
+    it('materia.count es invocado con estado ACTIVO (E.2 — excluye INACTIVO)', async () => {
+      const countMock = jest.fn().mockResolvedValue(14);
+      const customPrisma = { ...makePrisma({ totalMaterias: 14 }), materia: { count: countMock } };
+      const svc = new TablroCarreraService(
+        customPrisma as any, makeScope() as any, makeR15Mock() as any,
+        makeR07Mock() as any, makeIP09Mock() as any, makeIP10Mock() as any,
+        makeR12Mock() as any, makeR10Mock() as any,
+        makeR03Mock() as any, makeR04Mock() as any,
+        makeConsultasMock() as any,
+      );
+      await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+      expect(countMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ estado: 'ACTIVO' }),
+        }),
+      );
+    });
+
+    it('total de IP-03 refleja sólo las 14 materias ACTIVO (E.2)', async () => {
+      const res = await makeSvc({ totalMaterias: 14, materiasCubiertasIds: [{ materiaId: 'm-1' }] })
+        .consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ip03.total).toBe(14);
+      expect(res.ip03.cubiertas).toBe(1);
     });
   });
 
@@ -1594,56 +1621,50 @@ describe('TablroCarreraService', () => {
 describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
   type CargoPairCP = { docenteId: string; cargoId: string; cargo: { nombre: string } };
 
-  /** Mock de Prisma extendido con docente, cargoDocente y soporte para vincsConDesig. */
+  /** Mock de Prisma para condicionesPlantell (H.3: fuente VinculacionCatedra). */
   function makePrismaCP(opts: {
     docenteIds?: string[];
     docentes?: Array<{ id: string; tituloPosgrado: string | null; proyectosInvestigacionJson: string | null }>;
-    cargosRegulares?: Array<{ docenteId: string }>;
-    cargosInterinos?: Array<{ docenteId: string }>;
     vincsConDesig?: Array<{ docenteId: string; designacion: { nombre: string } }>;
     cargosVigentes?: CargoPairCP[];
-    throwOnCargoDocente?: boolean;
+    throwOnDocente?: boolean;
   } = {}) {
     const {
       docenteIds = ['d-1'],
       docentes = [{ id: 'd-1', tituloPosgrado: 'Maestría', proyectosInvestigacionJson: null }],
-      cargosRegulares = [{ docenteId: 'd-1' }],
-      cargosInterinos = [],
       vincsConDesig = [{ docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } }],
-      cargosVigentes = [{ docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'Titular' } }],
-      throwOnCargoDocente = false,
+      cargosVigentes = [{ docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } }],
+      throwOnDocente = false,
     } = opts;
 
     const vincsIds = docenteIds.map(id => ({ docenteId: id }));
     const cargosActivos = docenteIds.map((id, i) => ({
-      docenteId: id, cargoId: `act-${i}`, cargo: { nombre: 'Titular' },
+      docenteId: id, cargoId: `act-${i}`, cargo: { nombre: 'PROFESOR TITULAR' },
     }));
 
     return {
       carrera:      { findUnique: jest.fn().mockResolvedValue({ id: CAR_ID }) },
       planEstudio:  { findMany: jest.fn().mockResolvedValue([{ id: 'plan-1', nombre: 'Plan 1', materias: [] }]) },
       materia:      { count: jest.fn().mockResolvedValue(5) },
-      docente:      { findMany: jest.fn().mockResolvedValue(docentes) },
-      cargoDocente: {
-        findMany: jest.fn().mockImplementation((args: any) => {
-          if (throwOnCargoDocente) return Promise.reject(new Error('DB unavailable'));
-          const contains = (args?.where?.designacion?.contains ?? '').toLowerCase();
-          if (contains === 'regular') return Promise.resolve(cargosRegulares);
-          if (contains === 'interino') return Promise.resolve(cargosInterinos);
-          return Promise.resolve([]);
+      docente:      {
+        findMany: jest.fn().mockImplementation(() => {
+          if (throwOnDocente) return Promise.reject(new Error('DB unavailable'));
+          return Promise.resolve(docentes);
         }),
       },
+      cargoDocente: { findMany: jest.fn().mockResolvedValue([]) },
       vinculacionCatedra: {
         findMany: jest.fn().mockImplementation((args: any) => {
           const distinct = (args.distinct ?? []) as string[];
           const hasDesignacionId = distinct.includes('designacionId');
           const hasDocenteActivo = args.where?.docente?.activo === true;
 
-          if (distinct.includes('materiaId'))  return Promise.resolve([{ materiaId: 'm-1' }]);
-          if (hasDesignacionId)                return Promise.resolve(vincsConDesig);
-          if (!distinct.includes('cargoId'))   return Promise.resolve(vincsIds);     // IP-01 / vincsIds
-          if (hasDocenteActivo)                return Promise.resolve(cargosActivos); // IP-02
-          return Promise.resolve(cargosVigentes);                                     // IP-08
+          if (distinct.includes('materiaId') && !distinct.includes('cargoId')) return Promise.resolve([{ materiaId: 'm-1' }]);
+          if (hasDesignacionId)                        return Promise.resolve(vincsConDesig);
+          if (!distinct.includes('cargoId'))           return Promise.resolve(vincsIds);        // IP-01
+          if (args.where?.materia?.estado === 'ACTIVO') return Promise.resolve(cargosVigentes); // jerarquía H.3.2
+          if (hasDocenteActivo)                        return Promise.resolve(cargosActivos);   // IP-02
+          return Promise.resolve(cargosVigentes);                                               // IP-08
         }),
       },
     };
@@ -1703,22 +1724,20 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
     expect(res.condicionesPlantell!.totalDocentes).toBe(2);
   });
 
-  it('cargos regulares vigentes: conDesignacionRegular correcto', async () => {
+  it('cargos regulares vigentes: conDesignacionRegular correcto (fuente VinculacionCatedra)', async () => {
     const res = await makeSvcCP({
       docenteIds: ['d-1', 'd-2'],
       docentes: [
         { id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null },
         { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
       ],
-      cargosRegulares: [{ docenteId: 'd-1' }, { docenteId: 'd-2' }],
-      cargosInterinos: [],
       vincsConDesig: [
         { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
         { docenteId: 'd-2', designacion: { nombre: 'REGULAR AD HONOREM' } },
       ],
       cargosVigentes: [
-        { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'Titular' } },
-        { docenteId: 'd-2', cargoId: 'c-2', cargo: { nombre: 'Titular' } },
+        { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+        { docenteId: 'd-2', cargoId: 'c-2', cargo: { nombre: 'PROFESOR TITULAR' } },
       ],
     }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
@@ -1726,10 +1745,9 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
     expect(res.condicionesPlantell!.conDesignacionInterina).toBe(0);
   });
 
-  it('cargos interinos vigentes: conDesignacionInterina correcto', async () => {
+  it('cargos interinos vigentes: conDesignacionInterina correcto (fuente VinculacionCatedra)', async () => {
     const res = await makeSvcCP({
-      cargosRegulares: [],
-      cargosInterinos: [{ docenteId: 'd-1' }],
+      vincsConDesig: [{ docenteId: 'd-1', designacion: { nombre: 'INTERINO RENTADO' } }],
     }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
     expect(res.condicionesPlantell!.conDesignacionInterina).toBe(1);
@@ -1740,9 +1758,10 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
     const res = await makeSvcCP({
       docenteIds: ['d-1'],
       docentes: [{ id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null }],
-      cargosRegulares: [{ docenteId: 'd-1' }],
-      cargosInterinos: [{ docenteId: 'd-1' }],
-      vincsConDesig: [{ docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } }],
+      vincsConDesig: [
+        { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
+        { docenteId: 'd-1', designacion: { nombre: 'INTERINO RENTADO' } },
+      ],
     }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
     expect(res.condicionesPlantell!.conDesignacionRegular).toBe(1);
@@ -1800,7 +1819,7 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
     expect(res.condicionesPlantell!.relacionPA).toBeUndefined();
   });
 
-  it('la consulta de cargos incluye filtro de vigencia (fechaInicio lte, fechaFin null o gt)', async () => {
+  it('conDesignacionRegular/Interina usan VinculacionCatedra: cargoDocente no consultado', async () => {
     const prisma = makePrismaCP();
     const svc = new TablroCarreraService(
       prisma as any, makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
@@ -1810,12 +1829,15 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
     );
     await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
-    expect(prisma.cargoDocente.findMany).toHaveBeenCalledWith(
+    expect(prisma.cargoDocente.findMany).not.toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
-          fechaInicio: expect.objectContaining({ lte: expect.any(Date) }),
-          OR: [{ fechaFin: null }, { fechaFin: expect.objectContaining({ gt: expect.any(Date) }) }],
-        }),
+        where: expect.objectContaining({ designacion: expect.anything() }),
+      }),
+    );
+    expect(prisma.vinculacionCatedra.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ carreraId: CAR_ID, estado: 'APROBADA' }),
+        select: expect.objectContaining({ designacion: expect.anything() }),
       }),
     );
   });
@@ -1851,7 +1873,7 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
   });
 
   it('fallo controlado: si calcularCondicionesPlantell lanza, condicionesPlantell es undefined', async () => {
-    const res = await makeSvcCP({ throwOnCargoDocente: true }).consultarCarrera(
+    const res = await makeSvcCP({ throwOnDocente: true }).consultarCarrera(
       CAR_ID, USR.usuarioId, USR.rolNombre,
     );
     // El try/catch en consultarCarrera absorbe el error; el resto del análisis sigue disponible.
@@ -1873,7 +1895,6 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
           { id: 'd-3', tituloPosgrado: null, proyectosInvestigacionJson: null },
           { id: 'd-4', tituloPosgrado: null, proyectosInvestigacionJson: null },
         ],
-        cargosRegulares: [],
         vincsConDesig: [
           { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
           { docenteId: 'd-2', designacion: { nombre: 'CONTRATADO' } },
@@ -1881,7 +1902,7 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
           { docenteId: 'd-4', designacion: { nombre: 'CONTRATADO' } },
         ],
         cargosVigentes: ['d-1', 'd-2', 'd-3', 'd-4'].map((id, i) => ({
-          docenteId: id, cargoId: `c-${i}`, cargo: { nombre: 'Titular' },
+          docenteId: id, cargoId: `c-${i}`, cargo: { nombre: 'PROFESOR TITULAR' },
         })),
       }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
@@ -1901,14 +1922,13 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
           { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: JSON.stringify([{ titulo: 'Proyecto B' }]) },
           { id: 'd-3', tituloPosgrado: null, proyectosInvestigacionJson: null },
         ],
-        cargosRegulares: [],
         vincsConDesig: [
           { docenteId: 'd-1', designacion: { nombre: 'CONTRATADO' } },
           { docenteId: 'd-2', designacion: { nombre: 'CONTRATADO' } },
           { docenteId: 'd-3', designacion: { nombre: 'CONTRATADO' } },
         ],
         cargosVigentes: ['d-1', 'd-2', 'd-3'].map((id, i) => ({
-          docenteId: id, cargoId: `c-${i}`, cargo: { nombre: 'Titular' },
+          docenteId: id, cargoId: `c-${i}`, cargo: { nombre: 'PROFESOR TITULAR' },
         })),
       }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
@@ -1928,15 +1948,13 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
           { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
           { id: 'd-3', tituloPosgrado: null, proyectosInvestigacionJson: null },
         ],
-        cargosRegulares: [{ docenteId: 'd-1' }, { docenteId: 'd-2' }],
-        cargosInterinos: [],
         vincsConDesig: [
           { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
           { docenteId: 'd-2', designacion: { nombre: 'REGULAR AD HONOREM' } },
           { docenteId: 'd-3', designacion: { nombre: 'CONTRATADO' } },
         ],
         cargosVigentes: ['d-1', 'd-2', 'd-3'].map((id, i) => ({
-          docenteId: id, cargoId: `c-${i}`, cargo: { nombre: 'Titular' },
+          docenteId: id, cargoId: `c-${i}`, cargo: { nombre: 'PROFESOR TITULAR' },
         })),
       }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
@@ -1963,7 +1981,7 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
 
     // Escenario 5: datos faltantes (fallo de calcularCondicionesPlantell)
     it('si calcularCondicionesPlantell falla, ip05/ip06/ip07 son undefined', async () => {
-      const res = await makeSvcCP({ throwOnCargoDocente: true }).consultarCarrera(
+      const res = await makeSvcCP({ throwOnDocente: true }).consultarCarrera(
         CAR_ID, USR.usuarioId, USR.rolNombre,
       );
       expect(res.ip05).toBeUndefined();
@@ -1977,9 +1995,8 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
       const res = await makeSvcCP({
         docenteIds: ['d-1'],
         docentes: [{ id: 'd-1', tituloPosgrado: 'Maestría', proyectosInvestigacionJson: null }],
-        cargosRegulares: [],
         vincsConDesig: [{ docenteId: 'd-1', designacion: { nombre: 'CONTRATADO' } }],
-        cargosVigentes: [{ docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'Titular' } }],
+        cargosVigentes: [{ docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } }],
       }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
       expect(res.ip05!.totalDocentes).toBe(1);
@@ -1993,14 +2010,13 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
           { id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null },
           { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
         ],
-        cargosRegulares: [],
         vincsConDesig: [
           { docenteId: 'd-1', designacion: { nombre: 'CONTRATADO' } },
           { docenteId: 'd-2', designacion: { nombre: 'CONTRATADO' } },
         ],
         cargosVigentes: [
-          { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'Titular' } },
-          { docenteId: 'd-2', cargoId: 'c-2', cargo: { nombre: 'Titular' } },
+          { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+          { docenteId: 'd-2', cargoId: 'c-2', cargo: { nombre: 'PROFESOR TITULAR' } },
         ],
       }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
 
@@ -2020,14 +2036,12 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
           { id: 'd-1', tituloPosgrado: 'Maestría', proyectosInvestigacionJson: JSON.stringify([{ titulo: 'Proyecto' }]) },
           { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
         ],
-        cargosRegulares: [{ docenteId: 'd-1' }],
-        cargosInterinos: [],
         vincsConDesig: [
           { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
           { docenteId: 'd-2', designacion: { nombre: 'CONTRATADO' } },
         ],
         cargosVigentes: [
-          { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'Titular' } },
+          { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
           { docenteId: 'd-2', cargoId: 'c-2', cargo: { nombre: 'JTP' } },
         ],
       }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
@@ -2068,6 +2082,321 @@ describe('TablroCarreraService — condicionesPlantell (B-03)', () => {
       expect(res.ip13).toBeDefined();
       expect(res.estadoGeneralCalculo).toBeDefined();
     });
+  });
+});
+
+// ── H.3 — condicionesPlantell: designación + jerarquía ───────────────────────
+
+describe('TablroCarreraService — H.3 condicionesPlantell (designación + jerarquía)', () => {
+  type CargoPairCP = { docenteId: string; cargoId: string; cargo: { nombre: string } };
+
+  function makePrismaH3(opts: {
+    docenteIds?: string[];
+    docentes?: Array<{ id: string; tituloPosgrado: string | null; proyectosInvestigacionJson: string | null }>;
+    vincsConDesig?: Array<{ docenteId: string; designacion: { nombre: string } }>;
+    cargosVigentes?: CargoPairCP[];
+  } = {}) {
+    const {
+      docenteIds = ['d-1'],
+      docentes = [{ id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null }],
+      vincsConDesig = [{ docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } }],
+      cargosVigentes = [{ docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } }],
+    } = opts;
+
+    const vincsIds  = docenteIds.map(id => ({ docenteId: id }));
+    const cargosActivos = docenteIds.map((id, i) => ({ docenteId: id, cargoId: `act-${i}`, cargo: { nombre: 'PROFESOR TITULAR' } }));
+
+    return {
+      carrera:     { findUnique: jest.fn().mockResolvedValue({ id: CAR_ID }) },
+      planEstudio: { findMany: jest.fn().mockResolvedValue([{ id: 'plan-1', nombre: 'Plan 1', materias: [] }]) },
+      materia:     { count: jest.fn().mockResolvedValue(5) },
+      docente:     { findMany: jest.fn().mockResolvedValue(docentes) },
+      cargoDocente: { findMany: jest.fn().mockResolvedValue([]) },
+      vinculacionCatedra: {
+        findMany: jest.fn().mockImplementation((args: any) => {
+          const distinct = (args.distinct ?? []) as string[];
+          if (distinct.includes('materiaId') && !distinct.includes('cargoId')) return Promise.resolve([{ materiaId: 'm-1' }]);
+          if (distinct.includes('designacionId'))       return Promise.resolve(vincsConDesig);
+          if (!distinct.includes('cargoId'))            return Promise.resolve(vincsIds);
+          if (args.where?.materia?.estado === 'ACTIVO') return Promise.resolve(cargosVigentes); // jerarquía H.3.2
+          if (args.where?.docente?.activo === true)     return Promise.resolve(cargosActivos);  // IP-02
+          return Promise.resolve(cargosVigentes);
+        }),
+      },
+    };
+  }
+
+  function makeSvcH3(opts: Parameters<typeof makePrismaH3>[0] = {}) {
+    return new TablroCarreraService(
+      makePrismaH3(opts) as any,
+      makeScope() as any,
+      makeR15Mock() as any,
+      makeR07Mock() as any,
+      makeIP09Mock() as any,
+      makeIP10Mock() as any,
+      makeR12Mock() as any,
+      makeR10Mock() as any,
+      makeR03Mock() as any,
+      makeR04Mock() as any,
+      makeConsultasMock() as any,
+    );
+  }
+
+  // ── Grupo A: conDesignacionRegular/Interina desde VinculacionCatedra (5 tests) ──
+
+  it('CP-H3-01: REGULAR RENTADO → conDesignacionRegular=1, conDesignacionInterina=0', async () => {
+    const res = await makeSvcH3({
+      vincsConDesig: [{ docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } }],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+    expect(res.condicionesPlantell!.conDesignacionRegular).toBe(1);
+    expect(res.condicionesPlantell!.conDesignacionInterina).toBe(0);
+  });
+
+  it('CP-H3-02: REGULAR AD HONOREM → conDesignacionRegular=1, conDesignacionInterina=0', async () => {
+    const res = await makeSvcH3({
+      vincsConDesig: [{ docenteId: 'd-1', designacion: { nombre: 'REGULAR AD HONOREM' } }],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+    expect(res.condicionesPlantell!.conDesignacionRegular).toBe(1);
+    expect(res.condicionesPlantell!.conDesignacionInterina).toBe(0);
+  });
+
+  it('CP-H3-03: INTERINO RENTADO → conDesignacionInterina=1, conDesignacionRegular=0', async () => {
+    const res = await makeSvcH3({
+      vincsConDesig: [{ docenteId: 'd-1', designacion: { nombre: 'INTERINO RENTADO' } }],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+    expect(res.condicionesPlantell!.conDesignacionInterina).toBe(1);
+    expect(res.condicionesPlantell!.conDesignacionRegular).toBe(0);
+  });
+
+  it('CP-H3-04: INTERINO AD HONOREM → conDesignacionInterina=1, conDesignacionRegular=0', async () => {
+    const res = await makeSvcH3({
+      vincsConDesig: [{ docenteId: 'd-1', designacion: { nombre: 'INTERINO AD HONOREM' } }],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+    expect(res.condicionesPlantell!.conDesignacionInterina).toBe(1);
+    expect(res.condicionesPlantell!.conDesignacionRegular).toBe(0);
+  });
+
+  it('CP-H3-05: CONTRATADO → conDesignacionRegular=0, conDesignacionInterina=0', async () => {
+    const res = await makeSvcH3({
+      vincsConDesig: [{ docenteId: 'd-1', designacion: { nombre: 'CONTRATADO' } }],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+    expect(res.condicionesPlantell!.conDesignacionRegular).toBe(0);
+    expect(res.condicionesPlantell!.conDesignacionInterina).toBe(0);
+  });
+
+  // ── Grupo B: designacionDetalle (3 tests) ──────────────────────────────────
+
+  it('CP-H3-06: designacionDetalle presente con tipo, docentes y porcentaje', async () => {
+    const res = await makeSvcH3({
+      docenteIds: ['d-1', 'd-2'],
+      docentes: [
+        { id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null },
+        { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
+      ],
+      vincsConDesig: [
+        { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
+        { docenteId: 'd-2', designacion: { nombre: 'CONTRATADO' } },
+      ],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const det = res.condicionesPlantell!.designacionDetalle!;
+    expect(det).toBeDefined();
+    expect(det.length).toBe(2);
+    det.forEach(item => {
+      expect(typeof item.tipo).toBe('string');
+      expect(typeof item.docentes).toBe('number');
+      expect(typeof item.porcentaje).toBe('number');
+    });
+    // 1 de 2 = 50%
+    const regular = det.find(d => d.tipo === 'REGULAR RENTADO')!;
+    expect(regular.porcentaje).toBe(50);
+  });
+
+  it('CP-H3-07: designacionDetalle ordenado descendente por docentes', async () => {
+    const res = await makeSvcH3({
+      docenteIds: ['d-1', 'd-2', 'd-3'],
+      docentes: [
+        { id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null },
+        { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
+        { id: 'd-3', tituloPosgrado: null, proyectosInvestigacionJson: null },
+      ],
+      vincsConDesig: [
+        { docenteId: 'd-1', designacion: { nombre: 'CONTRATADO' } },
+        { docenteId: 'd-2', designacion: { nombre: 'CONTRATADO' } },
+        { docenteId: 'd-3', designacion: { nombre: 'REGULAR RENTADO' } },
+      ],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const det = res.condicionesPlantell!.designacionDetalle!;
+    expect(det[0].tipo).toBe('CONTRATADO');
+    expect(det[0].docentes).toBe(2);
+    expect(det[1].tipo).toBe('REGULAR RENTADO');
+    expect(det[1].docentes).toBe(1);
+  });
+
+  it('CP-H3-08: designacionDetalle sincronizado con dedicacionPorTipo', async () => {
+    const res = await makeSvcH3({
+      docenteIds: ['d-1', 'd-2'],
+      docentes: [
+        { id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null },
+        { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
+      ],
+      vincsConDesig: [
+        { docenteId: 'd-1', designacion: { nombre: 'INTERINO RENTADO' } },
+        { docenteId: 'd-2', designacion: { nombre: 'INTERINO AD HONOREM' } },
+      ],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const cp = res.condicionesPlantell!;
+    expect(cp.designacionDetalle!.length).toBe(cp.dedicacionPorTipo.length);
+    cp.dedicacionPorTipo.forEach(item => {
+      const det = cp.designacionDetalle!.find(d => d.tipo === item.tipo)!;
+      expect(det.docentes).toBe(item.docentes);
+    });
+  });
+
+  // ── Grupo C: jerarquía (5 tests) ───────────────────────────────────────────
+
+  it('CP-H3-09: PROFESOR TITULAR → jerarquía.profesores con un item, totalProfesores=1', async () => {
+    const res = await makeSvcH3({
+      cargosVigentes: [{ docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } }],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalProfesores).toBe(1);
+    expect(j.totalAuxiliares).toBe(0);
+    expect(j.profesores).toHaveLength(1);
+    expect(j.profesores[0].cargo).toBe('PROFESOR TITULAR');
+    expect(j.profesores[0].cargos).toBe(1);
+    expect(j.auxiliares).toHaveLength(0);
+  });
+
+  it('CP-H3-10: JTP → jerarquía.auxiliares con un item, totalAuxiliares=1', async () => {
+    const res = await makeSvcH3({
+      cargosVigentes: [{ docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'JTP' } }],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalAuxiliares).toBe(1);
+    expect(j.totalProfesores).toBe(0);
+    expect(j.auxiliares).toHaveLength(1);
+    expect(j.auxiliares[0].cargo).toBe('JTP');
+    expect(j.auxiliares[0].cargos).toBe(1);
+  });
+
+  it('CP-H3-11: Titular + JTP → profesores=[1], auxiliares=[1], otros=0', async () => {
+    const res = await makeSvcH3({
+      docenteIds: ['d-1', 'd-2'],
+      docentes: [
+        { id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null },
+        { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
+      ],
+      vincsConDesig: [
+        { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
+        { docenteId: 'd-2', designacion: { nombre: 'CONTRATADO' } },
+      ],
+      cargosVigentes: [
+        { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+        { docenteId: 'd-2', cargoId: 'c-2', cargo: { nombre: 'JTP' } },
+      ],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalProfesores).toBe(1);
+    expect(j.totalAuxiliares).toBe(1);
+    expect(j.otros).toBe(0);
+  });
+
+  it('CP-H3-12: cargo OTROS → clasificado como auxiliar (H.3.1)', async () => {
+    const res = await makeSvcH3({
+      cargosVigentes: [{ docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'OTROS' } }],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalAuxiliares).toBe(1);
+    expect(j.auxiliares).toHaveLength(1);
+    expect(j.auxiliares[0].cargo).toBe('OTROS');
+    expect(j.totalProfesores).toBe(0);
+    expect(j.otros).toBe(0);
+  });
+
+  it('CP-H3-13: sin cargos → jerarquía con todos en 0', async () => {
+    const res = await makeSvcH3({
+      cargosVigentes: [],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalProfesores).toBe(0);
+    expect(j.totalAuxiliares).toBe(0);
+    expect(j.otros).toBe(0);
+    expect(j.profesores).toHaveLength(0);
+    expect(j.auxiliares).toHaveLength(0);
+  });
+
+  // ── Grupo D: integración y regresión (3 tests) ─────────────────────────────
+
+  it('CP-H3-14: docente con REGULAR e INTERINO en distintas VinculacionCatedra → ambos=1', async () => {
+    const res = await makeSvcH3({
+      vincsConDesig: [
+        { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
+        { docenteId: 'd-1', designacion: { nombre: 'INTERINO AD HONOREM' } },
+      ],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    expect(res.condicionesPlantell!.conDesignacionRegular).toBe(1);
+    expect(res.condicionesPlantell!.conDesignacionInterina).toBe(1);
+  });
+
+  it('CP-H3-15: escenario completo — todos los campos nuevos presentes y coherentes', async () => {
+    const res = await makeSvcH3({
+      docenteIds: ['d-1', 'd-2', 'd-3'],
+      docentes: [
+        { id: 'd-1', tituloPosgrado: 'Maestría', proyectosInvestigacionJson: null },
+        { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
+        { id: 'd-3', tituloPosgrado: null, proyectosInvestigacionJson: null },
+      ],
+      vincsConDesig: [
+        { docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } },
+        { docenteId: 'd-2', designacion: { nombre: 'INTERINO AD HONOREM' } },
+        { docenteId: 'd-3', designacion: { nombre: 'CONTRATADO' } },
+      ],
+      cargosVigentes: [
+        { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+        { docenteId: 'd-2', cargoId: 'c-2', cargo: { nombre: 'PROFESOR ADJUNTO' } },
+        { docenteId: 'd-3', cargoId: 'c-3', cargo: { nombre: 'JTP' } },
+      ],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const cp = res.condicionesPlantell!;
+    expect(cp.conDesignacionRegular).toBe(1);
+    expect(cp.conDesignacionInterina).toBe(1);
+    expect(cp.designacionDetalle).toBeDefined();
+    expect(cp.designacionDetalle!.some(d => d.tipo === 'REGULAR RENTADO')).toBe(true);
+    expect(cp.jerarquia).toBeDefined();
+    expect(cp.jerarquia!.totalProfesores).toBe(2);
+    expect(cp.jerarquia!.totalAuxiliares).toBe(1);
+    // suma porcentajes ≈ 100 (3 docentes, cada uno con 1/3 ≈ 33%)
+    const sumPct = cp.designacionDetalle!.reduce((acc, d) => acc + d.porcentaje, 0);
+    expect(sumPct).toBeGreaterThanOrEqual(99);
+    expect(sumPct).toBeLessThanOrEqual(101);
+  });
+
+  it('CP-H3-16: regresión — conPosgrado/conInvestigacion no afectados por cambio de fuente', async () => {
+    const res = await makeSvcH3({
+      docenteIds: ['d-1', 'd-2'],
+      docentes: [
+        { id: 'd-1', tituloPosgrado: 'Doctorado', proyectosInvestigacionJson: JSON.stringify([{ titulo: 'P-1' }]) },
+        { id: 'd-2', tituloPosgrado: null, proyectosInvestigacionJson: null },
+      ],
+      vincsConDesig: [
+        { docenteId: 'd-1', designacion: { nombre: 'INTERINO RENTADO' } },
+        { docenteId: 'd-2', designacion: { nombre: 'CONTRATADO' } },
+      ],
+    }).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    expect(res.condicionesPlantell!.conPosgrado).toBe(1);
+    expect(res.condicionesPlantell!.conInvestigacion).toBe(1);
+    expect(res.condicionesPlantell!.totalDocentes).toBe(2);
   });
 });
 
@@ -2148,6 +2477,490 @@ function makeSvcAuditoria(
     consultasMock as any,
   );
 }
+
+// ── H.3.1 — Jerarquía: filtros y clasificación ───────────────────────────────
+
+describe('TablroCarreraService — H.3.1 jerarquía del plantel (filtros + clasificación)', () => {
+  type CargoPairH31 = { docenteId: string; cargoId: string; cargo: { nombre: string } };
+
+  function makePrismaH31(cargosVigentes: CargoPairH31[] = [
+    { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+  ]) {
+    const vincsIds     = [{ docenteId: 'd-1' }];
+    const cargosActivos = [{ docenteId: 'd-1', cargoId: 'act-0', cargo: { nombre: 'PROFESOR TITULAR' } }];
+    const vincsConDesig = [{ docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } }];
+    const docentes      = [{ id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null, dedicacion: null, tipoPosgrado: null }];
+
+    return {
+      carrera:     { findUnique: jest.fn().mockResolvedValue({ id: CAR_ID }) },
+      planEstudio: { findMany: jest.fn().mockResolvedValue([{ id: 'plan-1', nombre: 'Plan 1', materias: [] }]) },
+      materia:     { count: jest.fn().mockResolvedValue(5) },
+      docente:     { findMany: jest.fn().mockResolvedValue(docentes) },
+      cargoDocente: { findMany: jest.fn().mockResolvedValue([]) },
+      vinculacionCatedra: {
+        findMany: jest.fn().mockImplementation((args: any) => {
+          const distinct = (args.distinct ?? []) as string[];
+          if (distinct.includes('materiaId') && !distinct.includes('cargoId')) return Promise.resolve([{ materiaId: 'm-1' }]);
+          if (distinct.includes('designacionId'))       return Promise.resolve(vincsConDesig);
+          if (!distinct.includes('cargoId'))            return Promise.resolve(vincsIds);
+          if (args.where?.materia?.estado === 'ACTIVO') return Promise.resolve(cargosVigentes); // jerarquía H.3.2
+          if (args.where?.docente?.activo === true)     return Promise.resolve(cargosActivos);  // IP-02
+          return Promise.resolve(cargosVigentes);
+        }),
+      },
+    };
+  }
+
+  function makeSvcH31(cargos?: CargoPairH31[]) {
+    return new TablroCarreraService(
+      makePrismaH31(cargos) as any,
+      makeScope() as any,
+      makeR15Mock() as any,
+      makeR07Mock() as any,
+      makeIP09Mock() as any,
+      makeIP10Mock() as any,
+      makeR12Mock() as any,
+      makeR10Mock() as any,
+      makeR03Mock() as any,
+      makeR04Mock() as any,
+      makeConsultasMock() as any,
+    );
+  }
+
+  it('H.3.1-01: query cargosJerarquía usa docente.activo=true', async () => {
+    const prisma = makePrismaH31();
+    const svc = new TablroCarreraService(
+      prisma as any, makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
+      makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
+      makeR03Mock() as any, makeR04Mock() as any, makeConsultasMock() as any,
+    );
+    await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const calls = (prisma.vinculacionCatedra.findMany as jest.Mock).mock.calls.map(c => c[0]);
+    const jerarquiaCall = calls.find(a =>
+      (a.distinct ?? []).includes('cargoId') && a.where?.materia?.estado === 'ACTIVO',
+    );
+    expect(jerarquiaCall).toBeDefined();
+    expect(jerarquiaCall!.where.docente.activo).toBe(true);
+  });
+
+  it('H.3.1-02: query cargosJerarquía usa materia.estado="ACTIVO"', async () => {
+    const prisma = makePrismaH31();
+    const svc = new TablroCarreraService(
+      prisma as any, makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
+      makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
+      makeR03Mock() as any, makeR04Mock() as any, makeConsultasMock() as any,
+    );
+    await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const calls = (prisma.vinculacionCatedra.findMany as jest.Mock).mock.calls.map(c => c[0]);
+    // La query de jerarquía es la única con cargoId en distinct + docente.activo + materia.estado
+    const jerarquiaCall = calls.find(a =>
+      (a.distinct ?? []).includes('cargoId') &&
+      a.where?.docente?.activo === true &&
+      a.where?.materia?.estado === 'ACTIVO',
+    );
+    expect(jerarquiaCall).toBeDefined();
+    expect(jerarquiaCall!.where.materia.estado).toBe('ACTIVO');
+  });
+
+  it('H.3.1-03: query cargosJerarquía usa estado="APROBADA"', async () => {
+    const prisma = makePrismaH31();
+    const svc = new TablroCarreraService(
+      prisma as any, makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
+      makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
+      makeR03Mock() as any, makeR04Mock() as any, makeConsultasMock() as any,
+    );
+    await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const calls = (prisma.vinculacionCatedra.findMany as jest.Mock).mock.calls.map(c => c[0]);
+    const jerarquiaCall = calls.find(a =>
+      (a.distinct ?? []).includes('cargoId') && a.where?.materia?.estado === 'ACTIVO',
+    );
+    expect(jerarquiaCall!.where.estado).toBe('APROBADA');
+  });
+
+  it('H.3.1-04: query cargosJerarquía usa carreraId correcto', async () => {
+    const prisma = makePrismaH31();
+    const svc = new TablroCarreraService(
+      prisma as any, makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
+      makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
+      makeR03Mock() as any, makeR04Mock() as any, makeConsultasMock() as any,
+    );
+    await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const calls = (prisma.vinculacionCatedra.findMany as jest.Mock).mock.calls.map(c => c[0]);
+    const jerarquiaCall = calls.find(a =>
+      (a.distinct ?? []).includes('cargoId') && a.where?.materia?.estado === 'ACTIVO',
+    );
+    expect(jerarquiaCall!.where.carreraId).toBe(CAR_ID);
+  });
+
+  it('H.3.1-05: query cargosJerarquía usa distinct [docenteId, materiaId, cargoId] — una asignación por docente–materia–cargo', async () => {
+    const prisma = makePrismaH31();
+    const svc = new TablroCarreraService(
+      prisma as any, makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
+      makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
+      makeR03Mock() as any, makeR04Mock() as any, makeConsultasMock() as any,
+    );
+    await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const calls = (prisma.vinculacionCatedra.findMany as jest.Mock).mock.calls.map(c => c[0]);
+    const jerarquiaCall = calls.find(a =>
+      (a.distinct ?? []).includes('cargoId') && a.where?.materia?.estado === 'ACTIVO',
+    );
+    expect(jerarquiaCall!.distinct).toContain('docenteId');
+    expect(jerarquiaCall!.distinct).toContain('materiaId');
+    expect(jerarquiaCall!.distinct).toContain('cargoId');
+  });
+
+  it('H.3.1-06: Profesor Titular, Asociado y Adjunto → profesores', async () => {
+    const res = await makeSvcH31([
+      { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+      { docenteId: 'd-2', cargoId: 'c-2', cargo: { nombre: 'PROFESOR ASOCIADO' } },
+      { docenteId: 'd-3', cargoId: 'c-3', cargo: { nombre: 'PROFESOR ADJUNTO' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalProfesores).toBe(3);
+    expect(j.totalAuxiliares).toBe(0);
+    expect(j.profesores.map(p => p.cargo)).toEqual(
+      expect.arrayContaining(['PROFESOR TITULAR', 'PROFESOR ASOCIADO', 'PROFESOR ADJUNTO']),
+    );
+  });
+
+  it('H.3.1-07: Ayudante Graduado, No Graduado y JTP → auxiliares', async () => {
+    const res = await makeSvcH31([
+      { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'AYUDANTE GRADUADO' } },
+      { docenteId: 'd-2', cargoId: 'c-2', cargo: { nombre: 'AYUDANTE NO GRADUADO' } },
+      { docenteId: 'd-3', cargoId: 'c-3', cargo: { nombre: 'JTP' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalAuxiliares).toBe(3);
+    expect(j.totalProfesores).toBe(0);
+    expect(j.auxiliares.map(a => a.cargo)).toEqual(
+      expect.arrayContaining(['AYUDANTE GRADUADO', 'AYUDANTE NO GRADUADO', 'JTP']),
+    );
+  });
+
+  it('H.3.1-08: OTROS → auxiliares, otros=0 (H.3.1)', async () => {
+    const res = await makeSvcH31([
+      { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'OTROS' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalAuxiliares).toBe(1);
+    expect(j.auxiliares).toHaveLength(1);
+    expect(j.auxiliares[0].cargo).toBe('OTROS');
+    expect(j.totalProfesores).toBe(0);
+    expect(j.otros).toBe(0);
+  });
+
+  it('H.3.1-09: docente con múltiples cargos → ambos cargos contados por separado', async () => {
+    const res = await makeSvcH31([
+      { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+      { docenteId: 'd-1', cargoId: 'c-2', cargo: { nombre: 'JTP' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalProfesores).toBe(1);
+    expect(j.totalAuxiliares).toBe(1);
+  });
+
+  it('H.3.1-10: sin cargos vigentes → jerarquía con todos en 0', async () => {
+    const res = await makeSvcH31([]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalProfesores).toBe(0);
+    expect(j.totalAuxiliares).toBe(0);
+    expect(j.otros).toBe(0);
+    expect(j.profesores).toHaveLength(0);
+    expect(j.auxiliares).toHaveLength(0);
+  });
+
+  it('H.3.1-11: relación P/A refleja ip08 (no jerarquía directamente)', async () => {
+    const res = await makeSvcH31([
+      { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+      { docenteId: 'd-2', cargoId: 'c-2', cargo: { nombre: 'JTP' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    // relacionPA proviene de ip08, no del cálculo de jerarquía
+    const cp = res.condicionesPlantell!;
+    expect(cp.relacionPA).toBeDefined();
+  });
+
+  it('H.3.1-12: conDesignacionRegular/Interina no afectados por cambios de jerarquía', async () => {
+    const res = await makeSvcH31([
+      { docenteId: 'd-1', cargoId: 'c-1', cargo: { nombre: 'OTROS' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const cp = res.condicionesPlantell!;
+    expect(typeof cp.conDesignacionRegular).toBe('number');
+    expect(typeof cp.conDesignacionInterina).toBe('number');
+    expect(cp.conDesignacionRegular).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ── fin H.3.1 ────────────────────────────────────────────────────────────────
+
+// ── H.3.2 — Conteo por Docente–Materia (una asignación por docente-materia-cargo) ───
+
+describe('TablroCarreraService — H.3.2 jerarquía: conteo por docente-materia', () => {
+  type CargoPairH32 = { docenteId: string; materiaId: string; cargoId: string; cargo: { nombre: string } };
+
+  function makePrismaH32(cargosVigentes: CargoPairH32[] = [
+    { docenteId: 'd-1', materiaId: 'm-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+  ]) {
+    const vincsIds      = [{ docenteId: 'd-1' }];
+    const cargosActivos = [{ docenteId: 'd-1', cargoId: 'act-0', cargo: { nombre: 'PROFESOR TITULAR' } }];
+    const vincsConDesig = [{ docenteId: 'd-1', designacion: { nombre: 'REGULAR RENTADO' } }];
+    const docentes      = [{ id: 'd-1', tituloPosgrado: null, proyectosInvestigacionJson: null }];
+
+    return {
+      carrera:     { findUnique: jest.fn().mockResolvedValue({ id: CAR_ID }) },
+      planEstudio: { findMany: jest.fn().mockResolvedValue([{ id: 'plan-1', nombre: 'Plan 1', materias: [] }]) },
+      materia:     { count: jest.fn().mockResolvedValue(5) },
+      docente:     { findMany: jest.fn().mockResolvedValue(docentes) },
+      cargoDocente: { findMany: jest.fn().mockResolvedValue([]) },
+      vinculacionCatedra: {
+        findMany: jest.fn().mockImplementation((args: any) => {
+          const distinct = (args.distinct ?? []) as string[];
+          if (distinct.includes('materiaId') && !distinct.includes('cargoId')) return Promise.resolve([{ materiaId: 'm-1' }]);
+          if (distinct.includes('designacionId'))       return Promise.resolve(vincsConDesig);
+          if (!distinct.includes('cargoId'))            return Promise.resolve(vincsIds);
+          if (args.where?.materia?.estado === 'ACTIVO') return Promise.resolve(cargosVigentes); // jerarquía H.3.2
+          if (args.where?.docente?.activo === true)     return Promise.resolve(cargosActivos);  // IP-02
+          return Promise.resolve(cargosVigentes);
+        }),
+      },
+    };
+  }
+
+  function makeSvcH32(cargos?: CargoPairH32[]) {
+    return new TablroCarreraService(
+      makePrismaH32(cargos) as any,
+      makeScope() as any,
+      makeR15Mock() as any,
+      makeR07Mock() as any,
+      makeIP09Mock() as any,
+      makeIP10Mock() as any,
+      makeR12Mock() as any,
+      makeR10Mock() as any,
+      makeR03Mock() as any,
+      makeR04Mock() as any,
+      makeConsultasMock() as any,
+    );
+  }
+
+  // ── Conteo por docente–materia (H.3.2-01 a H.3.2-05) ────────────────────────
+
+  it('H.3.2-01: 1 docente titular en 1 materia → totalProfesores=1', async () => {
+    const res = await makeSvcH32([
+      { docenteId: 'd-1', materiaId: 'm-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalProfesores).toBe(1);
+    expect(j.totalAuxiliares).toBe(0);
+    expect(j.otros).toBe(0);
+  });
+
+  it('H.3.2-02: 1 docente titular en 2 materias distintas → totalProfesores=2', async () => {
+    // KEY FIX: antes del fix esto devolvía 1 porque distinct era (docenteId, cargoId)
+    const res = await makeSvcH32([
+      { docenteId: 'd-1', materiaId: 'm-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+      { docenteId: 'd-1', materiaId: 'm-2', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalProfesores).toBe(2);
+    expect(j.totalAuxiliares).toBe(0);
+    expect(j.profesores[0].cargo).toBe('PROFESOR TITULAR');
+    expect(j.profesores[0].cargos).toBe(2);
+  });
+
+  it('H.3.2-03: 2 docentes titulares en 3 materias en total → totalProfesores=3', async () => {
+    const res = await makeSvcH32([
+      { docenteId: 'd-1', materiaId: 'm-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+      { docenteId: 'd-1', materiaId: 'm-2', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+      { docenteId: 'd-2', materiaId: 'm-3', cargoId: 'c-2', cargo: { nombre: 'PROFESOR TITULAR' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalProfesores).toBe(3);
+    expect(j.profesores[0].cargos).toBe(3);
+  });
+
+  it('H.3.2-04: 1 docente con TITULAR en M1 y JTP en M2 → totalProfesores=1, totalAuxiliares=1', async () => {
+    const res = await makeSvcH32([
+      { docenteId: 'd-1', materiaId: 'm-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+      { docenteId: 'd-1', materiaId: 'm-2', cargoId: 'c-2', cargo: { nombre: 'JTP' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalProfesores).toBe(1);
+    expect(j.totalAuxiliares).toBe(1);
+    expect(j.otros).toBe(0);
+  });
+
+  it('H.3.2-05: profesores[cargo].cargos refleja asignaciones-materia, no docentes únicos', async () => {
+    // 1 docente en 3 materias → TITULAR.cargos=3, aunque solo hay 1 docente único
+    const res = await makeSvcH32([
+      { docenteId: 'd-1', materiaId: 'm-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+      { docenteId: 'd-1', materiaId: 'm-2', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+      { docenteId: 'd-1', materiaId: 'm-3', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalProfesores).toBe(3);
+    expect(j.profesores).toHaveLength(1);
+    expect(j.profesores[0].cargo).toBe('PROFESOR TITULAR');
+    expect(j.profesores[0].cargos).toBe(3);
+  });
+
+  // ── Clasificación de cargos (H.3.2-06 y H.3.2-07) ───────────────────────────
+
+  it('H.3.2-06: cargo canónico OTROS → auxiliares, otros=0', async () => {
+    const res = await makeSvcH32([
+      { docenteId: 'd-1', materiaId: 'm-1', cargoId: 'c-1', cargo: { nombre: 'OTROS' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.totalAuxiliares).toBe(1);
+    expect(j.auxiliares[0].cargo).toBe('OTROS');
+    expect(j.totalProfesores).toBe(0);
+    expect(j.otros).toBe(0);
+  });
+
+  it('H.3.2-07: cargo desconocido (no canónico) → jerarquia.otros=1, NO Auxiliar', async () => {
+    // 'INVESTIGADOR' no está en CARGOS_PROFESOR ni CARGOS_AUXILIAR ni es 'OTROS' canónico
+    const res = await makeSvcH32([
+      { docenteId: 'd-1', materiaId: 'm-1', cargoId: 'c-1', cargo: { nombre: 'INVESTIGADOR' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const j = res.condicionesPlantell!.jerarquia!;
+    expect(j.otros).toBe(1);
+    expect(j.totalAuxiliares).toBe(0);
+    expect(j.totalProfesores).toBe(0);
+    expect(j.auxiliares).toHaveLength(0);
+  });
+
+  // ── Verificación de args de la query (H.3.2-08 a H.3.2-10) ──────────────────
+
+  it('H.3.2-08: select en query cargosJerarquía incluye materiaId (nuevo en H.3.2)', async () => {
+    const prisma = makePrismaH32();
+    const svc = new TablroCarreraService(
+      prisma as any, makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
+      makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
+      makeR03Mock() as any, makeR04Mock() as any, makeConsultasMock() as any,
+    );
+    await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const calls = (prisma.vinculacionCatedra.findMany as jest.Mock).mock.calls.map(c => c[0]);
+    const jerarquiaCall = calls.find((a: any) =>
+      (a.distinct ?? []).includes('cargoId') && a.where?.materia?.estado === 'ACTIVO',
+    );
+    expect(jerarquiaCall).toBeDefined();
+    expect(jerarquiaCall!.select).toBeDefined();
+    expect(jerarquiaCall!.select.materiaId).toBe(true);
+    expect(jerarquiaCall!.select.docenteId).toBe(true);
+    expect(jerarquiaCall!.select.cargoId).toBe(true);
+  });
+
+  it('H.3.2-09: distinct en query cargosJerarquía incluye [docenteId, materiaId, cargoId]', async () => {
+    const prisma = makePrismaH32();
+    const svc = new TablroCarreraService(
+      prisma as any, makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
+      makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
+      makeR03Mock() as any, makeR04Mock() as any, makeConsultasMock() as any,
+    );
+    await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const calls = (prisma.vinculacionCatedra.findMany as jest.Mock).mock.calls.map(c => c[0]);
+    const jerarquiaCall = calls.find((a: any) =>
+      (a.distinct ?? []).includes('cargoId') && a.where?.materia?.estado === 'ACTIVO',
+    );
+    expect(jerarquiaCall!.distinct).toContain('docenteId');
+    expect(jerarquiaCall!.distinct).toContain('materiaId');
+    expect(jerarquiaCall!.distinct).toContain('cargoId');
+  });
+
+  it('H.3.2-10: where de la query incluye docente.activo, materia.estado y estado=APROBADA', async () => {
+    const prisma = makePrismaH32();
+    const svc = new TablroCarreraService(
+      prisma as any, makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
+      makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
+      makeR03Mock() as any, makeR04Mock() as any, makeConsultasMock() as any,
+    );
+    await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const calls = (prisma.vinculacionCatedra.findMany as jest.Mock).mock.calls.map(c => c[0]);
+    const jerarquiaCall = calls.find((a: any) =>
+      (a.distinct ?? []).includes('cargoId') && a.where?.materia?.estado === 'ACTIVO',
+    );
+    expect(jerarquiaCall!.where.docente.activo).toBe(true);
+    expect(jerarquiaCall!.where.materia.estado).toBe('ACTIVO');
+    expect(jerarquiaCall!.where.estado).toBe('APROBADA');
+    expect(jerarquiaCall!.where.carreraId).toBe(CAR_ID);
+  });
+
+  // ── Regresión (H.3.2-11 a H.3.2-14) ────────────────────────────────────────
+
+  it('H.3.2-11: regresión — conPosgrado/conInvestigacion no afectados por cambio de distinct', async () => {
+    const res = await makeSvcH32([
+      { docenteId: 'd-1', materiaId: 'm-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+      { docenteId: 'd-1', materiaId: 'm-2', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const cp = res.condicionesPlantell!;
+    expect(typeof cp.conPosgrado).toBe('number');
+    expect(typeof cp.conInvestigacion).toBe('number');
+    expect(cp.totalDocentes).toBeGreaterThanOrEqual(0);
+  });
+
+  it('H.3.2-12: regresión — conDesignacionRegular/Interina no afectados por cambio de distinct', async () => {
+    const res = await makeSvcH32([
+      { docenteId: 'd-1', materiaId: 'm-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+      { docenteId: 'd-1', materiaId: 'm-2', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    const cp = res.condicionesPlantell!;
+    // La fuente de designación es VinculacionCatedra con designacionId en distinct: no afectada
+    expect(typeof cp.conDesignacionRegular).toBe('number');
+    expect(typeof cp.conDesignacionInterina).toBe('number');
+  });
+
+  it('H.3.2-13: regresión — IP-02 (cargos docentes vigentes con docente.activo) no afectado', async () => {
+    const prisma = makePrismaH32([
+      { docenteId: 'd-1', materiaId: 'm-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+      { docenteId: 'd-1', materiaId: 'm-2', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+    ]);
+    const svc = new TablroCarreraService(
+      prisma as any, makeScope() as any, makeR15Mock() as any, makeR07Mock() as any,
+      makeIP09Mock() as any, makeIP10Mock() as any, makeR12Mock() as any, makeR10Mock() as any,
+      makeR03Mock() as any, makeR04Mock() as any, makeConsultasMock() as any,
+    );
+    const res = await svc.consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    // IP-02 usa cargosActivos (docente.activo=true, sin materia.estado='ACTIVO') → no confundida con jerarquía
+    expect(res.ip02).toBeDefined();
+    expect(res.ip02.estadoCalculo).toBeDefined();
+  });
+
+  it('H.3.2-14: regresión — IP-08 (relación P/A) no afectado por cambio de distinct en jerarquía', async () => {
+    const res = await makeSvcH32([
+      { docenteId: 'd-1', materiaId: 'm-1', cargoId: 'c-1', cargo: { nombre: 'PROFESOR TITULAR' } },
+      { docenteId: 'd-2', materiaId: 'm-2', cargoId: 'c-2', cargo: { nombre: 'JTP' } },
+    ]).consultarCarrera(CAR_ID, USR.usuarioId, USR.rolNombre);
+
+    // IP-08 usa IP-08 route (sin materia.estado='ACTIVO'), no jerarquía → debe estar CALCULADO
+    expect(res.ip08).toBeDefined();
+    expect(res.ip08.estadoCalculo).toBeDefined();
+  });
+});
+
+// ── fin H.3.2 ────────────────────────────────────────────────────────────────
 
 describe('TablroCarreraService — consultarAuditoriaDedicacion', () => {
 
@@ -2263,5 +3076,59 @@ describe('TablroCarreraService — consultarAuditoriaDedicacion', () => {
     const res = await makeSvcAuditoria(docs)
       .consultarAuditoriaDedicacion(CAR_ID, USR.usuarioId, USR.rolNombre);
     expect(res.filas.map(f => f.docenteId)).toEqual(['d-aud-3', 'd-aud-1', 'd-aud-2']);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// F.1 — calcularFpPorPlan: electiva con menor FP (§6)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('TablroCarreraService — F.1 fpPorPlan: electiva con menor FP (§6)', () => {
+  const USR_FP = { usuarioId: 'u-fp', rolNombre: 'SECRETARIA_ACADEMICA' };
+
+  it('dos electivas D07 → sumaHsNuevo usa sólo la menor FP', async () => {
+    const planes = [{
+      id: 'plan-fp1', nombre: 'Plan FP Test',
+      materias: [
+        { tipoAsignatura: 'OBLIGATORIA', programa: { hsFormacionPractica: 100, formacionPracticaJson: null } },
+        { tipoAsignatura: 'ELECTIVA',    programa: { hsFormacionPractica: 24,  formacionPracticaJson: null } },
+        { tipoAsignatura: 'ELECTIVA',    programa: { hsFormacionPractica: 56,  formacionPracticaJson: null } },
+      ],
+    }];
+    const res = await makeSvc({ planes }).consultarCarrera(CAR_ID, USR_FP.usuarioId, USR_FP.rolNombre);
+    const fp = res.fpPorPlan?.find(p => p.planEstudioId === 'plan-fp1');
+    // OBL(100) + min(ELECTIVA: 24, 56) = 100 + 24 = 124
+    expect(fp?.sumaHsNuevo).toBe(124);
+  });
+
+  it('sin electivas → sumaHsNuevo igual a la suma de todas las materias', async () => {
+    const planes = [{
+      id: 'plan-fp2', nombre: 'Plan sin electivas',
+      materias: [
+        { tipoAsignatura: 'OBLIGATORIA', programa: { hsFormacionPractica: 80, formacionPracticaJson: null } },
+        { tipoAsignatura: 'PPS',         programa: { hsFormacionPractica: 160, formacionPracticaJson: null } },
+      ],
+    }];
+    const res = await makeSvc({ planes }).consultarCarrera(CAR_ID, USR_FP.usuarioId, USR_FP.rolNombre);
+    const fp = res.fpPorPlan?.find(p => p.planEstudioId === 'plan-fp2');
+    expect(fp?.sumaHsNuevo).toBe(240);
+  });
+
+  it('regresión 806h → 774h en fpPorPlan: dos electivas, diferencia 32h', async () => {
+    // non-elec=764h (6×OBL 100h + PPS 100h + PI 64h), ELECTIVA_A=10h, ELECTIVA_B=32h
+    const materias = [
+      ...Array.from({ length: 6 }, (_, i) => ({
+        tipoAsignatura: 'OBLIGATORIA',
+        programa: { hsFormacionPractica: 100, formacionPracticaJson: null },
+      })),
+      { tipoAsignatura: 'PPS',      programa: { hsFormacionPractica: 100, formacionPracticaJson: null } },
+      { tipoAsignatura: 'PI',       programa: { hsFormacionPractica: 64,  formacionPracticaJson: null } },
+      { tipoAsignatura: 'ELECTIVA', programa: { hsFormacionPractica: 10,  formacionPracticaJson: null } },
+      { tipoAsignatura: 'ELECTIVA', programa: { hsFormacionPractica: 32,  formacionPracticaJson: null } },
+    ];
+    const res = await makeSvc({ planes: [{ id: 'plan-reg', nombre: 'Plan Reg', materias }] })
+      .consultarCarrera(CAR_ID, USR_FP.usuarioId, USR_FP.rolNombre);
+    const fp = res.fpPorPlan?.find(p => p.planEstudioId === 'plan-reg');
+    expect(fp?.sumaHsNuevo).toBe(774);
   });
 });

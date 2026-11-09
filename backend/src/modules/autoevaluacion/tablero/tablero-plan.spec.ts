@@ -716,7 +716,7 @@ describe('TablroPlanService', () => {
   describe('R-11 derivación', () => {
     it('r11 CALCULADO → res.r11 contiene el valor del indicador', async () => {
       const inc = {
-        materiaId: 'm1', nombre: 'Álgebra', codigo: 'ALG',
+        materiaId: 'm1', materiaNombre: 'Álgebra', materiaCodigo: 'ALG',
         estadoPrograma: 'APROBADO', seccionesCompletas: 5, seccionesPendientes: 1,
         prioridad: 'ALTA' as const,
       };

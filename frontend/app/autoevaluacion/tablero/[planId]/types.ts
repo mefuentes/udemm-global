@@ -16,6 +16,10 @@ export interface ResultadoIPL01 {
 export interface ResultadoIPL02 {
   bloquesCumplen: number;
   bloquesConUmbral: number;
+  /** Bloques con horas < mínimo (cumple === false). Disponible desde MOD-AUT v2.1. */
+  bloquesDebajo?: number;
+  /** Bloques con horas no determinables (cumple === null). Disponible desde MOD-AUT v2.1. */
+  bloquesInciertos?: number;
   estadoCalculo: EstadoCalculo;
 }
 

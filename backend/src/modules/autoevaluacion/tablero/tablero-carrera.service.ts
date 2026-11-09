@@ -23,12 +23,17 @@ import type {
   CondicionesPlantellDto,
   DedicacionConeauItem,
   DedicacionTipoItem,
+  DesignacionDetalleItem,
   DistribucionSemaforosDto,
+  JerarquiaCargoItem,
+  JerarquiaDetalleDto,
   FilaAuditoriaDedicacion,
   FpResumenPlan,
   PosgradoTipoItem,
   DocenteAccionRequerida,
+  EstadoProgramaListado,
   FilaDocenteListado,
+  FilaDocenteMateria,
   ListadoDocentesCarreraDto,
   ResultadoAccionRequerida,
   ResultadoIP01,
@@ -106,6 +111,14 @@ function categorizarCargo(nombre: string): 'P' | 'A' | null {
   const n = nombre.trim().toUpperCase();
   if (CARGOS_PROFESOR.has(n)) return 'P';
   if (CARGOS_AUXILIAR.has(n)) return 'A';
+  return null;
+}
+
+// H.3.2: 'OTROS' va a Auxiliares; desconocidos → null (→ jerarquia.otros, no Auxiliar)
+function categorizarCargoJerarquia(nombre: string): 'P' | 'A' | null {
+  const n = nombre.trim().toUpperCase();
+  if (CARGOS_PROFESOR.has(n)) return 'P';
+  if (CARGOS_AUXILIAR.has(n) || n === 'OTROS') return 'A';
   return null;
 }
 
@@ -210,7 +223,7 @@ export class TablroCarreraService {
     let ip06: ResultadoIP06 | undefined;
     let ip07: ResultadoIP07 | undefined;
     try {
-      condicionesPlantell = await this.calcularCondicionesPlantell(carreraId, fechaEvaluacion, ip08);
+      condicionesPlantell = await this.calcularCondicionesPlantell(carreraId, ip08);
       if (condicionesPlantell) {
         ip05 = this.derivarIP05(condicionesPlantell);
         ip06 = this.derivarIP06(condicionesPlantell);
@@ -320,6 +333,7 @@ export class TablroCarreraService {
         materias: {
           where: { estado: 'ACTIVO' },
           select: {
+            tipoAsignatura: true,
             programa: {
               select: {
                 hsFormacionPractica: true,
@@ -332,30 +346,59 @@ export class TablroCarreraService {
       orderBy: { nombre: 'asc' },
     });
 
+    // Helper: FP de un programa usando D07 fallback.
+    const fpDePrograma = (prog: { hsFormacionPractica: number | null; formacionPracticaJson: string | null } | null) => {
+      if (!prog) return null;
+      if (prog.hsFormacionPractica !== null) {
+        return { fuente: 'nuevo' as const, valor: prog.hsFormacionPractica };
+      }
+      if (prog.formacionPracticaJson) {
+        try {
+          const rows: unknown = JSON.parse(prog.formacionPracticaJson);
+          if (Array.isArray(rows)) {
+            const suma = (rows as Array<{ horasClase?: unknown }>).reduce(
+              (acc, r) => acc + (typeof r.horasClase === 'number' ? r.horasClase : 0),
+              0,
+            );
+            return { fuente: 'historico' as const, valor: suma };
+          }
+        } catch { /* fall through */ }
+      }
+      return null;
+    };
+
     return planes.map(plan => {
       let conDatosNuevos = 0, sumaHsNuevo = 0;
       let conDatosHistoricos = 0, sumaHsHistorico = 0;
       let sinDatos = 0;
 
-      for (const mat of plan.materias) {
-        const prog = mat.programa;
-        if (!prog) { sinDatos++; continue; }
-        if (prog.hsFormacionPractica !== null) {
-          conDatosNuevos++;
-          sumaHsNuevo += prog.hsFormacionPractica;
-        } else if (prog.formacionPracticaJson) {
-          try {
-            const rows: unknown = JSON.parse(prog.formacionPracticaJson);
-            if (Array.isArray(rows)) {
-              const suma = (rows as Array<{ horasClase?: unknown }>).reduce(
-                (acc, r) => acc + (typeof r.horasClase === 'number' ? r.horasClase : 0),
-                0,
-              );
-              conDatosHistoricos++;
-              sumaHsHistorico += suma;
-            } else sinDatos++;
-          } catch { sinDatos++; }
-        } else sinDatos++;
+      const addCount = (fp: { fuente: 'nuevo' | 'historico' }) => {
+        if (fp.fuente === 'nuevo') conDatosNuevos++;
+        else conDatosHistoricos++;
+      };
+      const addSum = (fp: { fuente: 'nuevo' | 'historico'; valor: number }) => {
+        if (fp.fuente === 'nuevo') sumaHsNuevo += fp.valor;
+        else sumaHsHistorico += fp.valor;
+      };
+
+      // §6: el alumno cursa UNA electiva — contribuye a la suma sólo la de menor FP.
+      const noElectivas = plan.materias.filter(m => m.tipoAsignatura?.toUpperCase() !== 'ELECTIVA');
+      const electivas   = plan.materias.filter(m => m.tipoAsignatura?.toUpperCase() === 'ELECTIVA');
+
+      for (const mat of noElectivas) {
+        const fp = fpDePrograma(mat.programa);
+        if (fp) { addCount(fp); addSum(fp); } else sinDatos++;
+      }
+
+      if (electivas.length > 0) {
+        const fpValores: Array<{ fuente: 'nuevo' | 'historico'; valor: number }> = [];
+        for (const e of electivas) {
+          const fp = fpDePrograma(e.programa);
+          if (fp) { addCount(fp); fpValores.push(fp); } else sinDatos++;
+        }
+        if (fpValores.length > 0) {
+          addSum(fpValores.reduce((min, x) => x.valor < min.valor ? x : min));
+        }
       }
 
       return {
@@ -415,8 +458,7 @@ export class TablroCarreraService {
   /**
    * IP-03: Materias cubiertas.
    *
-   * Total = todas las materias en planes de la carrera (sin filtro de estado de materia,
-   * consistente con R-08 que evalúa todas las materias del plan).
+   * Total = materias ACTIVO en planes de la carrera (mismo criterio de vigencia que el resto del módulo).
    * Cubiertas = distintos materiaId con ≥1 VinculacionCatedra estado='APROBADA'.
    */
   private async calcularIP03(carreraId: string): Promise<ResultadoIP03> {
@@ -432,7 +474,7 @@ export class TablroCarreraService {
     const planIds = planes.map((p) => p.id);
 
     const [totalMaterias, materiasCubiertas] = await Promise.all([
-      this.prisma.materia.count({ where: { planEstudioId: { in: planIds } } }),
+      this.prisma.materia.count({ where: { planEstudioId: { in: planIds }, estado: 'ACTIVO' } }),
       this.prisma.vinculacionCatedra.findMany({
         where: { carreraId, estado: 'APROBADA' },
         select: { materiaId: true },
@@ -735,7 +777,17 @@ export class TablroCarreraService {
       where: { carreraId, estado: 'APROBADA', docente: { activo: true } },
       select: {
         docenteId: true,
-        materia: { select: { id: true, nombre: true, cargaHorariaSemanal: true } },
+        materia: {
+          select: {
+            id: true, nombre: true, cargaHorariaSemanal: true,
+            programa: {
+              select: {
+                estadoS1: true, estadoS2: true, estadoS3: true,
+                estadoS4: true, estadoS5: true, estadoS6: true,
+              },
+            },
+          },
+        },
         docente: {
           select: {
             nombre: true, apellido: true,
@@ -747,7 +799,7 @@ export class TablroCarreraService {
       },
     });
 
-    type MatEntry = { materiaId: string; nombre: string; cargaHorariaSemanal: number | null };
+    type MatEntry = { materiaId: string; nombre: string; cargaHorariaSemanal: number | null; seccionesCompletas: number | null };
     type DocEntry = {
       nombre: string; apellido: string;
       sexo: string | null; fechaNacimiento: Date | null; cuit: string | null;
@@ -755,6 +807,9 @@ export class TablroCarreraService {
       tituloGrado: string | null; areaDisciplinarId: string | null;
       materias: Map<string, MatEntry>;
     };
+
+    const contarSecciones = (prog: { estadoS1: string | null; estadoS2: string | null; estadoS3: string | null; estadoS4: string | null; estadoS5: string | null; estadoS6: string | null } | null): number | null =>
+      prog === null ? null : [prog.estadoS1, prog.estadoS2, prog.estadoS3, prog.estadoS4, prog.estadoS5, prog.estadoS6].filter(s => s === 'COMPLETO').length;
 
     const byDocente = new Map<string, DocEntry>();
     for (const row of rows) {
@@ -775,6 +830,7 @@ export class TablroCarreraService {
             materiaId: row.materia.id,
             nombre: row.materia.nombre,
             cargaHorariaSemanal: row.materia.cargaHorariaSemanal ?? null,
+            seccionesCompletas: contarSecciones(row.materia.programa ?? null),
           }]]),
         });
       } else if (!existing.materias.has(row.materia.id)) {
@@ -782,6 +838,7 @@ export class TablroCarreraService {
           materiaId: row.materia.id,
           nombre: row.materia.nombre,
           cargaHorariaSemanal: row.materia.cargaHorariaSemanal ?? null,
+          seccionesCompletas: contarSecciones(row.materia.programa ?? null),
         });
       }
     }
@@ -791,6 +848,7 @@ export class TablroCarreraService {
         carreraId,
         fechaEvaluacion: fechaEvaluacion.toISOString(),
         docentes: [],
+        filas: [],
         totales: { total: 0, conAlertas: 0, sobreasignados: 0, bajaDedicacion: 0, fichaIncompleta: 0 },
         distribucionSemaforos: { verde: 0, amarillo: 0, rojo: 0, total: 0 },
         estadoCalculo: EstadoCalculo.NO_APLICA,
@@ -873,6 +931,41 @@ export class TablroCarreraService {
       })
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
 
+    // ── Construcción de filas Docente–Asignatura (H.2-B/C) ──────────────────
+    const calcularSemaforoPrograma = (sec: number | null): EstadoProgramaListado =>
+      sec === null ? 'NO_VERIFICABLE' : sec === 6 ? 'VERDE' : sec >= 4 ? 'AMARILLO' : 'ROJO';
+
+    const alertasByDocente = new Map<string, AlertasDocente>(
+      docentes.map(d => [d.docenteId, d.alertas]),
+    );
+    const filas: FilaDocenteMateria[] = [];
+    for (const [docenteId, d] of byDocente.entries()) {
+      const materiasArr = [...d.materias.values()];
+      const horasCarreraConocidas = materiasArr.reduce((s, m) => s + (m.cargaHorariaSemanal ?? 0), 0);
+      const tieneHorasIncompletas = materiasArr.some(m => m.cargaHorariaSemanal === null);
+      const nombreDocente = `${d.apellido.toUpperCase()}, ${d.nombre}`;
+      const alertas = alertasByDocente.get(docenteId)!;
+      for (const mat of materiasArr) {
+        filas.push({
+          docenteId,
+          nombreDocente,
+          materiaId: mat.materiaId,
+          nombreMateria: mat.nombre,
+          horasCarreraConocidas,
+          tieneHorasIncompletas,
+          seccionesCompletas: mat.seccionesCompletas,
+          completitudPrograma: mat.seccionesCompletas !== null
+            ? Math.round(mat.seccionesCompletas / 6 * 100)
+            : null,
+          estadoPrograma: calcularSemaforoPrograma(mat.seccionesCompletas),
+          alertas,
+        });
+      }
+    }
+    filas.sort((a, b) =>
+      a.nombreDocente.localeCompare(b.nombreDocente) || a.nombreMateria.localeCompare(b.nombreMateria),
+    );
+
     // ── Totales para filtros ───────────────────────────────────────────────────
     const totales: TotalesListadoDocentes = {
       total: docentes.length,
@@ -908,6 +1001,7 @@ export class TablroCarreraService {
       carreraId,
       fechaEvaluacion: fechaEvaluacion.toISOString(),
       docentes,
+      filas,
       totales,
       distribucionSemaforos,
       estadoCalculo,
@@ -915,17 +1009,20 @@ export class TablroCarreraService {
   }
 
   /**
-   * B-03: Condiciones del plantel (FSD §9.2).
+   * B-03: Condiciones del plantel (FSD §9.2, H.3).
    *
-   * Indicadores CONEAU derivados sin modificar esquema:
-   *   conPosgrado:          Docente.tituloPosgrado not null (boolean).
-   *   conInvestigacion:     docentes con al menos un proyecto en Docente.proyectosInvestigacionJson.
-   *   conDesignacionRegular: CargoDocente vigente con designacion contiene "Regular".
-   *   dedicacionPorTipo:    distribución por Designacion.nombre vía VinculacionCatedra APROBADA.
+   * Indicadores CONEAU:
+   *   conPosgrado:           Docente.tituloPosgrado not null.
+   *   conInvestigacion:      docentes con al menos un proyecto en proyectosInvestigacionJson.
+   *   conDesignacionRegular: docentes con VinculacionCatedra APROBADA cuya
+   *                          Designacion.nombre contiene "REGULAR" (H.3 — fuente corregida).
+   *   conDesignacionInterina: ídem con "INTERINO".
+   *   dedicacionPorTipo:     distribución por Designacion.nombre (VinculacionCatedra APROBADA).
+   *   designacionDetalle:    igual que dedicacionPorTipo con porcentaje por tipo (H.3).
+   *   jerarquia:             desglose de cargos (pares docenteId/cargoId) por tipo CONEAU (H.3).
    */
   private async calcularCondicionesPlantell(
     carreraId: string,
-    fechaCalculo: Date,
     ip08: ResultadoIP08,
   ): Promise<CondicionesPlantellDto> {
     const vincsIds = await this.prisma.vinculacionCatedra.findMany({
@@ -942,6 +1039,8 @@ export class TablroCarreraService {
         conDesignacionRegular: 0,
         conDesignacionInterina: 0,
         dedicacionPorTipo: [],
+        designacionDetalle: [],
+        jerarquia: { profesores: [], totalProfesores: 0, auxiliares: [], totalAuxiliares: 0, otros: 0 },
         dedicacionConeau: [],
         estadoCalculo: EstadoCalculo.NO_APLICA,
       };
@@ -949,42 +1048,28 @@ export class TablroCarreraService {
 
     const docenteIds = vincsIds.map(v => v.docenteId);
 
-    const [docentes, cargosRegulares, cargosInterinos, vincsConDesig] = await Promise.all([
+    const [docentes, vincsConDesig, cargosJerarquia] = await Promise.all([
       this.prisma.docente.findMany({
         where: { id: { in: docenteIds } },
         select: { id: true, tituloPosgrado: true, proyectosInvestigacionJson: true, dedicacion: true, tipoPosgrado: { select: { nombre: true } } },
-      }),
-      this.prisma.cargoDocente.findMany({
-        where: {
-          docenteId: { in: docenteIds },
-          fechaInicio: { lte: fechaCalculo },
-          OR: [{ fechaFin: null }, { fechaFin: { gt: fechaCalculo } }],
-          designacion: { contains: 'Regular', mode: 'insensitive' },
-        },
-        select: { docenteId: true },
-        distinct: ['docenteId'],
-      }),
-      this.prisma.cargoDocente.findMany({
-        where: {
-          docenteId: { in: docenteIds },
-          fechaInicio: { lte: fechaCalculo },
-          OR: [{ fechaFin: null }, { fechaFin: { gt: fechaCalculo } }],
-          designacion: { contains: 'Interino', mode: 'insensitive' },
-        },
-        select: { docenteId: true },
-        distinct: ['docenteId'],
       }),
       this.prisma.vinculacionCatedra.findMany({
         where: { carreraId, estado: 'APROBADA', docente: { activo: true } },
         select: { docenteId: true, designacion: { select: { nombre: true } } },
         distinct: ['docenteId', 'designacionId'],
       }),
+      // H.3.2: distinct por (docenteId, materiaId, cargoId) → una asignación por docente-materia-cargo
+      this.prisma.vinculacionCatedra.findMany({
+        where: { carreraId, estado: 'APROBADA', docente: { activo: true }, materia: { estado: 'ACTIVO' } },
+        select: { docenteId: true, materiaId: true, cargoId: true, cargo: { select: { nombre: true } } },
+        distinct: ['docenteId', 'materiaId', 'cargoId'],
+      }),
     ]);
 
     const conPosgrado      = docentes.filter(d => !!d.tituloPosgrado).length;
     const conInvestigacion = docentes.filter(d => tieneProyectoInvestigacion(d.proyectosInvestigacionJson)).length;
 
-    // D-06: distribución por nivel máximo de posgrado CONEAU (null = no clasificado, no es SIN_POSGRADO)
+    // D-06: distribución por nivel máximo de posgrado CONEAU
     const posgradoConteo = new Map<string, number>();
     for (const d of docentes) {
       if (d.tipoPosgrado) {
@@ -995,9 +1080,16 @@ export class TablroCarreraService {
       .filter(nombre => posgradoConteo.has(nombre))
       .map(nombre => ({ tipo: nombre, docentes: posgradoConteo.get(nombre)! }));
 
-    // Primera designación encontrada por docente determina su categoría.
-    // Nota: los valores son categorías de designación (REGULAR RENTADO, INTERINO RENTADO…),
-    // no rangos de dedicación horaria. Fuente de dedicación pendiente (PD-1, IMPL-19B.3-B.0).
+    // conDesignacionRegular / conDesignacionInterina desde VinculacionCatedra → Designacion.nombre (H.3)
+    const regularSet  = new Set<string>();
+    const interinoSet = new Set<string>();
+    for (const v of vincsConDesig) {
+      const nombre = v.designacion.nombre.toUpperCase();
+      if (nombre.includes('REGULAR'))  regularSet.add(v.docenteId);
+      if (nombre.includes('INTERINO')) interinoSet.add(v.docenteId);
+    }
+
+    // dedicacionPorTipo: primera designación por docente
     const dedMap = new Map<string, string>();
     for (const v of vincsConDesig) {
       if (!dedMap.has(v.docenteId)) dedMap.set(v.docenteId, v.designacion.nombre);
@@ -1007,15 +1099,22 @@ export class TablroCarreraService {
       conteoPorTipo.set(tipo, (conteoPorTipo.get(tipo) ?? 0) + 1);
     }
     const dedicacionPorTipo: DedicacionTipoItem[] = [...conteoPorTipo.entries()]
-      .map(([tipo, docentes]) => ({ tipo, docentes }))
+      .map(([tipo, dc]) => ({ tipo, docentes: dc }))
       .sort((a, b) => b.docentes - a.docentes);
+
+    // designacionDetalle: igual que dedicacionPorTipo + porcentaje (H.3)
+    const designacionDetalle: DesignacionDetalleItem[] = dedicacionPorTipo.map(item => ({
+      tipo: item.tipo,
+      docentes: item.docentes,
+      porcentaje: docenteIds.length > 0 ? Math.round((item.docentes / docenteIds.length) * 100) : 0,
+    }));
 
     const relacionPA: CondicionesPlantellDto['relacionPA'] =
       ip08.estadoCalculo !== EstadoCalculo.NO_APLICA
         ? { profesores: ip08.profesores, auxiliares: ip08.auxiliares }
         : undefined;
 
-    // Distribución CONEAU por Docente.dedicacion (normalización conservadora)
+    // Distribución CONEAU por Docente.dedicacion
     const coneauConteo = new Map<string, number>();
     for (const d of docentes) {
       const cat = normalizarDedicacionConeau(d.dedicacion);
@@ -1025,14 +1124,44 @@ export class TablroCarreraService {
       .filter(cat => coneauConteo.has(cat))
       .map(cat => ({ categoria: cat, docentes: coneauConteo.get(cat)! }));
 
+    // H.3.2: una asignación por (docente, materia, cargo); 'OTROS'→Auxiliar; desconocidos→otros
+    const cargoNombreConteo = new Map<string, number>();
+    let totalProfesores = 0;
+    let totalAuxiliares = 0;
+    let otros = 0;
+    for (const c of cargosJerarquia) {
+      const nombre = c.cargo.nombre;
+      const cat = categorizarCargoJerarquia(nombre);
+      cargoNombreConteo.set(nombre, (cargoNombreConteo.get(nombre) ?? 0) + 1);
+      if (cat === 'P') totalProfesores++;
+      else if (cat === 'A') totalAuxiliares++;
+      else otros++;
+    }
+    const profesoresCargos: JerarquiaCargoItem[] = [];
+    const auxiliaresCargos: JerarquiaCargoItem[] = [];
+    for (const [cargo, cargos] of cargoNombreConteo.entries()) {
+      const cat = categorizarCargoJerarquia(cargo);
+      if (cat === 'P') profesoresCargos.push({ cargo, cargos });
+      else if (cat === 'A') auxiliaresCargos.push({ cargo, cargos });
+    }
+    const jerarquia: JerarquiaDetalleDto = {
+      profesores: profesoresCargos.sort((a, b) => b.cargos - a.cargos),
+      totalProfesores,
+      auxiliares: auxiliaresCargos.sort((a, b) => b.cargos - a.cargos),
+      totalAuxiliares,
+      otros,
+    };
+
     return {
       totalDocentes: docenteIds.length,
       conPosgrado,
       conInvestigacion,
-      conDesignacionRegular: cargosRegulares.length,
-      conDesignacionInterina: cargosInterinos.length,
+      conDesignacionRegular: regularSet.size,
+      conDesignacionInterina: interinoSet.size,
       relacionPA,
       dedicacionPorTipo,
+      designacionDetalle,
+      jerarquia,
       dedicacionConeau,
       distribucionPosgrado,
       estadoCalculo: EstadoCalculo.CALCULADO,

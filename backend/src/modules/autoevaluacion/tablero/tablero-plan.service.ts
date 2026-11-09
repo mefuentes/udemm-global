@@ -194,6 +194,8 @@ export class TablroPlanService {
       return {
         bloquesCumplen: 0,
         bloquesConUmbral: 0,
+        bloquesDebajo: 0,
+        bloquesInciertos: 0,
         estadoCalculo: EstadoCalculo.NO_DETERMINABLE,
       };
     }
@@ -201,12 +203,16 @@ export class TablroPlanService {
     const evs = r09.valor.evaluaciones;
     let bloquesConUmbral = 0;
     let bloquesCumplen = 0;
+    let bloquesDebajo = 0;
+    let bloquesInciertos = 0;
 
     for (const key of ['CB', 'TB', 'TA', 'CTC'] as const) {
       const ev = evs[key];
       if (ev.horasMinimas !== null) {
         bloquesConUmbral++;
-        if (ev.cumple === true) bloquesCumplen++;
+        if      (ev.cumple === true)  bloquesCumplen++;
+        else if (ev.cumple === false) bloquesDebajo++;
+        else                          bloquesInciertos++;
       }
     }
 
@@ -214,11 +220,17 @@ export class TablroPlanService {
       advertencias.push(
         'IPL-02: Ningún bloque tiene umbral configurado. El indicador «N de M» no tiene denominador.',
       );
-      return { bloquesCumplen: 0, bloquesConUmbral: 0, estadoCalculo: EstadoCalculo.NO_APLICA };
+      return {
+        bloquesCumplen: 0,
+        bloquesConUmbral: 0,
+        bloquesDebajo: 0,
+        bloquesInciertos: 0,
+        estadoCalculo: EstadoCalculo.NO_APLICA,
+      };
     }
 
     const estadoCalculo = r09.estadoCalculo ?? EstadoCalculo.NO_DETERMINABLE;
-    return { bloquesCumplen, bloquesConUmbral, estadoCalculo };
+    return { bloquesCumplen, bloquesConUmbral, bloquesDebajo, bloquesInciertos, estadoCalculo };
   }
 
   private derivarIPL03(r08: ResultadoIndicador<ResultadoR08> | null): ResultadoIPL03 {

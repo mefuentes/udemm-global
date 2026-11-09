@@ -378,3 +378,185 @@ describe('R13EvaluadorService — metadatos', () => {
     expect(res.contextoId).toBe(PLAN_ID);
   });
 });
+
+// ── Fase B.3: tipoAsignatura determina PPS/PI (bloqueConocimiento independiente) ─
+
+describe('R13EvaluadorService — tipoAsignatura es el único criterio para PPS/PI', () => {
+
+  it('PPS detectada exclusivamente por tipoAsignatura="PPS"', async () => {
+    const materias = [makeMateriaD07('m1', 'Práctica Profesional Supervisada', 'PPS', 160)];
+    const service = makeService(makeConsultas(materias));
+    const res = await service.evaluar(makeContexto());
+    expect(res.valor?.porTipo.PPS).toBe(1);
+    expect(res.valor?.tienePPS).toBe(true);
+    expect(res.valor?.porTipo.PI).toBe(0);
+  });
+
+  it('PI detectada exclusivamente por tipoAsignatura="PI"', async () => {
+    const materias = [makeMateriaD07('m1', 'Proyecto Integrador', 'PI', 120)];
+    const service = makeService(makeConsultas(materias));
+    const res = await service.evaluar(makeContexto());
+    expect(res.valor?.porTipo.PI).toBe(1);
+    expect(res.valor?.tienePI).toBe(true);
+    expect(res.valor?.porTipo.PPS).toBe(0);
+  });
+
+  it('PPS y PI coexisten con OBLIGATORIA → conteos independientes por tipo', async () => {
+    const materias = [
+      makeMateriaD07('m1', 'Álgebra',  'OBLIGATORIA', 0),
+      makeMateriaD07('m2', 'PPS I',    'PPS',         200),
+      makeMateriaD07('m3', 'PI Final', 'PI',          160),
+    ];
+    const service = makeService(makeConsultas(materias));
+    const res = await service.evaluar(makeContexto());
+    expect(res.valor?.tienePPS).toBe(true);
+    expect(res.valor?.tienePI).toBe(true);
+    expect(res.valor?.porTipo.OBLIGATORIA).toBe(1);
+    expect(res.valor?.porTipo.PPS).toBe(1);
+    expect(res.valor?.porTipo.PI).toBe(1);
+    expect(res.valor?.totalHorasFormacionPractica).toBe(360);
+  });
+
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// F.1 — electiva con menor FP (§6: el alumno cursa UNA electiva)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('R13EvaluadorService — F.1 electiva con menor FP (§6)', () => {
+
+  it('dos electivas → totalHorasFormacionPractica usa sólo la de menor FP', async () => {
+    // OBLIGATORIA=0, ELECTIVA_A=32h, ELECTIVA_B=64h → debe usar 32h (mínimo)
+    const materias = [
+      makeMateriaD07('m1', 'Álgebra',      'OBLIGATORIA',  0),
+      makeMateriaD07('m2', 'Electiva A',   'ELECTIVA',    32),
+      makeMateriaD07('m3', 'Electiva B',   'ELECTIVA',    64),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalHorasFormacionPractica).toBe(32);
+  });
+
+  it('tres electivas → usa sólo el mínimo, no la suma', async () => {
+    // ELECTIVA: 20h, 40h, 60h → min = 20h
+    const materias = [
+      makeMateriaD07('e1', 'Electiva 1', 'ELECTIVA', 20),
+      makeMateriaD07('e2', 'Electiva 2', 'ELECTIVA', 40),
+      makeMateriaD07('e3', 'Electiva 3', 'ELECTIVA', 60),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalHorasFormacionPractica).toBe(20);
+  });
+
+  it('una sola electiva → usa su FP directamente', async () => {
+    const materias = [
+      makeMateriaD07('m1', 'PPS I',     'PPS',       100),
+      makeMateriaD07('e1', 'Electiva',  'ELECTIVA',   50),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalHorasFormacionPractica).toBe(150);
+  });
+
+  it('sin electivas → el total no cambia respecto al comportamiento previo', async () => {
+    const materias = [
+      makeMateriaD07('m1', 'Álgebra', 'OBLIGATORIA', 100),
+      makeMateriaD07('m2', 'PPS I',   'PPS',          200),
+      makeMateriaD07('m3', 'PI',      'PI',            80),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalHorasFormacionPractica).toBe(380);
+  });
+
+  it('electivas con FP iguales → usa ese valor (mínimo de iguales)', async () => {
+    const materias = [
+      makeMateriaD07('e1', 'Electiva A', 'ELECTIVA', 48),
+      makeMateriaD07('e2', 'Electiva B', 'ELECTIVA', 48),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalHorasFormacionPractica).toBe(48);
+  });
+
+  it('electiva con null FP → va a sinDatosFP; min se calcula de las que tienen dato', async () => {
+    // ELECTIVA_A=32h (dato), ELECTIVA_B=null (sin dato)
+    // Total: usa 32h; sinDatosFP=1 por electiva sin dato
+    const materias = [
+      makeMateriaD07('e1', 'Electiva A', 'ELECTIVA', 32),
+      makeMateria('e2', 'Electiva B', 'COD-E2', 'ELECTIVA', 64, null, null),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalHorasFormacionPractica).toBe(32);
+    expect(res.valor?.sinDatosFP).toBe(1);
+    expect(res.valor?.conDatosFP).toBe(1);
+  });
+
+  it('todas las electivas con null FP → no hay contribución de electiva al total', async () => {
+    const materias = [
+      makeMateriaD07('m1', 'PPS I',     'PPS',       100),
+      makeMateria('e1', 'Electiva A', 'COD-E1', 'ELECTIVA', 64, null, null),
+      makeMateria('e2', 'Electiva B', 'COD-E2', 'ELECTIVA', 64, null, null),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalHorasFormacionPractica).toBe(100);
+    expect(res.valor?.sinDatosFP).toBe(2);
+  });
+
+  it('regresión 806h → 774h: dos electivas, diferencia 32h (§6 selecciona la menor)', async () => {
+    // Escenario calibrado: non-elec=764h (6×OBL 100h + PPS 100h + PI 64h),
+    // ELECTIVA_A=10h (min), ELECTIVA_B=32h
+    // Suma antigua (todas electivas): 764 + 10 + 32 = 806h
+    // Suma nueva   (sólo menor FP):   764 + 10      = 774h
+    const materias = [
+      makeMateriaD07('ob1', 'Matemática',   'OBLIGATORIA', 100),
+      makeMateriaD07('ob2', 'Física',       'OBLIGATORIA', 100),
+      makeMateriaD07('ob3', 'Química',      'OBLIGATORIA', 100),
+      makeMateriaD07('ob4', 'Programación', 'OBLIGATORIA', 100),
+      makeMateriaD07('ob5', 'Redes',        'OBLIGATORIA', 100),
+      makeMateriaD07('ob6', 'Sistemas',     'OBLIGATORIA', 100),
+      makeMateriaD07('p1',  'PPS I',        'PPS',         100),
+      makeMateriaD07('pi1', 'PI',           'PI',           64),
+      makeMateriaD07('e1',  'Electiva A',   'ELECTIVA',    10),
+      makeMateriaD07('e2',  'Electiva B',   'ELECTIVA',    32),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalHorasFormacionPractica).toBe(774);
+  });
+
+  it('porTipo sigue contando TODAS las electivas (distribución por tipo no cambia)', async () => {
+    const materias = [
+      makeMateriaD07('e1', 'Electiva A', 'ELECTIVA', 24),
+      makeMateriaD07('e2', 'Electiva B', 'ELECTIVA', 56),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.porTipo.ELECTIVA).toBe(2);
+    expect(res.valor?.totalHorasFormacionPractica).toBe(24); // usa el mínimo
+  });
+
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// E.2 — universo de materias vigentes (ACTIVO)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('R13EvaluadorService — E.2 universo de materias vigentes (ACTIVO)', () => {
+
+  it('totalHorasFormacionPractica suma sólo las materias devueltas por consultas', async () => {
+    // Consultas devuelve 2 materias ACTIVO con hsFormacionPractica conocido
+    const materias = [
+      makeMateriaD07('m1', 'PPS I',    'PPS',         200),
+      makeMateriaD07('m2', 'PI Final', 'PI',          100),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalHorasFormacionPractica).toBe(300);
+    expect(res.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+  });
+
+  it('porTipo refleja la distribución de las N materias del universo vigente', async () => {
+    const materias = [
+      makeMateriaD07('m1', 'Álgebra', 'OBLIGATORIA', 0),
+      makeMateriaD07('m2', 'PPS I',   'PPS',         120),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.porTipo.OBLIGATORIA).toBe(1);
+    expect(res.valor?.porTipo.PPS).toBe(1);
+    expect(res.valor?.totalMaterias).toBe(2);
+  });
+});

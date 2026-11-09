@@ -18,7 +18,7 @@ const NAV_INTERNA = [
   { label: 'Información de Planes de Estudio', href: '/plan-estudios/informacion-planes' },
 ];
 
-const TIPOS_ASIGNATURA = ['OBLIGATORIA', 'ELECTIVA'];
+const TIPOS_ASIGNATURA = ['OBLIGATORIA', 'ELECTIVA', 'OPTATIVA', 'PPS', 'PI'];
 const ESTADOS_ASIGNATURA = ['ACTIVO', 'INACTIVO'];
 const ESTADOS_PLAN = ['ACTIVO', 'INACTIVO', 'EN_REVISION'];
 
@@ -34,14 +34,20 @@ const BLOQUES_CONOCIMIENTO = [
   { codigo: 'TA',  label: 'TA - Tecnologías Aplicadas' },
   { codigo: 'CTC', label: 'CTC - Cs. y Tecn. Complementarias' },
   { codigo: 'EL',  label: 'EL - Electivas' },
-  { codigo: 'PI',  label: 'PI - Proyecto Final Integrador' },
-  { codigo: 'PPS', label: 'PPS - Prácticas Profesionales Supervisadas' },
 ];
+
+const REGIMENES = ['Cuatrimestral', 'Anual'];
+
+function calcularSemanales(total: string, regimen: string): number | null {
+  const t = parseInt(total, 10);
+  if (!t || !regimen) return null;
+  return Math.round(t / (regimen === 'Anual' ? 32 : 16));
+}
 
 const MATERIA_VACIA = {
   codigo: '', nombre: '', descripcion: '', anio: '',
   cuatrimestre: '', bloqueConocimiento: '', modalidadDictado: '',
-  cargaHorariaSemanal: '', cargaHorariaTotal: '', creditos: '',
+  regimenCursado: '', cargaHorariaTotal: '', creditos: '',
   tipoAsignatura: 'OBLIGATORIA', estado: 'ACTIVO', observaciones: ''
 };
 const PLAN_VACIO = { nombre: '', anio: '', version: '', estado: 'ACTIVO' };
@@ -80,6 +86,7 @@ interface Materia {
   tipoAsignatura: string;
   estado: string;
   observaciones?: string;
+  regimenCursado?: string;
   planEstudioId: string;
 }
 
@@ -258,6 +265,10 @@ export default function MallaCurricularPage() {
       alert('El código y el nombre son obligatorios.');
       return;
     }
+    if (formMateria.regimenCursado === 'Cuatrimestral' && (formMateria.cuatrimestre === '' || formMateria.cuatrimestre === '0')) {
+      alert('Seleccioná 1° o 2° Cuatrimestre antes de guardar una asignatura cuatrimestral.');
+      return;
+    }
     setGuardando(true);
     try {
       let payload: Record<string, unknown>;
@@ -272,10 +283,10 @@ export default function MallaCurricularPage() {
           descripcion:       formMateria.descripcion.trim() || null,
           bloqueConocimiento: formMateria.bloqueConocimiento || null,
           modalidadDictado:  formMateria.modalidadDictado   || null,
+          regimenCursado:    formMateria.regimenCursado || null,
           observaciones:     formMateria.observaciones.trim() || null,
           anio:              formMateria.anio !== ''              ? parseInt(formMateria.anio)              : null,
           cuatrimestre:      formMateria.cuatrimestre !== ''      ? parseInt(formMateria.cuatrimestre)      : null,
-          cargaHorariaSemanal: formMateria.cargaHorariaSemanal !== '' ? parseInt(formMateria.cargaHorariaSemanal) : null,
           cargaHorariaTotal:   formMateria.cargaHorariaTotal   !== '' ? parseInt(formMateria.cargaHorariaTotal)   : null,
           creditos:          formMateria.creditos !== ''        ? parseInt(formMateria.creditos)        : 0,
         };
@@ -296,7 +307,7 @@ export default function MallaCurricularPage() {
         if (formMateria.cuatrimestre !== '')  payload.cuatrimestre      = parseInt(formMateria.cuatrimestre);
         if (formMateria.bloqueConocimiento)   payload.bloqueConocimiento = formMateria.bloqueConocimiento;
         if (formMateria.modalidadDictado)     payload.modalidadDictado  = formMateria.modalidadDictado;
-        if (formMateria.cargaHorariaSemanal)  payload.cargaHorariaSemanal = parseInt(formMateria.cargaHorariaSemanal);
+        if (formMateria.regimenCursado)        payload.regimenCursado      = formMateria.regimenCursado;
         if (formMateria.cargaHorariaTotal)    payload.cargaHorariaTotal = parseInt(formMateria.cargaHorariaTotal);
         if (formMateria.creditos)             payload.creditos          = parseInt(formMateria.creditos);
         if (formMateria.observaciones.trim()) payload.observaciones     = formMateria.observaciones.trim();
@@ -368,8 +379,8 @@ export default function MallaCurricularPage() {
       anio: m.anio?.toString() ?? '', cuatrimestre: m.cuatrimestre?.toString() ?? '',
       bloqueConocimiento: m.bloqueConocimiento ?? '',
       modalidadDictado: m.modalidadDictado ?? '',
-      cargaHorariaSemanal: m.cargaHorariaSemanal?.toString() ?? '',
       cargaHorariaTotal: m.cargaHorariaTotal?.toString() ?? '',
+      regimenCursado: m.regimenCursado ?? '',
       creditos: m.creditos?.toString() ?? '',
       tipoAsignatura: m.tipoAsignatura || 'OBLIGATORIA',
       estado: m.estado, observaciones: m.observaciones ?? ''
@@ -839,11 +850,17 @@ export default function MallaCurricularPage() {
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Duración</label>
                   <select value={formMateria.cuatrimestre} onChange={e => setField('cuatrimestre', e.target.value)}
-                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]">
-                    <option value="">-- Duración --</option>
-                    <option value="1">1° Cuatrimestre</option>
-                    <option value="2">2° Cuatrimestre</option>
-                    <option value="0">Anual</option>
+                    disabled={formMateria.regimenCursado === 'Anual'}
+                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81] disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400">
+                    {formMateria.regimenCursado === 'Anual' ? (
+                      <option value="0">Anual</option>
+                    ) : (
+                      <>
+                        <option value="">-- Duración --</option>
+                        <option value="1">1° Cuatrimestre</option>
+                        <option value="2">2° Cuatrimestre</option>
+                      </>
+                    )}
                   </select>
                 </div>
               </div>
@@ -879,14 +896,29 @@ export default function MallaCurricularPage() {
                     ))}
                   </select>
                 </div>
-                <div></div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Régimen de Cursado</label>
+                  <select value={formMateria.regimenCursado} onChange={e => {
+                    const r = e.target.value;
+                    setField('regimenCursado', r);
+                    if (r === 'Anual') setField('cuatrimestre', '0');
+                    else if (r === 'Cuatrimestral' && formMateria.cuatrimestre === '0') setField('cuatrimestre', '');
+                  }} className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]">
+                    <option value="">—</option>
+                    {REGIMENES.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Hs/Semana</label>
-                  <input type="number" min="0" value={formMateria.cargaHorariaSemanal} onChange={e => setField('cargaHorariaSemanal', e.target.value)}
-                    placeholder="0" className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/20 focus:border-[#0f4c81]" />
+                  {(() => {
+                    const v = calcularSemanales(formMateria.cargaHorariaTotal, formMateria.regimenCursado);
+                    return <input type="text" readOnly value={v !== null ? String(v) : '—'}
+                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-slate-50 cursor-default text-slate-500 focus:outline-none"
+                      title="Calculado: H/Total ÷ 16 (cuatrimestral) o ÷ 32 (anual)" />;
+                  })()}
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Hs Totales</label>

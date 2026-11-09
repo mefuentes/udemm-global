@@ -355,7 +355,7 @@ function TarjetaR13({ r13 }: { r13: ResultadoR13 }) {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
         <div className="flex items-center gap-2 mb-2">
           <span className="text-[11px] font-bold font-mono bg-[#0f4c81]/8 text-[#0f4c81] px-2 py-0.5 rounded border border-[#0f4c81]/10">R-13</span>
-          <span className="text-xs font-semibold text-slate-700">Distribución por tipo de asignatura</span>
+          <span className="text-xs font-semibold text-slate-700">Formación práctica</span>
         </div>
         <p className="text-xs text-sky-700 bg-sky-50 border border-sky-200 rounded-lg p-3">Sin materias en el plan. No aplica la evaluación.</p>
       </div>
@@ -878,9 +878,9 @@ function TableroPlanInner() {
           {/* IPL-04 — Pares materia/cátedra con múltiples responsables */}
           <TarjetaIPL04 ipl04={dato.ipl04} />
 
-          {/* IPL-05 — Horas por tipo de bloque */}
+          {/* IPL-05 — Horas por bloque curricular (R-09) */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-            <EtiquetaIndicador codigo="IPL-05" titulo="Horas por tipo de bloque" />
+            <EtiquetaIndicador codigo="IPL-05" titulo="Horas por bloque curricular (R-09)" />
             {dato.ipl05.estadoCalculo === 'NO_APLICA' ? (
               <p className="text-xs text-sky-600">El plan no tiene materias registradas. No aplica.</p>
             ) : dato.ipl05.bloques.length === 0 ? (

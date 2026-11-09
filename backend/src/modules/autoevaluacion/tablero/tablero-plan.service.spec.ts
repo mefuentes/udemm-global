@@ -4,7 +4,7 @@ import { EstadoCalculo } from '../types/estado-calculo.types';
 import type { ResultadoIndicador } from '../indicadores/indicadores.types';
 import type { AlertaR02, ResultadoR02 } from '../indicadores/r02.evaluador';
 import type { AlertaMateria, ResultadoR08 } from '../indicadores/r08.evaluador';
-import type { ResultadoR09 } from '../indicadores/r09.evaluador';
+import type { EvaluacionDimension, ResultadoR09 } from '../indicadores/r09.evaluador';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -107,6 +107,38 @@ function makeR09Result(
           diferencia,
           cumple: diferencia >= 0,
         },
+      },
+    },
+    datosFaltantes: [],
+    fechaEvaluacion: new Date(),
+  };
+}
+
+function makeR09WithEvals(
+  estadoCalculo: EstadoCalculo,
+  evals: Partial<Record<'CB' | 'TB' | 'TA' | 'CTC', EvaluacionDimension>>,
+  horasTotal = 3000,
+): ResultadoIndicador<ResultadoR09> {
+  const DEFAULT_EV: EvaluacionDimension = { horasReales: 600, horasMinimas: 500, diferencia: 100, cumple: true };
+  return {
+    codigo: 'R-09',
+    contextoId: PLAN_ID,
+    tipoContexto: 'PLAN',
+    estadoImplementacion: 'IMPLEMENTADO',
+    estadoCalculo,
+    valor: {
+      planEstudioId: PLAN_ID,
+      totalMaterias: 20,
+      materiasSinHoras: [],
+      materiasConBloqueIndeterminado: [],
+      horasTotal,
+      horasPorBloque: { CB: 600, TB: 800, TA: 900, CTC: 400 },
+      evaluaciones: {
+        CB:    evals.CB  ?? DEFAULT_EV,
+        TB:    evals.TB  ?? DEFAULT_EV,
+        TA:    evals.TA  ?? DEFAULT_EV,
+        CTC:   evals.CTC ?? DEFAULT_EV,
+        total: { horasReales: horasTotal, horasMinimas: 2800, diferencia: horasTotal - 2800, cumple: horasTotal >= 2800 },
       },
     },
     datosFaltantes: [],
@@ -346,6 +378,122 @@ describe('TablroPlanService', () => {
         makeSvc(makeR02Result(), makeR08Result(), new ForbiddenException())
           .consultarPlan(PLAN_ID, USR.usuarioId, USR.rolNombre),
       ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  // ── IPL-02 — Bloques que cumplen umbral mínimo ──────────────────────────────
+
+  describe('IPL-02 — bloquesCumplen, bloquesDebajo, bloquesInciertos', () => {
+    it('cuatro bloques que cumplen → bloquesDebajo=0, bloquesInciertos=0', async () => {
+      const r09 = makeR09WithEvals(EstadoCalculo.CALCULADO, {
+        CB:  { horasReales: 600, horasMinimas: 500, diferencia:  100, cumple: true },
+        TB:  { horasReales: 800, horasMinimas: 700, diferencia:  100, cumple: true },
+        TA:  { horasReales: 900, horasMinimas: 800, diferencia:  100, cumple: true },
+        CTC: { horasReales: 400, horasMinimas: 300, diferencia:  100, cumple: true },
+      });
+      const res = await makeSvc(makeR02Result(), makeR08Result(), r09)
+        .consultarPlan(PLAN_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ipl02.bloquesCumplen).toBe(4);
+      expect(res.ipl02.bloquesConUmbral).toBe(4);
+      expect(res.ipl02.bloquesDebajo).toBe(0);
+      expect(res.ipl02.bloquesInciertos).toBe(0);
+    });
+
+    it('un bloque incumple y tres cumplen → bloquesDebajo=1', async () => {
+      const r09 = makeR09WithEvals(EstadoCalculo.CALCULADO, {
+        CB:  { horasReales: 600, horasMinimas: 500, diferencia:  100, cumple: true },
+        TB:  { horasReales: 300, horasMinimas: 500, diferencia: -200, cumple: false },
+        TA:  { horasReales: 900, horasMinimas: 800, diferencia:  100, cumple: true },
+        CTC: { horasReales: 400, horasMinimas: 300, diferencia:  100, cumple: true },
+      });
+      const res = await makeSvc(makeR02Result(), makeR08Result(), r09)
+        .consultarPlan(PLAN_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ipl02.bloquesCumplen).toBe(3);
+      expect(res.ipl02.bloquesDebajo).toBe(1);
+      expect(res.ipl02.bloquesInciertos).toBe(0);
+    });
+
+    it('cuatro bloques inciertos → bloquesInciertos=4, bloquesDebajo=0', async () => {
+      const r09 = makeR09WithEvals(EstadoCalculo.PARCIAL, {
+        CB:  { horasReales: null, horasMinimas: 500, diferencia: null, cumple: null },
+        TB:  { horasReales: null, horasMinimas: 500, diferencia: null, cumple: null },
+        TA:  { horasReales: null, horasMinimas: 500, diferencia: null, cumple: null },
+        CTC: { horasReales: null, horasMinimas: 300, diferencia: null, cumple: null },
+      });
+      const res = await makeSvc(makeR02Result(), makeR08Result(), r09)
+        .consultarPlan(PLAN_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ipl02.bloquesCumplen).toBe(0);
+      expect(res.ipl02.bloquesDebajo).toBe(0);
+      expect(res.ipl02.bloquesInciertos).toBe(4);
+    });
+
+    it('mezcla: 1 cumple, 1 debajo, 2 inciertos', async () => {
+      const r09 = makeR09WithEvals(EstadoCalculo.PARCIAL, {
+        CB:  { horasReales: 600, horasMinimas: 500, diferencia:  100, cumple: true },
+        TB:  { horasReales: 300, horasMinimas: 500, diferencia: -200, cumple: false },
+        TA:  { horasReales: null, horasMinimas: 500, diferencia: null, cumple: null },
+        CTC: { horasReales: null, horasMinimas: 300, diferencia: null, cumple: null },
+      });
+      const res = await makeSvc(makeR02Result(), makeR08Result(), r09)
+        .consultarPlan(PLAN_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ipl02.bloquesCumplen).toBe(1);
+      expect(res.ipl02.bloquesDebajo).toBe(1);
+      expect(res.ipl02.bloquesInciertos).toBe(2);
+      expect(res.ipl02.bloquesConUmbral).toBe(4);
+    });
+
+    it('ningún umbral configurado → NO_APLICA, todos los contadores en 0', async () => {
+      const r09 = makeR09WithEvals(EstadoCalculo.CALCULADO, {
+        CB:  { horasReales: 600, horasMinimas: null, diferencia: null, cumple: null },
+        TB:  { horasReales: 800, horasMinimas: null, diferencia: null, cumple: null },
+        TA:  { horasReales: 900, horasMinimas: null, diferencia: null, cumple: null },
+        CTC: { horasReales: 400, horasMinimas: null, diferencia: null, cumple: null },
+      });
+      const res = await makeSvc(makeR02Result(), makeR08Result(), r09)
+        .consultarPlan(PLAN_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ipl02.estadoCalculo).toBe(EstadoCalculo.NO_APLICA);
+      expect(res.ipl02.bloquesConUmbral).toBe(0);
+      expect(res.ipl02.bloquesCumplen).toBe(0);
+      expect(res.ipl02.bloquesDebajo).toBe(0);
+      expect(res.ipl02.bloquesInciertos).toBe(0);
+    });
+
+    it('R-09 falla → NO_DETERMINABLE, todos los contadores en 0', async () => {
+      const res = await makeSvc(makeR02Result(), makeR08Result(), new Error('r09 timeout'))
+        .consultarPlan(PLAN_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ipl02.estadoCalculo).toBe(EstadoCalculo.NO_DETERMINABLE);
+      expect(res.ipl02.bloquesConUmbral).toBe(0);
+      expect(res.ipl02.bloquesDebajo).toBe(0);
+      expect(res.ipl02.bloquesInciertos).toBe(0);
+    });
+
+    it('invariante: bloquesConUmbral = bloquesCumplen + bloquesDebajo + bloquesInciertos', async () => {
+      const r09 = makeR09WithEvals(EstadoCalculo.PARCIAL, {
+        CB:  { horasReales: 600, horasMinimas: 500, diferencia:  100, cumple: true },
+        TB:  { horasReales: 300, horasMinimas: 500, diferencia: -200, cumple: false },
+        TA:  { horasReales: null, horasMinimas: 500, diferencia: null, cumple: null },
+        CTC: { horasReales: 400, horasMinimas: 300, diferencia:  100, cumple: true },
+      });
+      const res = await makeSvc(makeR02Result(), makeR08Result(), r09)
+        .consultarPlan(PLAN_ID, USR.usuarioId, USR.rolNombre);
+      const { bloquesCumplen, bloquesDebajo, bloquesInciertos, bloquesConUmbral } = res.ipl02;
+      expect(bloquesCumplen + bloquesDebajo + bloquesInciertos).toBe(bloquesConUmbral);
+    });
+
+    it('regresión Plan 2006: CB=272≥250 TB=40<50 TA=40≥40 CTC=384≥300 → bloquesDebajo=1', async () => {
+      const r09 = makeR09WithEvals(EstadoCalculo.CALCULADO, {
+        CB:  { horasReales: 272, horasMinimas: 250, diferencia:  22, cumple: true },
+        TB:  { horasReales:  40, horasMinimas:  50, diferencia: -10, cumple: false },
+        TA:  { horasReales:  40, horasMinimas:  40, diferencia:   0, cumple: true },
+        CTC: { horasReales: 384, horasMinimas: 300, diferencia:  84, cumple: true },
+      }, 736);
+      const res = await makeSvc(makeR02Result(), makeR08Result(), r09)
+        .consultarPlan(PLAN_ID, USR.usuarioId, USR.rolNombre);
+      expect(res.ipl02.bloquesCumplen).toBe(3);
+      expect(res.ipl02.bloquesDebajo).toBe(1);
+      expect(res.ipl02.bloquesInciertos).toBe(0);
+      expect(res.ipl02.bloquesConUmbral).toBe(4);
+      expect(res.ipl02.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
     });
   });
 

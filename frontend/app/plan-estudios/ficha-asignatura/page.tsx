@@ -26,7 +26,7 @@ const TABS_FICHA = [
 
 type TabId = typeof TABS_FICHA[number]['id'];
 
-const TIPOS_ASIGNATURA = ['OBLIGATORIA', 'ELECTIVA', 'OPTATIVA'];
+const TIPOS_ASIGNATURA = ['OBLIGATORIA', 'ELECTIVA', 'OPTATIVA', 'PPS', 'PI'];
 const REGIMENES = ['Cuatrimestral', 'Anual'];
 
 function calcularSemanales(total: string, regimen: string): number | null {
@@ -59,8 +59,6 @@ const BLOQUES_CONOCIMIENTO = [
   { codigo: 'TA',  label: 'TA - Tecnologías Aplicadas' },
   { codigo: 'CTC', label: 'CTC - Cs. y Tecn. Complementarias' },
   { codigo: 'EL',  label: 'EL - Electivas' },
-  { codigo: 'PI',  label: 'PI - Proyecto Final Integrador' },
-  { codigo: 'PPS', label: 'PPS - Prácticas Profesionales Supervisadas' },
 ];
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -259,6 +257,8 @@ function formatFechaCorta(iso: string) {
 function colorTipo(tipo: string) {
   if (tipo === 'ELECTIVA') return 'bg-amber-50 text-amber-700 border border-amber-200';
   if (tipo === 'OPTATIVA') return 'bg-purple-50 text-purple-700 border border-purple-200';
+  if (tipo === 'PPS')      return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+  if (tipo === 'PI')       return 'bg-indigo-50 text-indigo-700 border border-indigo-200';
   return 'bg-slate-100 text-slate-600 border border-slate-200';
 }
 
@@ -683,6 +683,10 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
   }
 
   async function guardarCambios() {
+    if (form.regimenCursado === 'Cuatrimestral' && (form.cuatrimestre === '' || form.cuatrimestre === '0')) {
+      alert('Seleccioná 1° o 2° Cuatrimestre antes de guardar una asignatura cuatrimestral.');
+      return;
+    }
     setGuardando(true);
     try {
       const payload: Record<string, unknown> = {
@@ -952,22 +956,38 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
                     </select>} />
                 </div>
                 <div className="flex-1">
-                  <CampoEditable label="Cuatrimestre"
-                    valor={ficha.cuatrimestre === 0 ? 'Anual' : ficha.cuatrimestre ? `${ficha.cuatrimestre}° Cuatrimestre` : '—'}
-                    editar={modoEditar}
-                    input={<select value={form.cuatrimestre} onChange={e => setForm(f => ({ ...f, cuatrimestre: e.target.value }))} className={inputCls}>
+                  <CampoEditable label="Régimen de Cursado" valor={ficha.regimenCursado ?? '—'} editar={modoEditar}
+                    input={<select value={form.regimenCursado} onChange={e => setForm(f => {
+                      const r = e.target.value;
+                      return { ...f, regimenCursado: r,
+                        cuatrimestre: r === 'Anual' ? '0' : (f.cuatrimestre === '0' ? '' : f.cuatrimestre) };
+                    })} className={inputCls}>
                       <option value="">—</option>
-                      <option value="1">1° Cuatrimestre</option>
-                      <option value="2">2° Cuatrimestre</option>
-                      <option value="0">Anual</option>
+                      {REGIMENES.map(r => <option key={r} value={r}>{r}</option>)}
                     </select>} />
                 </div>
               </div>
-              <CampoEditable label="Régimen de Cursado" valor={ficha.regimenCursado ?? '—'} editar={modoEditar}
-                input={<select value={form.regimenCursado} onChange={e => setForm(f => ({ ...f, regimenCursado: e.target.value }))} className={inputCls}>
-                  <option value="">—</option>
-                  {REGIMENES.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>} />
+              <div className="flex">
+                <div className="flex-1">
+                  <CampoEditable label="Cuatrimestre"
+                    valor={ficha.cuatrimestre === 0 ? 'Anual' : ficha.cuatrimestre ? `${ficha.cuatrimestre}° Cuatrimestre` : '—'}
+                    editar={modoEditar}
+                    input={<select value={form.cuatrimestre}
+                      onChange={e => setForm(f => ({ ...f, cuatrimestre: e.target.value }))}
+                      disabled={form.regimenCursado === 'Anual'}
+                      className={`${inputCls} disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400`}>
+                      {form.regimenCursado === 'Anual' ? (
+                        <option value="0">Anual</option>
+                      ) : (
+                        <>
+                          <option value="">—</option>
+                          <option value="1">1° Cuatrimestre</option>
+                          <option value="2">2° Cuatrimestre</option>
+                        </>
+                      )}
+                    </select>} />
+                </div>
+              </div>
               <CampoEditable label="Observaciones" valor={ficha.observaciones ?? '—'} editar={modoEditar}
                 input={<textarea data-no-uppercase="true" value={form.observaciones} onChange={e => setForm(f => ({ ...f, observaciones: normalizarMayusculas(e.target.value) }))}
                   rows={2} className={`${inputCls} resize-none`} placeholder="Notas adicionales..." />} />

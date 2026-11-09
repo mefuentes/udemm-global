@@ -14,12 +14,15 @@ import type {
   DistribucionSemaforosCarrera,
   FilaAuditoriaDedicacion,
   FpResumenPlan,
+  JerarquiaCargoItem,
+  JerarquiaDetalleDto,
   PosgradoTipoItem,
   DocenteAccionRequerida,
   DocenteAlertaR10,
   DocenteAlertaR12,
   EstadoCalculo,
   FilaDocenteListado,
+  FilaDocenteMateria,
   ListadoDocentesCarreraResponse,
   ResultadoAccionRequerida,
   ResultadoIP04,
@@ -835,6 +838,30 @@ function PanelFpPorPlan({ planes }: { planes: FpResumenPlan[] }) {
 
 // ── Condiciones del plantel — CONEAU (B-03) ───────────────────────────────────
 
+function BarraIndicador({ valor, pct, color = 'bg-[#0f4c81]/60' }: { valor: number; pct: number; color?: string }) {
+  return (
+    <div className="flex items-center justify-between mb-0.5">
+      <div className="flex-1 mr-2">
+        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+          <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+      <span className="text-[11px] font-bold text-slate-700 tabular-nums whitespace-nowrap">
+        {valor} <span className="font-normal text-slate-400">({pct}%)</span>
+      </span>
+    </div>
+  );
+}
+
+function FilaCP({ label, valor, pct, color }: { label: string; valor: number; pct: number; color?: string }) {
+  return (
+    <div>
+      <span className="text-[11px] text-slate-600 block mb-0.5">{label}</span>
+      <BarraIndicador valor={valor} pct={pct} color={color} />
+    </div>
+  );
+}
+
 function PanelCondicionesPlantell({ cp }: { cp: CondicionesPlantellResponse }) {
   if (cp.estadoCalculo === 'NO_APLICA') {
     return (
@@ -849,13 +876,6 @@ function PanelCondicionesPlantell({ cp }: { cp: CondicionesPlantellResponse }) {
   }
 
   const pct = (n: number) => cp.totalDocentes > 0 ? Math.round((n / cp.totalDocentes) * 100) : 0;
-
-  const indicadores: { label: string; valor: number; pctVal: number }[] = [
-    { label: 'Con posgrado',            valor: cp.conPosgrado,            pctVal: pct(cp.conPosgrado) },
-    { label: 'Con investigación',       valor: cp.conInvestigacion,       pctVal: pct(cp.conInvestigacion) },
-    { label: 'Con designación regular', valor: cp.conDesignacionRegular,  pctVal: pct(cp.conDesignacionRegular) },
-    { label: 'Con designación interina',valor: cp.conDesignacionInterina ?? 0, pctVal: pct(cp.conDesignacionInterina ?? 0) },
-  ];
 
   const ratioPA = cp.relacionPA
     ? cp.relacionPA.auxiliares > 0
@@ -875,133 +895,139 @@ function PanelCondicionesPlantell({ cp }: { cp: CondicionesPlantellResponse }) {
         </span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Indicadores booleanos */}
+      {/* Bloques A + B: 2 columnas */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+
+        {/* Bloque A — Formación */}
         <div className="space-y-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
-            Formación y actividad ({cp.totalDocentes} docentes)
+            Formación ({cp.totalDocentes} docentes)
           </p>
-          {indicadores.map(ind => (
-            <div key={ind.label}>
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="text-[11px] text-slate-600">{ind.label}</span>
-                <span className="text-[11px] font-bold text-slate-700 tabular-nums">
-                  {ind.valor} <span className="font-normal text-slate-400">({ind.pctVal}%)</span>
-                </span>
-              </div>
-              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-[#0f4c81]/60"
-                  style={{ width: `${ind.pctVal}%` }}
-                />
+          <FilaCP label="Con posgrado"      valor={cp.conPosgrado}      pct={pct(cp.conPosgrado)} />
+          <FilaCP label="Con investigación" valor={cp.conInvestigacion} pct={pct(cp.conInvestigacion)} />
+
+          {/* Dedicación CONEAU */}
+          {cp.dedicacionConeau && cp.dedicacionConeau.length > 0 && (
+            <div className="pt-2 border-t border-slate-100">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">Dedicación CONEAU</p>
+              <div className="space-y-1.5">
+                {cp.dedicacionConeau.map((item: DedicacionConeauItem) => (
+                  <div key={item.categoria} className="flex items-center gap-2">
+                    <span className="text-[11px] text-slate-600 flex-1 truncate">
+                      {item.categoria === 'NO_DETERMINADA' ? 'No determinada' : item.categoria.charAt(0) + item.categoria.slice(1).toLowerCase()}
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-700 tabular-nums whitespace-nowrap">{item.docentes}</span>
+                    <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-indigo-400" style={{ width: `${pct(item.docentes)}%` }} />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
+          )}
 
-          {/* Relación P/A (FSD §9.2) */}
-          {ratioPA !== null && (
-            <div className="pt-1 border-t border-slate-100 mt-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] text-slate-600">Relación profesores/auxiliares</span>
-                <span className="text-[11px] font-bold text-slate-700 tabular-nums">
-                  {ratioPA}
-                </span>
+          {/* Nivel de posgrado CONEAU */}
+          {cp.distribucionPosgrado && cp.distribucionPosgrado.length > 0 && (
+            <div className="pt-2 border-t border-slate-100">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">Nivel de posgrado CONEAU</p>
+              <div className="space-y-1.5">
+                {cp.distribucionPosgrado.map((item: PosgradoTipoItem) => (
+                  <div key={item.tipo} className="flex items-center gap-2">
+                    <span className="text-[11px] text-slate-600 flex-1 truncate">
+                      {item.tipo.charAt(0) + item.tipo.slice(1).toLowerCase()}
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-700 tabular-nums whitespace-nowrap">{item.docentes}</span>
+                    <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-violet-400" style={{ width: `${pct(item.docentes)}%` }} />
+                    </div>
+                  </div>
+                ))}
               </div>
-              {cp.relacionPA && (
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  {cp.relacionPA.profesores} prof. · {cp.relacionPA.auxiliares} aux.
-                </p>
-              )}
             </div>
           )}
         </div>
 
-        {/* Distribución por categoría de designación */}
-        {cp.dedicacionPorTipo.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
-              Categoría de designación
-            </p>
-            <p className="text-[10px] text-amber-600 mb-2">
-              Dedicación horaria pendiente de fuente validada
-            </p>
-            <div className="space-y-1.5">
-              {cp.dedicacionPorTipo.map((item: DedicacionTipoItem) => (
-                <div key={item.tipo} className="flex items-center gap-2">
-                  <span className="text-[11px] text-slate-600 flex-1 truncate">{item.tipo}</span>
-                  <span className="text-[11px] font-bold text-slate-700 tabular-nums whitespace-nowrap">
-                    {item.docentes}
-                  </span>
-                  <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-slate-400"
-                      style={{ width: `${cp.totalDocentes > 0 ? Math.round((item.docentes / cp.totalDocentes) * 100) : 0}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Distribución CONEAU de dedicación */}
-        {cp.dedicacionConeau && cp.dedicacionConeau.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
-              Dedicación CONEAU
-            </p>
-            <div className="space-y-1.5">
-              {cp.dedicacionConeau.map((item: DedicacionConeauItem) => (
-                <div key={item.categoria} className="flex items-center gap-2">
-                  <span className="text-[11px] text-slate-600 flex-1 truncate">
-                    {item.categoria === 'NO_DETERMINADA' ? 'No determinada' : item.categoria.charAt(0) + item.categoria.slice(1).toLowerCase()}
-                  </span>
-                  <span className="text-[11px] font-bold text-slate-700 tabular-nums whitespace-nowrap">
-                    {item.docentes}
-                  </span>
-                  <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-indigo-400"
-                      style={{ width: `${cp.totalDocentes > 0 ? Math.round((item.docentes / cp.totalDocentes) * 100) : 0}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* D-06: Distribución por nivel de posgrado CONEAU */}
-        {cp.distribucionPosgrado && cp.distribucionPosgrado.length > 0 ? (
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
-              Nivel de posgrado CONEAU
-            </p>
-            <div className="space-y-1.5">
-              {cp.distribucionPosgrado.map((item: PosgradoTipoItem) => (
-                <div key={item.tipo} className="flex items-center gap-2">
-                  <span className="text-[11px] text-slate-600 flex-1 truncate">
-                    {item.tipo.charAt(0) + item.tipo.slice(1).toLowerCase()}
-                  </span>
-                  <span className="text-[11px] font-bold text-slate-700 tabular-nums whitespace-nowrap">
-                    {item.docentes}
-                  </span>
-                  <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-violet-400"
-                      style={{ width: `${cp.totalDocentes > 0 ? Math.round((item.docentes / cp.totalDocentes) * 100) : 0}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : cp.distribucionPosgrado !== undefined && (
-          <p className="text-[11px] text-slate-400 italic">
-            Nivel de posgrado: sin docentes clasificados aún
+        {/* Bloque B — Designación */}
+        <div className="space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
+            Designación
           </p>
-        )}
+          <FilaCP label="Con designación regular"  valor={cp.conDesignacionRegular}        pct={pct(cp.conDesignacionRegular)}        color="bg-emerald-500/60" />
+          <FilaCP label="Con designación interina" valor={cp.conDesignacionInterina ?? 0}  pct={pct(cp.conDesignacionInterina ?? 0)}  color="bg-amber-500/60" />
+
+        </div>
       </div>
+
+      {/* Bloque C — Jerarquía (ancho completo) */}
+      {cp.jerarquia ? (
+        <div className="border-t border-slate-100 pt-4">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-2">
+            Jerarquía del plantel
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Profesores */}
+            <div>
+              <p className="text-[11px] font-semibold text-slate-600 mb-1">
+                Profesores ({cp.jerarquia.totalProfesores})
+              </p>
+              {cp.jerarquia.profesores.length > 0 ? (
+                <div className="space-y-1">
+                  {cp.jerarquia.profesores.map((item: JerarquiaCargoItem) => (
+                    <div key={item.cargo} className="flex items-center gap-2">
+                      <span className="text-[11px] text-slate-500 flex-1 truncate">{item.cargo}</span>
+                      <span className="text-[11px] font-bold text-slate-700 tabular-nums">{item.cargos}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-400 italic">Sin cargos de profesor</p>
+              )}
+            </div>
+
+            {/* Auxiliares + Relación P/A */}
+            <div>
+              <p className="text-[11px] font-semibold text-slate-600 mb-1">
+                Auxiliares ({cp.jerarquia.totalAuxiliares})
+              </p>
+              {cp.jerarquia.auxiliares.length > 0 ? (
+                <div className="space-y-1">
+                  {cp.jerarquia.auxiliares.map((item: JerarquiaCargoItem) => (
+                    <div key={item.cargo} className="flex items-center gap-2">
+                      <span className="text-[11px] text-slate-500 flex-1 truncate">{item.cargo}</span>
+                      <span className="text-[11px] font-bold text-slate-700 tabular-nums">{item.cargos}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-400 italic">Sin cargos auxiliares</p>
+              )}
+
+              {cp.jerarquia.otros > 0 && (
+                <p className="text-[11px] text-slate-400 mt-1">+ {cp.jerarquia.otros} cargo(s) «Otros»</p>
+              )}
+
+              {ratioPA !== null && (
+                <div className="mt-2 pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-slate-600">Relación P/A</span>
+                    <span className="text-[11px] font-bold text-slate-700 tabular-nums">{ratioPA}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : ratioPA !== null && (
+        <div className="border-t border-slate-100 pt-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-slate-600">Relación profesores/auxiliares</span>
+            <span className="text-[11px] font-bold text-slate-700 tabular-nums">{ratioPA}</span>
+          </div>
+          {cp.relacionPA && (
+            <p className="text-[10px] text-slate-400 mt-0.5">{cp.relacionPA.profesores} prof. · {cp.relacionPA.auxiliares} aux.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1088,7 +1114,7 @@ const FILTRO_LABELS: Record<FiltroListado, string> = {
   conAlertas:      'Con alertas',
   sobreasignados:  'Sobre-asignados',
   bajaDedicacion:  'Dedicación < P-02',
-  fichaIncompleta: 'Ficha incompleta',
+  fichaIncompleta: 'Ficha docente incompleta',
 };
 
 function semaforoCls(s: SemaforoDocente): string {
@@ -1119,12 +1145,9 @@ function BadgeAlerta({ label, tipo }: { label: string; tipo: 'alta' | 'media' | 
 
 function alertasBadges(al: AlertasDocente) {
   const badges: JSX.Element[] = [];
-  if (al.altaTope)                   badges.push(<BadgeAlerta key="tope"  label="Tope"        tipo="alta"  />);
-  if (al.altaSinActividad)           badges.push(<BadgeAlerta key="sinac" label="Sin actividad" tipo="alta"  />);
-  if (al.mediaSobreasignado)         badges.push(<BadgeAlerta key="sobre" label="Sobreasig."    tipo="media" />);
-  if (al.informativaBajaDedicacion)  badges.push(<BadgeAlerta key="baja"  label="Baja ded."     tipo="info"  />);
-  if (al.bajaDedicacionIncierta)     badges.push(<BadgeAlerta key="inc"   label="Baja (inc.)"   tipo="info"  />);
-  if (al.fichaIncompleta)            badges.push(<BadgeAlerta key="ficha" label="Ficha inc."     tipo="info"  />);
+  if (al.altaTope)           badges.push(<BadgeAlerta key="tope"  label="Tope"         tipo="alta"  />);
+  if (al.altaSinActividad)   badges.push(<BadgeAlerta key="sinac" label="Sin actividad" tipo="alta"  />);
+  if (al.mediaSobreasignado) badges.push(<BadgeAlerta key="sobre" label="Sobreasig."    tipo="media" />);
   return badges;
 }
 
@@ -1153,20 +1176,34 @@ function contadorFiltro(totales: TotalesListadoDocentes, filtro: FiltroListado):
   }
 }
 
-type SortKey = 'nombre' | 'nMaterias' | 'horas' | 'ficha' | 'semaforo';
+type SortKey = 'nombre' | 'asignatura' | 'horas' | 'programa';
 
-const SEMAFORO_PESO: Record<SemaforoDocente, number> = { ROJO: 0, AMARILLO: 1, VERDE: 2 };
+function filtrarFilas(
+  filas: FilaDocenteMateria[],
+  docentes: FilaDocenteListado[],
+  filtro: FiltroListado,
+): FilaDocenteMateria[] {
+  if (filtro === 'todos') return filas;
+  const docenteIds = new Set(filtrarDocentes(docentes, filtro).map(d => d.docenteId));
+  return filas.filter(f => docenteIds.has(f.docenteId));
+}
 
-function sortDocentes(docentes: FilaDocenteListado[], key: SortKey, asc: boolean): FilaDocenteListado[] {
-  const copy = [...docentes];
+function sortFilas(filas: FilaDocenteMateria[], key: SortKey, asc: boolean): FilaDocenteMateria[] {
+  const copy = [...filas];
   copy.sort((a, b) => {
+    if (key === 'programa') {
+      // null siempre al final, sin importar dirección
+      if (a.seccionesCompletas === null && b.seccionesCompletas === null) return 0;
+      if (a.seccionesCompletas === null) return 1;
+      if (b.seccionesCompletas === null) return -1;
+      const cmp = a.seccionesCompletas - b.seccionesCompletas;
+      return asc ? cmp : -cmp;
+    }
     let cmp = 0;
     switch (key) {
-      case 'nombre':   cmp = a.nombre.localeCompare(b.nombre); break;
-      case 'nMaterias': cmp = a.nMaterias - b.nMaterias; break;
-      case 'horas':    cmp = a.horasCarreraConocidas - b.horasCarreraConocidas; break;
-      case 'ficha':    cmp = a.fichaScore - b.fichaScore; break;
-      case 'semaforo': cmp = SEMAFORO_PESO[a.semaforo] - SEMAFORO_PESO[b.semaforo]; break;
+      case 'nombre':     cmp = a.nombreDocente.localeCompare(b.nombreDocente); break;
+      case 'asignatura': cmp = a.nombreMateria.localeCompare(b.nombreMateria); break;
+      case 'horas':      cmp = a.horasCarreraConocidas - b.horasCarreraConocidas; break;
     }
     return asc ? cmp : -cmp;
   });
@@ -1359,8 +1396,8 @@ function PanelListadoDocentes({
     else { setSortKey(key); setSortAsc(true); }
   }
 
-  const docentesFiltrados = listado
-    ? sortDocentes(filtrarDocentes(listado.docentes, filtro), sortKey, sortAsc)
+  const filasFiltradas = listado
+    ? sortFilas(filtrarFilas(listado.filas ?? [], listado.docentes, filtro), sortKey, sortAsc)
     : [];
 
   const SortIcon = ({ k }: { k: SortKey }) => {
@@ -1437,13 +1474,13 @@ function PanelListadoDocentes({
           </div>
 
           {/* Tabla */}
-          {docentesFiltrados.length === 0 ? (
+          {filasFiltradas.length === 0 ? (
             <div className="py-8 text-center text-xs text-slate-400 italic">
               No hay docentes en este filtro.
             </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-slate-100">
-              <table className="w-full text-xs min-w-[540px]">
+              <table className="w-full text-xs min-w-[600px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
                     <th
@@ -1453,10 +1490,10 @@ function PanelListadoDocentes({
                       Docente <SortIcon k="nombre" />
                     </th>
                     <th
-                      className="text-right px-3 py-2 font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 whitespace-nowrap"
-                      onClick={() => toggleSort('nMaterias')}
+                      className="text-left px-3 py-2 font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 whitespace-nowrap"
+                      onClick={() => toggleSort('asignatura')}
                     >
-                      Materias <SortIcon k="nMaterias" />
+                      Asignatura <SortIcon k="asignatura" />
                     </th>
                     <th
                       className="text-right px-3 py-2 font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 whitespace-nowrap"
@@ -1466,70 +1503,77 @@ function PanelListadoDocentes({
                     </th>
                     <th
                       className="text-right px-3 py-2 font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 whitespace-nowrap"
-                      onClick={() => toggleSort('ficha')}
+                      onClick={() => toggleSort('programa')}
                     >
-                      Ficha <SortIcon k="ficha" />
+                      Prog. Asignatura <SortIcon k="programa" />
                     </th>
-                    <th
-                      className="text-center px-3 py-2 font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 whitespace-nowrap"
-                      onClick={() => toggleSort('semaforo')}
-                    >
-                      Estado <SortIcon k="semaforo" />
+                    <th className="text-center px-3 py-2 font-semibold text-slate-500 whitespace-nowrap">
+                      Estado del programa
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {docentesFiltrados.map((d, i) => (
-                    <tr key={d.docenteId} className={`border-b border-slate-50 hover:bg-slate-50/60 ${i % 2 === 1 ? 'bg-slate-50/30' : ''}`}>
+                  {filasFiltradas.map((f, i) => (
+                    <tr key={`${f.docenteId}-${f.materiaId}`} className={`border-b border-slate-50 hover:bg-slate-50/60 ${i % 2 === 1 ? 'bg-slate-50/30' : ''}`}>
                       {/* Docente */}
                       <td className="px-3 py-2 min-w-0">
                         <div className="flex flex-col gap-1 min-w-0">
                           <Link
-                            href={`/autoevaluacion/ficha-docente/${d.docenteId}`}
+                            href={`/autoevaluacion/ficha-docente/${f.docenteId}`}
                             className="font-medium text-slate-700 hover:text-[#0f4c81] hover:underline truncate"
                           >
-                            {d.nombre}
+                            {f.nombreDocente}
                           </Link>
-                          {/* Materias en tooltip-style list on hover — shown as expand on mobile */}
                           <div className="flex flex-wrap gap-1">
-                            {alertasBadges(d.alertas)}
+                            {alertasBadges(f.alertas)}
                           </div>
                         </div>
                       </td>
 
-                      {/* Materias */}
-                      <td className="px-3 py-2 text-right align-top">
-                        <details className="text-right group">
-                          <summary className="cursor-pointer list-none font-semibold tabular-nums text-slate-700 hover:text-[#0f4c81] select-none">
-                            {d.nMaterias}
-                          </summary>
-                          <div className="text-left mt-1 space-y-0.5 max-w-[200px] ml-auto">
-                            {d.materias.map(m => (
-                              <p key={m.materiaId} className="text-[10px] text-slate-500 leading-tight">{m.nombre}</p>
-                            ))}
-                          </div>
-                        </details>
+                      {/* Asignatura */}
+                      <td className="px-3 py-2 align-top min-w-0">
+                        <span className="text-slate-700 leading-snug">{f.nombreMateria}</span>
                       </td>
 
                       {/* Dedicación */}
                       <td className="px-3 py-2 text-right align-top whitespace-nowrap">
-                        <span className="font-mono tabular-nums text-slate-700">{d.horasCarreraConocidas} h</span>
-                        {d.tieneHorasIncompletas && (
+                        <span className="font-mono tabular-nums text-slate-700">{f.horasCarreraConocidas} h</span>
+                        {f.tieneHorasIncompletas && (
                           <span className="ml-1 text-[9px] text-amber-500 italic">inc.</span>
                         )}
                       </td>
 
-                      {/* Ficha N/4 */}
+                      {/* Programa de Asignatura */}
                       <td className="px-3 py-2 text-right align-top whitespace-nowrap">
-                        <span className={`font-semibold tabular-nums ${d.fichaScore < 4 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                          {d.fichaScore}
-                        </span>
-                        <span className="text-slate-400">/4</span>
+                        {f.seccionesCompletas !== null ? (
+                          <>
+                            <span className={`font-semibold tabular-nums ${
+                              f.seccionesCompletas >= 6 ? 'text-emerald-600' :
+                              f.seccionesCompletas >= 4 ? 'text-amber-600' :
+                              'text-red-600'
+                            }`}>
+                              {f.seccionesCompletas}
+                            </span>
+                            <span className="text-slate-400">/6</span>
+                          </>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
                       </td>
 
-                      {/* Estado / semáforo */}
+                      {/* Estado del programa */}
                       <td className="px-3 py-2 text-center align-top">
-                        <BadgeSemaforo s={d.semaforo} />
+                        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                          f.estadoPrograma === 'VERDE'    ? 'bg-emerald-50 text-emerald-700 border-emerald-300' :
+                          f.estadoPrograma === 'AMARILLO' ? 'bg-amber-50 text-amber-700 border-amber-300' :
+                          f.estadoPrograma === 'ROJO'     ? 'bg-red-50 text-red-700 border-red-300' :
+                          'bg-slate-50 text-slate-400 border-slate-200'
+                        }`}>
+                          {f.estadoPrograma === 'VERDE'    ? 'VERDE' :
+                           f.estadoPrograma === 'AMARILLO' ? 'AMARILLO' :
+                           f.estadoPrograma === 'ROJO'     ? 'ROJO' :
+                           'SIN PROGRAMA'}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -1538,17 +1582,6 @@ function PanelListadoDocentes({
             </div>
           )}
 
-          {/* Leyenda semáforo */}
-          <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-slate-400">
-            <span className="font-semibold">Semáforo =</span>
-            <span>min(completitud_i, consistencia_i)</span>
-            <span className="text-slate-300">·</span>
-            <span className="text-emerald-600 font-semibold">VERDE ≥90</span>
-            <span className="text-slate-300">·</span>
-            <span className="text-amber-600 font-semibold">AMARILLO 60–89</span>
-            <span className="text-slate-300">·</span>
-            <span className="text-red-600 font-semibold">ROJO &lt;60</span>
-          </div>
         </>
       )}
     </div>

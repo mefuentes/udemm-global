@@ -52,12 +52,17 @@ export interface ResultadoIPL01 {
  * FSD §8, Tabla 25, IPL-02 — Bloques que cumplen su umbral mínimo.
  * Denominador = bloques con umbral configurado.
  * Los bloques sin umbral no se cuentan ni como cumplidos ni como incumplidos.
+ * Invariante: bloquesConUmbral = bloquesCumplen + bloquesDebajo + bloquesInciertos.
  */
 export interface ResultadoIPL02 {
-  /** Bloques con umbral configurado cuyas horas >= mínimo. */
+  /** Bloques con umbral configurado cuyas horas >= mínimo (cumple === true). */
   bloquesCumplen: number;
   /** Cantidad de bloques con umbral configurado (denominador del «N de M»). */
   bloquesConUmbral: number;
+  /** Bloques con umbral configurado cuyas horas < mínimo (cumple === false). */
+  bloquesDebajo: number;
+  /** Bloques con umbral configurado pero horas no determinables (cumple === null). */
+  bloquesInciertos: number;
   estadoCalculo: EstadoCalculo;
 }
 

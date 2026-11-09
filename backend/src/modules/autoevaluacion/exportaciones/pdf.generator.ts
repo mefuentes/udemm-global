@@ -1359,16 +1359,29 @@ function semaforoColor(semaforo: string | undefined): string {
   return C_LIGHT;
 }
 
+// Offsets de columnas del listado Docente–Asignatura (H.2-B).
+const LD_COL = {
+  docente:    { x:   2, w: 140 },
+  asignatura: { x: 145, w: 128 },
+  horas:      { x: 276, w:  36 },
+  prog:       { x: 315, w:  42 },
+  estado:     { x: 360, w: CONTENT_W - 360 },
+} as const;
+
 function renderListadoHeader(doc: PDFKit.PDFDocument, y: number): void {
-  doc.rect(MARGIN, y, CONTENT_W, 13).fill('#e2e8f0');
+  doc.rect(MARGIN, y, CONTENT_W, 22).fill('#e2e8f0');
+  // Primera línea
   doc.fillColor(C_MID).font('Helvetica-Bold').fontSize(6.5)
-    .text('DOCENTE',    MARGIN + 2,   y + 3, { lineBreak: false, width: 145 })
-    .text('MATERIAS',   MARGIN + 148, y + 3, { lineBreak: false, width: 35 })
-    .text('HORAS/SEM',  MARGIN + 184, y + 3, { lineBreak: false, width: 45 })
-    .text('FICHA',      MARGIN + 230, y + 3, { lineBreak: false, width: 30 })
-    .text('ESTADO',     MARGIN + 261, y + 3, { lineBreak: false, width: 55 })
-    .text('ALERTAS',    MARGIN + 317, y + 3, { lineBreak: false, width: CONTENT_W - 317 });
-  doc.y = y + 15;
+    .text('DOCENTE',      MARGIN + LD_COL.docente.x,    y + 4,  { lineBreak: false, width: LD_COL.docente.w })
+    .text('ASIGNATURA',   MARGIN + LD_COL.asignatura.x, y + 4,  { lineBreak: false, width: LD_COL.asignatura.w })
+    .text('H/SEM',        MARGIN + LD_COL.horas.x,      y + 4,  { lineBreak: false, width: LD_COL.horas.w })
+    .text('PROG. DE',     MARGIN + LD_COL.prog.x,       y + 4,  { lineBreak: false, width: LD_COL.prog.w })
+    .text('ESTADO DEL',   MARGIN + LD_COL.estado.x,     y + 4,  { lineBreak: false, width: LD_COL.estado.w });
+  // Segunda línea (solo columnas con 2 líneas)
+  doc.fillColor(C_MID).font('Helvetica-Bold').fontSize(6.5)
+    .text('ASIG.',        MARGIN + LD_COL.prog.x,       y + 12, { lineBreak: false, width: LD_COL.prog.w })
+    .text('PROGRAMA',     MARGIN + LD_COL.estado.x,     y + 12, { lineBreak: false, width: LD_COL.estado.w });
+  doc.y = y + 24;
 }
 
 function renderListadoDocentes(doc: PDFKit.PDFDocument, snapshot: Record<string, unknown>): void {
@@ -1381,9 +1394,25 @@ function renderListadoDocentes(doc: PDFKit.PDFDocument, snapshot: Record<string,
     doc.moveDown(0.3);
     return;
   }
-  const docentes = (ld['docentes'] ?? []) as Record<string, unknown>[];
-  const estado   = (ld['estadoCalculo'] ?? '') as string;
-  if (docentes.length === 0) {
+  // Formato H.2-B: filas[]; compatibilidad retroactiva con snapshots que sólo tienen docentes[].
+  const rawFilas = ld['filas'];
+  const esSnapshotHistorico = rawFilas === undefined;
+  let filas: Record<string, unknown>[];
+  if (!esSnapshotHistorico) {
+    filas = (rawFilas as Record<string, unknown>[]);
+  } else {
+    const oldDocentes = (ld['docentes'] ?? []) as Record<string, unknown>[];
+    filas = oldDocentes.map(d => ({
+      nombreDocente: String(d['nombre'] ?? ''),
+      nombreMateria: `(${d['nMaterias'] ?? '?'} mat.)`,
+      horasCarreraConocidas: d['horasCarreraConocidas'] ?? 0,
+      tieneHorasIncompletas: d['tieneHorasIncompletas'] ?? false,
+      seccionesCompletas: null as number | null,
+      alertas: d['alertas'] ?? {},
+    }));
+  }
+  const estado  = (ld['estadoCalculo'] ?? '') as string;
+  if (filas.length === 0) {
     addPageIfNeeded(doc, 20);
     doc.fillColor(estadoColor(estado)).font('Helvetica-Bold').fontSize(7.5)
       .text(`Estado: ${estado.replace(/_/g, ' ')}`, MARGIN, doc.y, { lineBreak: false, width: 150 });
@@ -1412,40 +1441,42 @@ function renderListadoDocentes(doc: PDFKit.PDFDocument, snapshot: Record<string,
     }
     doc.moveDown(0.8);
   }
+  if (esSnapshotHistorico) {
+    addPageIfNeeded(doc, 14);
+    doc.fillColor(C_MEDIA).font('Helvetica-Oblique').fontSize(6.5)
+      .text('(*) Ejecución histórica: datos de Programa de Asignatura no disponibles en esta exportación. Regenere el análisis para incluir la columna PROG. DE ASIG.', MARGIN);
+    doc.moveDown(0.3);
+  }
   addPageIfNeeded(doc, 40);
   renderListadoHeader(doc, doc.y);
   let lastHeaderPage = (doc as any)._pageBuffer?.length ?? 0;
-  for (const d of docentes) {
-    addPageIfNeeded(doc, 18);
+  for (const f of filas) {
+    addPageIfNeeded(doc, 13);
     const currentPage = (doc as any)._pageBuffer?.length ?? 0;
     if (currentPage !== lastHeaderPage) {
       renderListadoHeader(doc, doc.y);
       lastHeaderPage = currentPage;
     }
     const y = doc.y;
-    const alertas    = (d['alertas'] ?? {}) as Record<string, boolean>;
-    const semaforo   = (d['semaforo'] ?? '') as string;
-    const fichaScore = typeof d['fichaScore'] === 'number' ? d['fichaScore'] : '?';
-    const horas      = typeof d['horasCarreraConocidas'] === 'number' ? d['horasCarreraConocidas'] : '?';
-    const incompletas = d['tieneHorasIncompletas'] === true ? '+?' : '';
-    const nMaterias  = typeof d['nMaterias'] === 'number' ? d['nMaterias'] : '?';
-    const alertaBadges: string[] = [];
-    if (alertas['altaTope'])           alertaBadges.push('R-03');
-    if (alertas['altaSinActividad'])   alertaBadges.push('R-04');
-    if (alertas['mediaSobreasignado']) alertaBadges.push('R-07');
+    const alertas      = (f['alertas'] ?? {}) as Record<string, boolean>;
+    const horas        = typeof f['horasCarreraConocidas'] === 'number' ? f['horasCarreraConocidas'] : '?';
+    const incompletas  = f['tieneHorasIncompletas'] === true ? '+?' : '';
+    const secCompletas = typeof f['seccionesCompletas'] === 'number' ? f['seccionesCompletas'] : null;
+    const progLabel    = secCompletas !== null ? `${secCompletas}/6` : '—';
     doc.fillColor(C_DARK).font('Helvetica').fontSize(6.5)
-      .text(String(d['nombre'] ?? ''), MARGIN + 2, y, { lineBreak: false, width: 143 });
+      .text(String(f['nombreDocente'] ?? ''), MARGIN + LD_COL.docente.x,    y, { lineBreak: false, width: LD_COL.docente.w });
     doc.fillColor(C_MID).font('Helvetica').fontSize(6.5)
-      .text(String(nMaterias), MARGIN + 148, y, { lineBreak: false, width: 33 });
-    doc.fillColor(d['tieneHorasIncompletas'] ? C_MEDIA : C_MID).font('Helvetica').fontSize(6.5)
-      .text(`${horas}h${incompletas}`, MARGIN + 184, y, { lineBreak: false, width: 43 });
-    doc.fillColor(C_PRIMARY).font('Helvetica-Bold').fontSize(6.5)
-      .text(`${fichaScore}/4`, MARGIN + 230, y, { lineBreak: false, width: 28 });
-    doc.fillColor(semaforoColor(semaforo)).font('Helvetica-Bold').fontSize(6.5)
-      .text(semaforo || '—', MARGIN + 261, y, { lineBreak: false, width: 53 });
-    doc.fillColor(alertaBadges.length > 0 ? C_ALTA : C_OK).font('Helvetica').fontSize(6.5)
-      .text(alertaBadges.length > 0 ? alertaBadges.join(' ') : '—',
-        MARGIN + 317, y, { lineBreak: false, width: CONTENT_W - 317 });
+      .text(String(f['nombreMateria'] ?? ''), MARGIN + LD_COL.asignatura.x, y, { lineBreak: false, width: LD_COL.asignatura.w });
+    doc.fillColor(f['tieneHorasIncompletas'] ? C_MEDIA : C_MID).font('Helvetica').fontSize(6.5)
+      .text(`${horas}h${incompletas}`, MARGIN + LD_COL.horas.x, y, { lineBreak: false, width: LD_COL.horas.w });
+    const progColor = secCompletas === null ? C_MID : secCompletas >= 6 ? C_OK : secCompletas >= 4 ? C_MEDIA : C_ALTA;
+    doc.fillColor(progColor).font('Helvetica-Bold').fontSize(6.5)
+      .text(progLabel, MARGIN + LD_COL.prog.x, y, { lineBreak: false, width: LD_COL.prog.w });
+    const estadoProg = typeof f['estadoPrograma'] === 'string' ? f['estadoPrograma'] : 'NO_VERIFICABLE';
+    const estadoPdfColor = estadoProg === 'VERDE' ? C_OK : estadoProg === 'AMARILLO' ? C_MEDIA : estadoProg === 'ROJO' ? C_ALTA : C_MID;
+    const estadoPdfLabel = estadoProg === 'VERDE' ? 'VERDE' : estadoProg === 'AMARILLO' ? 'AMARILLO' : estadoProg === 'ROJO' ? 'ROJO' : 'SIN PROGRAMA';
+    doc.fillColor(estadoPdfColor).font('Helvetica-Bold').fontSize(6.5)
+      .text(estadoPdfLabel, MARGIN + LD_COL.estado.x, y, { lineBreak: false, width: LD_COL.estado.w });
     doc.y = Math.max(doc.y, y + 11);
   }
   doc.moveDown(0.3);

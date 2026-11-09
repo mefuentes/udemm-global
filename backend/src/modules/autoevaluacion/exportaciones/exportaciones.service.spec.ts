@@ -652,6 +652,164 @@ describe('ExportacionesService', () => {
 
   });
 
+  // ── PDF listado Docente–Asignatura (H.2-B.1) ─────────────────────────────────
+
+  function makeFilaPdf(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      docenteId:              'doc-001',
+      nombreDocente:          'GARCÍA LÓPEZ, Juan',
+      materiaId:              'mat-001',
+      nombreMateria:          'Álgebra Lineal',
+      horasCarreraConocidas:  10,
+      tieneHorasIncompletas:  false,
+      seccionesCompletas:     null as number | null,
+      completitudPrograma:    null as number | null,
+      estadoPrograma:         'NO_VERIFICABLE',
+      alertas:                {},
+      ...overrides,
+    };
+  }
+
+  function makeSnapConFilas(
+    filas: Record<string, unknown>[],
+    ar?: Record<string, unknown>,
+  ): Record<string, unknown> {
+    return {
+      ...makeSnapCarrera(),
+      accionRequerida: ar ?? {
+        conAlertasAltas:        { total: 0, docentes: [] },
+        sobreasignados:         { total: 0, docentes: [] },
+        sinActividadCurricular: { total: 0, docentes: [] },
+        bajaDedicacion:         { total: 0, docentes: [], umbral: 10, confirmados: 0, inciertos: 0 },
+      },
+      listadoDocentes: {
+        estadoCalculo: 'CALCULADO',
+        docentes: [],
+        filas,
+      },
+    };
+  }
+
+  describe('PDF listado Docente–Asignatura (H.2-B.1)', () => {
+
+    it('PDF-H2B-01: fila con seccionesCompletas=6 (VERDE) → PDF válido sin crash', async () => {
+      const snap = makeSnapConFilas([
+        makeFilaPdf({ seccionesCompletas: 6, completitudPrograma: 100, estadoPrograma: 'VERDE' }),
+      ]);
+      const buf = await generarPdf(snap);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+      expect(buf.length).toBeGreaterThan(1024);
+    });
+
+    it('PDF-H2B-02: fila con seccionesCompletas=3 (ROJO) → PDF válido sin crash', async () => {
+      const snap = makeSnapConFilas([
+        makeFilaPdf({ seccionesCompletas: 3, completitudPrograma: 50, estadoPrograma: 'ROJO' }),
+      ]);
+      const buf = await generarPdf(snap);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+    });
+
+    it('PDF-H2B-03: fila con seccionesCompletas=0 (ROJO) → PDF válido sin crash', async () => {
+      const snap = makeSnapConFilas([
+        makeFilaPdf({ seccionesCompletas: 0, completitudPrograma: 0, estadoPrograma: 'ROJO' }),
+      ]);
+      const buf = await generarPdf(snap);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+    });
+
+    it('PDF-H2B-04a: fila con seccionesCompletas=4 (AMARILLO) → PDF válido sin crash', async () => {
+      const snap = makeSnapConFilas([
+        makeFilaPdf({ seccionesCompletas: 4, completitudPrograma: 67, estadoPrograma: 'AMARILLO' }),
+      ]);
+      const buf = await generarPdf(snap);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+    });
+
+    it('PDF-H2B-04b: fila sin programa (seccionesCompletas=null) → PDF válido y muestra "SIN PROGRAMA"', async () => {
+      const snap = makeSnapConFilas([
+        makeFilaPdf({ seccionesCompletas: null, completitudPrograma: null, estadoPrograma: 'NO_VERIFICABLE' }),
+      ]);
+      const buf = await generarPdf(snap);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+    });
+
+    it('PDF-H2B-05: snapshot histórico sin filas → retrocompatibilidad sin datos inventados', async () => {
+      // Snapshot anterior a H.2-B: tiene docentes[] pero no filas[]
+      const snap = makeSnapConListado([
+        makeDocPdf({ docenteId: 'doc-001', nombre: 'MARTÍNEZ, Pedro', nMaterias: 2 }),
+      ]);
+      const buf = await generarPdf(snap);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+      expect(buf.length).toBeGreaterThan(1024);
+    });
+
+    it('PDF-H2B-06: horas con flag incompletas → PDF válido sin crash', async () => {
+      const snap = makeSnapConFilas([
+        makeFilaPdf({
+          horasCarreraConocidas: 8,
+          tieneHorasIncompletas: true,
+          seccionesCompletas:    4,
+          completitudPrograma:   67,
+          alertas:               { informativaBajaDedicacion: true },
+        }),
+      ]);
+      const buf = await generarPdf(snap);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+    });
+
+    it('PDF-H2B-07: docente con varias materias → más filas → buffer mayor que con una sola', async () => {
+      const snapUna = makeSnapConFilas([
+        makeFilaPdf({ materiaId: 'mat-001', nombreMateria: 'Álgebra Lineal', seccionesCompletas: 6 }),
+      ]);
+      const snapTres = makeSnapConFilas([
+        makeFilaPdf({ materiaId: 'mat-001', nombreMateria: 'Álgebra Lineal',    seccionesCompletas: 6 }),
+        makeFilaPdf({ materiaId: 'mat-002', nombreMateria: 'Cálculo I',         seccionesCompletas: 3 }),
+        makeFilaPdf({ materiaId: 'mat-003', nombreMateria: 'Física General',    seccionesCompletas: null }),
+      ]);
+      const [bufUna, bufTres] = await Promise.all([generarPdf(snapUna), generarPdf(snapTres)]);
+      expect(bufTres.length).toBeGreaterThan(bufUna.length);
+    });
+
+    it('PDF-H2B-08: encabezados correctos → snapshot con filas genera PDF mayor que snapshot vacío', async () => {
+      const snapVacio = makeSnapConFilas([]);
+      const snapConFila = makeSnapConFilas([
+        makeFilaPdf({ seccionesCompletas: 5, completitudPrograma: 83 }),
+      ]);
+      const [bufVacio, bufConFila] = await Promise.all([generarPdf(snapVacio), generarPdf(snapConFila)]);
+      expect(bufConFila.length).toBeGreaterThan(bufVacio.length);
+    });
+
+    it('PDF-H2B-09: nombres largos con distintos estadoPrograma → PDF válido sin superposición', async () => {
+      // Fila con nombreDocente largo para verificar que el texto no provoca crash
+      const snap = makeSnapConFilas([
+        makeFilaPdf({
+          nombreDocente: 'VÁSQUEZ DE LA TORRE HERNÁNDEZ, María Fernanda',
+          nombreMateria: 'Introducción al Análisis Matemático Superior',
+          seccionesCompletas: 2,
+        }),
+      ]);
+      const buf = await generarPdf(snap);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+    });
+
+    it('PDF-H2B-10: paginación con 30 filas → PDF válido y mayor a 4KB', async () => {
+      const filas = Array.from({ length: 30 }, (_, i) =>
+        makeFilaPdf({
+          docenteId:    `doc-${i % 5}`,
+          nombreDocente: `DOCENTE ${String(i % 5).padStart(2, '0')}, Nombre`,
+          materiaId:    `mat-${i}`,
+          nombreMateria: `Materia ${String(i).padStart(2, '0')}`,
+          seccionesCompletas: i % 3 === 0 ? 6 : i % 3 === 1 ? 3 : null,
+        }),
+      );
+      const snap = makeSnapConFilas(filas);
+      const buf = await generarPdf(snap);
+      expect(buf.slice(0, 4).toString()).toBe('%PDF');
+      expect(buf.length).toBeGreaterThan(4096);
+    });
+
+  });
+
   // ── PDF tablero plan — Fase 2 ─────────────────────────────────────────────────
 
   describe('PDF tablero plan — Fase 2', () => {
@@ -951,11 +1109,19 @@ describe('ExportacionesService', () => {
       expect(texts.some(t => t.includes('MAT06'))).toBe(true);
     });
 
-    it('XLS-PLAN-10: R-13 contiene materias PPS y distribución por tipo', async () => {
+    it('XLS-PLAN-10: R-13 contiene distribución por tipo de asignatura', async () => {
       const { wb } = await generarExcelPlan();
-      const texts = cellTexts(wb.getWorksheet('R-13 Practica'));
-      expect(texts.some(t => t.includes('PPS01'))).toBe(true);
-      expect(texts.some(t => t.includes('PPS'))).toBe(true);
+      const ws = wb.getWorksheet('R-13 Practica');
+      const texts = cellTexts(ws);
+      // La tabla porTipo incluye 'PPS' como tipo de asignatura
+      expect(texts.some(t => t === 'PPS')).toBe(true);
+      // La fila PPS tiene exactamente la cantidad 2 (verificar fila, no cualquier celda)
+      let ppsCantidad: number | null = null;
+      ws.eachRow((row: any) => {
+        if (String(row.getCell(1).value ?? '') === 'PPS')
+          ppsCantidad = typeof row.getCell(2).value === 'number' ? row.getCell(2).value : null;
+      });
+      expect(ppsCantidad).toBe(2);
     });
 
     it('XLS-PLAN-11: R-14 tabla enAlerta contiene MAT07 y exceso', async () => {

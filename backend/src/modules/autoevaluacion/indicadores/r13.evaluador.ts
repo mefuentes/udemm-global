@@ -157,18 +157,34 @@ export class R13EvaluadorService implements IndicadorEvaluador<ResultadoR13> {
     const tienePPS = porTipo.PPS > 0;
     const tienePI  = porTipo.PI  > 0;
 
-    // ── Sumar horas FP vía D07 fallback ──────────────────────────────────────
+    // ── Sumar horas FP vía D07 fallback (§6: alumno cursa UNA electiva — contribuye la de menor FP) ─
     let totalHorasFormacionPractica = 0;
     let conDatosFP = 0;
     let sinDatosFP = 0;
 
+    const electivas: MateriaProgramaAut[] = [];
+    const noElectivas: MateriaProgramaAut[] = [];
+
     for (const m of materias) {
+      if (m.tipoAsignatura.toUpperCase() === 'ELECTIVA') electivas.push(m);
+      else noElectivas.push(m);
+    }
+
+    for (const m of noElectivas) {
       const fp = fpEfectiva(m);
-      if (fp !== null) {
-        totalHorasFormacionPractica += fp;
-        conDatosFP++;
-      } else {
-        sinDatosFP++;
+      if (fp !== null) { totalHorasFormacionPractica += fp; conDatosFP++; }
+      else sinDatosFP++;
+    }
+
+    if (electivas.length > 0) {
+      const fpElectivas: number[] = [];
+      for (const e of electivas) {
+        const fp = fpEfectiva(e);
+        if (fp !== null) { fpElectivas.push(fp); conDatosFP++; }
+        else sinDatosFP++;
+      }
+      if (fpElectivas.length > 0) {
+        totalHorasFormacionPractica += Math.min(...fpElectivas);
       }
     }
 

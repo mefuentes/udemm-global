@@ -49,7 +49,7 @@ export class ActualizarMateriaDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['OBLIGATORIA', 'ELECTIVA', 'OPTATIVA'])
+  @IsIn(['OBLIGATORIA', 'ELECTIVA', 'OPTATIVA', 'PPS', 'PI'])
   tipoAsignatura?: string;
 
   @IsOptional()
