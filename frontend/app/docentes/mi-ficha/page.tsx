@@ -686,6 +686,16 @@ function parseDesempenoPasado(rawValue: unknown): DesempenoPasadoItem[] {
   }
 }
 
+interface CompletitudFichaDoc {
+  porcentaje: number;
+  criterios: {
+    datosPersonales: boolean;
+    formacion: boolean;
+    areaDesempeno: boolean;
+    docenciaUniversitaria: boolean;
+  };
+}
+
 export default function MiFichaPage() {
   const router = useRouter();
   const { usuario } = useAuth();
@@ -809,6 +819,7 @@ export default function MiFichaPage() {
   const [actividadForm, setActividadForm] = useState({ titulo: '', rol: '', horasSemanales: '', institucionDestino: '', vinculacionCarrera: '', carreraVinculada: '', fechaInicio: '', fechaFin: '' });
   const [registrosPromocion, setRegistrosPromocion] = useState<RegistroPromocionItem[]>([]);
   const [registroPromocionForm, setRegistroPromocionForm] = useState({ sistema: '', categoria: '', fechaAlta: '' });
+  const [completitudFicha, setCompletitudFicha] = useState<CompletitudFichaDoc | null>(null);
 
   function normalizarFechaSoloDia(valor: string) {
     if (!valor) return '';
@@ -862,6 +873,17 @@ export default function MiFichaPage() {
       .then(d => setTiposPosgrado(Array.isArray(d) ? d : []))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!queryReady || esNuevoDocente || !usuario) return;
+    const url = esVistaDesdeListado && docenteIdDesdeListado
+      ? `${API_URL}/docentes/${docenteIdDesdeListado}/completitud`
+      : `${API_URL}/docentes/mi-ficha/completitud`;
+    apiFetch(url)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setCompletitudFicha(d))
+      .catch(() => {});
+  }, [queryReady, esNuevoDocente, usuario, docenteIdDesdeListado, esVistaDesdeListado]);
 
   useEffect(() => {
     if (!queryReady) return;
@@ -2606,7 +2628,7 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
     doc.save(`ficha-docente-${(formData.apellido || 'docente').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.pdf`);
   }
 
-  function getDatosPestana(tab: number): Partial<FormData> {
+  function getDatosPestana(tab: number): Record<string, unknown> {
     if (!formData) return {};
     switch (tab) {
       case 1: return {
@@ -2625,8 +2647,8 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
         carreraFormacionDocenteJson: formData.carreraFormacionDocenteJson,
       };
       case 3: return {
-        areaDisciplinarId: formData.areaDisciplinarId || undefined,
-        subareaId: formData.subareaId || undefined,
+        areaDisciplinarId: formData.areaDisciplinarId || null,
+        subareaId: formData.subareaId || null,
         observacionesArea: formData.observacionesArea,
       };
       case 4: return {
@@ -2720,6 +2742,13 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
         setTimeout(() => router.push('/docentes'), 1500);
       } else {
         cargarFicha(true);
+        const completitudUrl = esVistaDesdeListado && docenteIdDesdeListado
+          ? `${API_URL}/docentes/${docenteIdDesdeListado}/completitud`
+          : `${API_URL}/docentes/mi-ficha/completitud`;
+        apiFetch(completitudUrl)
+          .then(r => r.ok ? r.json() : null)
+          .then(d => setCompletitudFicha(d))
+          .catch(() => {});
       }
 
     } catch (err) {
@@ -2871,6 +2900,55 @@ drawSection('Área de desempeño', '3.1 Disciplina y área', [
             ) : null}
           </div>
         </div>
+
+        {completitudFicha && !esNuevoDocente && (() => {
+          const pct = completitudFicha.porcentaje;
+          const radio = 28;
+          const circ = 2 * Math.PI * radio;
+          const offset = circ * (1 - pct / 100);
+          const color = pct === 100 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444';
+          const criterios = [
+            { label: 'Datos personales', ok: completitudFicha.criterios.datosPersonales },
+            { label: 'Formación', ok: completitudFicha.criterios.formacion },
+            { label: 'Área de desempeño', ok: completitudFicha.criterios.areaDesempeno },
+            { label: 'Docencia universitaria', ok: completitudFicha.criterios.docenciaUniversitaria },
+          ];
+          return (
+            <section className="rounded-xl bg-white p-5 shadow-sm border border-slate-200">
+              <h2 className="mb-3 text-sm font-semibold text-slate-700">Completitud de ficha</h2>
+              <div className="flex items-center gap-5">
+                <div className="relative flex-shrink-0 w-16 h-16">
+                  <svg width="64" height="64" viewBox="0 0 64 64" className="-rotate-90">
+                    <circle cx="32" cy="32" r={radio} fill="none" stroke="#e2e8f0" strokeWidth="7" />
+                    <circle
+                      cx="32" cy="32" r={radio}
+                      fill="none"
+                      stroke={color}
+                      strokeWidth="7"
+                      strokeLinecap="round"
+                      strokeDasharray={circ}
+                      strokeDashoffset={offset}
+                      style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xs font-bold tabular-nums" style={{ color }}>{pct}%</span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0 grid gap-1.5 sm:grid-cols-2">
+                  {criterios.map(c => (
+                    <div key={c.label} className="flex items-center gap-1.5">
+                      <span className={`flex-shrink-0 text-sm font-bold ${c.ok ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {c.ok ? '✔' : '✖'}
+                      </span>
+                      <span className="text-xs text-slate-700">{c.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          );
+        })()}
 
         <section className="rounded-xl bg-white p-5 shadow-sm border border-slate-200">
           {error ? <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}

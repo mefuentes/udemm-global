@@ -1176,7 +1176,7 @@ function contadorFiltro(totales: TotalesListadoDocentes, filtro: FiltroListado):
   }
 }
 
-type SortKey = 'nombre' | 'asignatura' | 'horas' | 'programa';
+type SortKey = 'nombre' | 'materias' | 'horas';
 
 function filtrarFilas(
   filas: FilaDocenteMateria[],
@@ -1191,19 +1191,11 @@ function filtrarFilas(
 function sortFilas(filas: FilaDocenteMateria[], key: SortKey, asc: boolean): FilaDocenteMateria[] {
   const copy = [...filas];
   copy.sort((a, b) => {
-    if (key === 'programa') {
-      // null siempre al final, sin importar dirección
-      if (a.seccionesCompletas === null && b.seccionesCompletas === null) return 0;
-      if (a.seccionesCompletas === null) return 1;
-      if (b.seccionesCompletas === null) return -1;
-      const cmp = a.seccionesCompletas - b.seccionesCompletas;
-      return asc ? cmp : -cmp;
-    }
     let cmp = 0;
     switch (key) {
-      case 'nombre':     cmp = a.nombreDocente.localeCompare(b.nombreDocente); break;
-      case 'asignatura': cmp = a.nombreMateria.localeCompare(b.nombreMateria); break;
-      case 'horas':      cmp = a.horasCarreraConocidas - b.horasCarreraConocidas; break;
+      case 'nombre':   cmp = a.nombreDocente.localeCompare(b.nombreDocente); break;
+      case 'materias': cmp = a.materiasVinculadas - b.materiasVinculadas; break;
+      case 'horas':    cmp = a.dedicacion - b.dedicacion; break;
     }
     return asc ? cmp : -cmp;
   });
@@ -1480,7 +1472,7 @@ function PanelListadoDocentes({
             </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-slate-100">
-              <table className="w-full text-xs min-w-[600px]">
+              <table className="w-full text-xs min-w-[520px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
                     <th
@@ -1490,89 +1482,76 @@ function PanelListadoDocentes({
                       Docente <SortIcon k="nombre" />
                     </th>
                     <th
-                      className="text-left px-3 py-2 font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 whitespace-nowrap"
-                      onClick={() => toggleSort('asignatura')}
+                      className="text-right px-3 py-2 font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 whitespace-nowrap"
+                      onClick={() => toggleSort('materias')}
                     >
-                      Asignatura <SortIcon k="asignatura" />
+                      Materias vinculadas <SortIcon k="materias" />
                     </th>
                     <th
                       className="text-right px-3 py-2 font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 whitespace-nowrap"
                       onClick={() => toggleSort('horas')}
                     >
-                      Dedicación <SortIcon k="horas" />
+                      Dedicación total <SortIcon k="horas" />
                     </th>
-                    <th
-                      className="text-right px-3 py-2 font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 whitespace-nowrap"
-                      onClick={() => toggleSort('programa')}
-                    >
-                      Prog. Asignatura <SortIcon k="programa" />
+                    <th className="text-right px-3 py-2 font-semibold text-slate-500 whitespace-nowrap">
+                      Desglose (doc / gest / inv / vin)
+                    </th>
+                    <th className="text-right px-3 py-2 font-semibold text-slate-500 whitespace-nowrap">
+                      Ficha
                     </th>
                     <th className="text-center px-3 py-2 font-semibold text-slate-500 whitespace-nowrap">
-                      Estado del programa
+                      Estado ficha
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {filasFiltradas.map((f, i) => (
-                    <tr key={`${f.docenteId}-${f.materiaId}`} className={`border-b border-slate-50 hover:bg-slate-50/60 ${i % 2 === 1 ? 'bg-slate-50/30' : ''}`}>
+                    <tr key={f.docenteId} className={`border-b border-slate-50 hover:bg-slate-50/60 ${i % 2 === 1 ? 'bg-slate-50/30' : ''}`}>
                       {/* Docente */}
                       <td className="px-3 py-2 min-w-0">
                         <div className="flex flex-col gap-1 min-w-0">
-                          <Link
-                            href={`/autoevaluacion/ficha-docente/${f.docenteId}`}
-                            className="font-medium text-slate-700 hover:text-[#0f4c81] hover:underline truncate"
-                          >
+                          <span className="font-medium text-slate-700 truncate">
                             {f.nombreDocente}
-                          </Link>
+                          </span>
                           <div className="flex flex-wrap gap-1">
                             {alertasBadges(f.alertas)}
                           </div>
                         </div>
                       </td>
 
-                      {/* Asignatura */}
-                      <td className="px-3 py-2 align-top min-w-0">
-                        <span className="text-slate-700 leading-snug">{f.nombreMateria}</span>
+                      {/* Materias vinculadas */}
+                      <td className="px-3 py-2 text-right align-top whitespace-nowrap">
+                        <span className="font-mono tabular-nums text-slate-700">{f.materiasVinculadas}</span>
                       </td>
 
-                      {/* Dedicación */}
+                      {/* Dedicación total */}
                       <td className="px-3 py-2 text-right align-top whitespace-nowrap">
-                        <span className="font-mono tabular-nums text-slate-700">{f.horasCarreraConocidas} h</span>
+                        <span className="font-mono tabular-nums text-slate-700 font-semibold">{f.dedicacion} h</span>
                         {f.tieneHorasIncompletas && (
                           <span className="ml-1 text-[9px] text-amber-500 italic">inc.</span>
                         )}
                       </td>
 
-                      {/* Programa de Asignatura */}
+                      {/* Desglose */}
                       <td className="px-3 py-2 text-right align-top whitespace-nowrap">
-                        {f.seccionesCompletas !== null ? (
-                          <>
-                            <span className={`font-semibold tabular-nums ${
-                              f.seccionesCompletas >= 6 ? 'text-emerald-600' :
-                              f.seccionesCompletas >= 4 ? 'text-amber-600' :
-                              'text-red-600'
-                            }`}>
-                              {f.seccionesCompletas}
-                            </span>
-                            <span className="text-slate-400">/6</span>
-                          </>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
+                        <span className="font-mono tabular-nums text-slate-500 text-[10px]">
+                          {f.horasDocencia} / {f.horasGestion} / {f.horasInvestigacion} / {f.horasVinculacion}
+                        </span>
                       </td>
 
-                      {/* Estado del programa */}
-                      <td className="px-3 py-2 text-center align-top">
-                        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap ${
-                          f.estadoPrograma === 'VERDE'    ? 'bg-emerald-50 text-emerald-700 border-emerald-300' :
-                          f.estadoPrograma === 'AMARILLO' ? 'bg-amber-50 text-amber-700 border-amber-300' :
-                          f.estadoPrograma === 'ROJO'     ? 'bg-red-50 text-red-700 border-red-300' :
-                          'bg-slate-50 text-slate-400 border-slate-200'
+                      {/* Completitud ficha */}
+                      <td className="px-3 py-2 text-right align-top whitespace-nowrap">
+                        <span className="font-mono tabular-nums text-slate-700">{f.completitudFichaDocente}%</span>
+                      </td>
+
+                      {/* Estado ficha */}
+                      <td className="px-3 py-2 text-center align-top whitespace-nowrap">
+                        <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold ${
+                          f.estadoFichaDocente === 'VERDE'    ? 'bg-emerald-100 text-emerald-700' :
+                          f.estadoFichaDocente === 'AMARILLO' ? 'bg-amber-100 text-amber-700'   :
+                                                                'bg-red-100 text-red-700'
                         }`}>
-                          {f.estadoPrograma === 'VERDE'    ? 'VERDE' :
-                           f.estadoPrograma === 'AMARILLO' ? 'AMARILLO' :
-                           f.estadoPrograma === 'ROJO'     ? 'ROJO' :
-                           'SIN PROGRAMA'}
+                          {f.estadoFichaDocente}
                         </span>
                       </td>
                     </tr>

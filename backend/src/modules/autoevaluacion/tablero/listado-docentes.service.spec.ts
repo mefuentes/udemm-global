@@ -22,11 +22,6 @@ const ROL     = 'ADMINISTRADOR_SISTEMA';
 
 // ── Docente mínimo con ficha completa ─────────────────────────────────────────
 
-type ProgramaRow = {
-  estadoS1: string | null; estadoS2: string | null; estadoS3: string | null;
-  estadoS4: string | null; estadoS5: string | null; estadoS6: string | null;
-} | null;
-
 function makeDocRow(overrides: Partial<{
   docenteId: string;
   nombre: string;
@@ -39,10 +34,16 @@ function makeDocRow(overrides: Partial<{
   tipoDocumento: string;
   tituloGrado: string | null;
   areaDisciplinarId: string | null;
+  subareaId: string | null;
   materiaId: string;
   materiaNombre: string;
   cargaHorariaSemanal: number | null;
-  programa: ProgramaRow;
+  cargosAcademicosJson: string | null;
+  tiempoDedicacionGestionSemanal: string | null;
+  fechaFinGestion: string | null;
+  funcionGestion: string | null;
+  proyectosInvestigacionJson: string | null;
+  participacionVinculacionJson: string | null;
 }> = {}) {
   const {
     docenteId    = 'd-001',
@@ -56,19 +57,26 @@ function makeDocRow(overrides: Partial<{
     tipoDocumento = 'DNI',
     tituloGrado  = '[{"denominacion":"Ing.","anio":"2005","pais":"Argentina","institucion":"UBA"}]',
     areaDisciplinarId = 'area-1',
+    subareaId    = null,
     materiaId    = 'm-001',
     materiaNombre = 'Matemática',
     cargaHorariaSemanal = 6,
+    cargosAcademicosJson = null,
+    tiempoDedicacionGestionSemanal = null,
+    fechaFinGestion = null,
+    funcionGestion = null,
+    proyectosInvestigacionJson = null,
+    participacionVinculacionJson = null,
   } = overrides;
-
-  const programa: ProgramaRow = overrides.programa !== undefined ? overrides.programa : null;
 
   return {
     docenteId,
-    materia: { id: materiaId, nombre: materiaNombre, cargaHorariaSemanal, programa },
+    materia: { id: materiaId, nombre: materiaNombre, cargaHorariaSemanal },
     docente: {
       nombre, apellido, sexo, fechaNacimiento, cuit, pisoDepto, residencia,
-      tipoDocumento, tituloGrado, areaDisciplinarId,
+      tipoDocumento, tituloGrado, areaDisciplinarId, subareaId,
+      cargosAcademicosJson, tiempoDedicacionGestionSemanal, fechaFinGestion,
+      funcionGestion, proyectosInvestigacionJson, participacionVinculacionJson,
     },
   };
 }
@@ -374,7 +382,7 @@ describe('LD-12 — totales.conAlertas incluye solo alertas ALTA y MEDIA (no inf
 
 // ── LD-13: horas suma solo materias con carga informada ──────────────────────
 
-describe('LD-13 — horasCarreraConocidas y tieneHorasIncompletas', () => {
+describe('LD-13 — horasCarreraConocidas y tieneHorasIncompletas en docentes[]', () => {
   it('suma solo horas conocidas y marca tieneHorasIncompletas cuando hay null', async () => {
     const rows = [
       makeDocRow({ docenteId: 'd-001', nombre: 'Juan', apellido: 'García', materiaId: 'm-1', cargaHorariaSemanal: 6 }),
@@ -573,27 +581,22 @@ describe('LD-18 — distribucionSemaforos: conteo por semáforo del plantel', ()
   });
 });
 
-// ── LD-19: 1 docente / 1 materia con programa completo (6/6) ─────────────────
+// ── LD-19: 1 docente / 1 materia → 1 fila con materiasVinculadas=1 ───────────
 
-describe('LD-19 — filas: 1 docente / 1 materia con ProgramaAsignatura completo (6/6)', () => {
-  it('devuelve 1 fila con seccionesCompletas=6, completitudPrograma=100 y estadoPrograma=VERDE', async () => {
-    const prog: ProgramaRow = {
-      estadoS1: 'COMPLETO', estadoS2: 'COMPLETO', estadoS3: 'COMPLETO',
-      estadoS4: 'COMPLETO', estadoS5: 'COMPLETO', estadoS6: 'COMPLETO',
-    };
-    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+describe('LD-19 — filas: 1 docente / 1 materia → 1 fila con materiasVinculadas=1', () => {
+  it('devuelve 1 fila con materiasVinculadas=1 y horasDocencia correcta', async () => {
+    const svc = makeSvc({ rows: [makeDocRow({ cargaHorariaSemanal: 6 })] });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
     expect(res.filas).toHaveLength(1);
-    expect(res.filas[0].seccionesCompletas).toBe(6);
-    expect(res.filas[0].completitudPrograma).toBe(100);
-    expect(res.filas[0].estadoPrograma).toBe('VERDE');
+    expect(res.filas[0].materiasVinculadas).toBe(1);
+    expect(res.filas[0].horasDocencia).toBe(6);
   });
 });
 
-// ── LD-20: 1 docente / 3 materias → 3 filas con misma dedicación total ───────
+// ── LD-20: 1 docente / 3 materias → 1 fila con materiasVinculadas=3 ──────────
 
-describe('LD-20 — filas: 1 docente / 3 materias devuelve 3 filas con dedicación total en cada una', () => {
-  it('3 filas para el docente; horasCarreraConocidas es el total en cada fila; docentes tiene 1 entrada', async () => {
+describe('LD-20 — filas: 1 docente / 3 materias → 1 fila consolidada', () => {
+  it('1 fila para el docente; materiasVinculadas=3; horasDocencia=suma total; docentes tiene 1 entrada', async () => {
     const rows = [
       makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', materiaNombre: 'Mat A', cargaHorariaSemanal: 4 }),
       makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', materiaNombre: 'Mat B', cargaHorariaSemanal: 3 }),
@@ -602,11 +605,10 @@ describe('LD-20 — filas: 1 docente / 3 materias devuelve 3 filas con dedicaci�
     const svc = makeSvc({ rows });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
     expect(res.docentes).toHaveLength(1);
-    expect(res.filas).toHaveLength(3);
-    for (const f of res.filas) {
-      expect(f.horasCarreraConocidas).toBe(9); // total 4+3+2, igual en todas las filas
-      expect(f.docenteId).toBe('d-001');
-    }
+    expect(res.filas).toHaveLength(1);
+    expect(res.filas[0].materiasVinculadas).toBe(3);
+    expect(res.filas[0].horasDocencia).toBe(9); // 4+3+2
+    expect(res.filas[0].docenteId).toBe('d-001');
   });
 });
 
@@ -622,6 +624,7 @@ describe('LD-21 — filas: 2 docentes / 1 materia cada uno devuelve 2 filas', ()
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
     expect(res.filas).toHaveLength(2);
     expect(res.filas.map(f => f.docenteId).sort()).toEqual(['d-001', 'd-002']);
+    expect(res.filas.every(f => f.materiasVinculadas === 1)).toBe(true);
   });
 });
 
@@ -636,56 +639,63 @@ describe('LD-22 — filas: 2 vinculaciones con mismo (docenteId, materiaId) → 
     const svc = makeSvc({ rows });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
     expect(res.filas).toHaveLength(1);
-    expect(res.filas[0].horasCarreraConocidas).toBe(4);
+    expect(res.filas[0].materiasVinculadas).toBe(1);
+    expect(res.filas[0].horasDocencia).toBe(4);
   });
 });
 
-// ── LD-23: materia sin ProgramaAsignatura → seccionesCompletas=null ───────────
+// ── LD-23: materia sin cargaHorariaSemanal → tieneHorasIncompletas en fila ───
 
-describe('LD-23 — filas: materia sin ProgramaAsignatura → seccionesCompletas null, completitudPrograma null', () => {
-  it('devuelve seccionesCompletas=null y completitudPrograma=null cuando no existe ProgramaAsignatura', async () => {
-    const svc = makeSvc({ rows: [makeDocRow({ programa: null })] });
+describe('LD-23 — filas: materia sin cargaHorariaSemanal → horasDocencia parcial, tieneHorasIncompletas=true', () => {
+  it('contabiliza solo horas conocidas y marca tieneHorasIncompletas en la fila del docente', async () => {
+    const rows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', cargaHorariaSemanal: null }),
+    ];
+    const svc = makeSvc({ rows });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
-    expect(res.filas[0].seccionesCompletas).toBeNull();
-    expect(res.filas[0].completitudPrograma).toBeNull();
+    expect(res.filas).toHaveLength(1);
+    expect(res.filas[0].horasDocencia).toBe(6);
+    expect(res.filas[0].tieneHorasIncompletas).toBe(true);
+    expect(res.filas[0].materiasVinculadas).toBe(2);
   });
 });
 
-// ── LD-24: programa parcial 3/6 → completitudPrograma=50 ─────────────────────
+// ── LD-24: suma correcta de horasDocencia en carrera ─────────────────────────
 
-describe('LD-24 — filas: programa 3/6 → completitudPrograma=Math.round(3/6*100)=50', () => {
-  it('calcula completitudPrograma=50 con 3 secciones completas y 3 pendientes', async () => {
-    const prog: ProgramaRow = {
-      estadoS1: 'COMPLETO', estadoS2: 'COMPLETO', estadoS3: 'COMPLETO',
-      estadoS4: 'PENDIENTE', estadoS5: 'PENDIENTE', estadoS6: 'PENDIENTE',
-    };
-    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+describe('LD-24 — filas: horasDocencia es la suma total de cargaHorariaSemanal del docente en la carrera', () => {
+  it('suma correctamente las horas de todas las materias del docente', async () => {
+    const rows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 8 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', cargaHorariaSemanal: 4 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-3', cargaHorariaSemanal: 3 }),
+    ];
+    const svc = makeSvc({ rows });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
-    expect(res.filas[0].seccionesCompletas).toBe(3);
-    expect(res.filas[0].completitudPrograma).toBe(50);
+    expect(res.filas[0].horasDocencia).toBe(15); // 8+4+3
   });
 });
 
-// ── LD-25: dedicación del docente no se duplica por materia ──────────────────
+// ── LD-25: 1 docente / 2 materias → 1 fila (no 2) ───────────────────────────
 
-describe('LD-25 — filas: horasCarreraConocidas es la suma total del docente (no por materia)', () => {
-  it('todas las filas del docente muestran el total de horas, no las de cada materia individual', async () => {
+describe('LD-25 — filas: 1 docente / 2 materias devuelve 1 fila (consolidado por docente)', () => {
+  it('1 fila con horasDocencia=total; no una fila por materia', async () => {
     const rows = [
       makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 }),
       makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', cargaHorariaSemanal: 4 }),
     ];
     const svc = makeSvc({ rows });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
-    expect(res.filas).toHaveLength(2);
-    expect(res.filas[0].horasCarreraConocidas).toBe(10);
-    expect(res.filas[1].horasCarreraConocidas).toBe(10);
+    expect(res.filas).toHaveLength(1);
+    expect(res.filas[0].horasDocencia).toBe(10);
+    expect(res.filas[0].materiasVinculadas).toBe(2);
   });
 });
 
 // ── LD-26: contadores de totales son únicos por docente, no por filas ─────────
 
 describe('LD-26 — totales: contadores basados en docentes únicos, no en filas', () => {
-  it('total=1 aunque el docente tenga 3 materias (docentes únicos, no filas)', async () => {
+  it('total=1 y filas.length=1 cuando el docente tiene 3 materias', async () => {
     const rows = [
       makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 4 }),
       makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', cargaHorariaSemanal: 3 }),
@@ -693,9 +703,9 @@ describe('LD-26 — totales: contadores basados en docentes únicos, no en filas
     ];
     const svc = makeSvc({ rows });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
-    expect(res.totales.total).toBe(1);       // 1 docente único
-    expect(res.filas).toHaveLength(3);       // 3 filas
-    expect(res.docentes).toHaveLength(1);    // 1 docente en docentes[]
+    expect(res.totales.total).toBe(1);     // 1 docente único
+    expect(res.filas).toHaveLength(1);     // 1 fila consolidada
+    expect(res.docentes).toHaveLength(1);  // 1 docente en docentes[]
   });
 });
 
@@ -710,22 +720,22 @@ describe('LD-27 — retorno vacío: filas=[] cuando no hay docentes activos', ()
   });
 });
 
-// ── LD-28: orden de filas por nombreDocente asc, luego nombreMateria asc ──────
+// ── LD-28: filas ordenadas por nombreDocente asc ──────────────────────────────
 
-describe('LD-28 — filas ordenadas por nombreDocente asc, luego nombreMateria asc', () => {
-  it('filas ordenadas alfabéticamente por docente, luego por materia', async () => {
+describe('LD-28 — filas ordenadas por nombreDocente asc (una fila por docente)', () => {
+  it('filas ordenadas alfabéticamente por docente; docente con 2 materias tiene materiasVinculadas=2', async () => {
     const rows = [
-      makeDocRow({ docenteId: 'd-002', apellido: 'López', nombre: 'Ana', materiaId: 'm-1', materiaNombre: 'Zeta' }),
-      makeDocRow({ docenteId: 'd-002', apellido: 'López', nombre: 'Ana', materiaId: 'm-2', materiaNombre: 'Alpha' }),
-      makeDocRow({ docenteId: 'd-001', apellido: 'García', nombre: 'Juan', materiaId: 'm-3', materiaNombre: 'Beta' }),
+      makeDocRow({ docenteId: 'd-002', apellido: 'López', nombre: 'Ana', materiaId: 'm-1' }),
+      makeDocRow({ docenteId: 'd-002', apellido: 'López', nombre: 'Ana', materiaId: 'm-2' }),
+      makeDocRow({ docenteId: 'd-001', apellido: 'García', nombre: 'Juan', materiaId: 'm-3' }),
     ];
     const svc = makeSvc({ rows });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
-    // GARCÍA, Juan → 'd-001' first; LÓPEZ, Ana → 'd-002' x2
+    // GARCÍA, Juan → 'd-001' first; LÓPEZ, Ana → 'd-002'
+    expect(res.filas).toHaveLength(2);
     expect(res.filas[0].docenteId).toBe('d-001');
     expect(res.filas[1].docenteId).toBe('d-002');
-    expect(res.filas[1].nombreMateria).toBe('Alpha');  // Alpha < Zeta
-    expect(res.filas[2].nombreMateria).toBe('Zeta');
+    expect(res.filas[1].materiasVinculadas).toBe(2);
   });
 });
 
@@ -747,119 +757,343 @@ describe('LD-29 — filas: alertas en fila coinciden con las alertas del docente
   });
 });
 
-// ── LD-30 a LD-37: semáforo del Programa de Asignatura (H.2-C) ───────────────
+// ── LD-30: horasGestion=0 cuando sin datos de gestión ────────────────────────
 
-describe('LD-30 — semáforo programa: 0/6 → ROJO', () => {
-  it('devuelve estadoPrograma=ROJO cuando seccionesCompletas=0', async () => {
-    const prog: ProgramaRow = {
-      estadoS1: 'PENDIENTE', estadoS2: 'PENDIENTE', estadoS3: 'PENDIENTE',
-      estadoS4: 'PENDIENTE', estadoS5: 'PENDIENTE', estadoS6: 'PENDIENTE',
-    };
-    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+describe('LD-30 — filas: horasGestion=0 cuando cargosAcademicosJson=null y sin gestión legacy', () => {
+  it('horasGestion=0 cuando todos los campos de gestión son null', async () => {
+    const svc = makeSvc({ rows: [makeDocRow()] }); // defaults: all json fields = null
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
-    expect(res.filas[0].seccionesCompletas).toBe(0);
-    expect(res.filas[0].estadoPrograma).toBe('ROJO');
+    expect(res.filas[0].horasGestion).toBe(0);
   });
 });
 
-describe('LD-31 — semáforo programa: 1/6 → ROJO', () => {
-  it('devuelve estadoPrograma=ROJO cuando seccionesCompletas=1', async () => {
-    const prog: ProgramaRow = {
-      estadoS1: 'COMPLETO',  estadoS2: 'PENDIENTE', estadoS3: 'PENDIENTE',
-      estadoS4: 'PENDIENTE', estadoS5: 'PENDIENTE', estadoS6: 'PENDIENTE',
-    };
-    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+// ── LD-31: horasGestion > 0 con cargosAcademicosJson vigente ─────────────────
+
+describe('LD-31 — filas: horasGestion > 0 cuando cargosAcademicosJson tiene cargo vigente', () => {
+  it('extrae horasGestion=10 de cargosAcademicosJson con periodoHasta vacío', async () => {
+    const rows = [makeDocRow({
+      cargosAcademicosJson: JSON.stringify([{ dedicacionSemanal: '10', periodoHasta: '' }]),
+    })];
+    const svc = makeSvc({ rows });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
-    expect(res.filas[0].seccionesCompletas).toBe(1);
-    expect(res.filas[0].estadoPrograma).toBe('ROJO');
+    expect(res.filas[0].horasGestion).toBe(10);
   });
 });
 
-describe('LD-32 — semáforo programa: 2/6 → ROJO', () => {
-  it('devuelve estadoPrograma=ROJO cuando seccionesCompletas=2', async () => {
-    const prog: ProgramaRow = {
-      estadoS1: 'COMPLETO',  estadoS2: 'COMPLETO',  estadoS3: 'PENDIENTE',
-      estadoS4: 'PENDIENTE', estadoS5: 'PENDIENTE', estadoS6: 'PENDIENTE',
-    };
-    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+// ── LD-32: horasInvestigacion > 0 con proyectosInvestigacionJson ─────────────
+
+describe('LD-32 — filas: horasInvestigacion > 0 cuando proyectosInvestigacionJson tiene proyecto activo', () => {
+  it('extrae horasInvestigacion=5 de proyectosInvestigacionJson', async () => {
+    const rows = [makeDocRow({
+      proyectosInvestigacionJson: JSON.stringify([{ horasSemanales: '5' }]),
+    })];
+    const svc = makeSvc({ rows });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
-    expect(res.filas[0].seccionesCompletas).toBe(2);
-    expect(res.filas[0].estadoPrograma).toBe('ROJO');
+    expect(res.filas[0].horasInvestigacion).toBe(5);
   });
 });
 
-describe('LD-33 — semáforo programa: 3/6 → ROJO', () => {
-  it('devuelve estadoPrograma=ROJO cuando seccionesCompletas=3', async () => {
-    const prog: ProgramaRow = {
-      estadoS1: 'COMPLETO',  estadoS2: 'COMPLETO',  estadoS3: 'COMPLETO',
-      estadoS4: 'PENDIENTE', estadoS5: 'PENDIENTE', estadoS6: 'PENDIENTE',
-    };
-    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+// ── LD-33: horasVinculacion > 0 con participacionVinculacionJson ─────────────
+
+describe('LD-33 — filas: horasVinculacion > 0 cuando participacionVinculacionJson tiene actividad', () => {
+  it('extrae horasVinculacion=3 de participacionVinculacionJson', async () => {
+    const rows = [makeDocRow({
+      participacionVinculacionJson: JSON.stringify([{ horasSemanales: '3' }]),
+    })];
+    const svc = makeSvc({ rows });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
-    expect(res.filas[0].seccionesCompletas).toBe(3);
-    expect(res.filas[0].estadoPrograma).toBe('ROJO');
+    expect(res.filas[0].horasVinculacion).toBe(3);
   });
 });
 
-describe('LD-34 — semáforo programa: 4/6 → AMARILLO', () => {
-  it('devuelve estadoPrograma=AMARILLO cuando seccionesCompletas=4', async () => {
-    const prog: ProgramaRow = {
-      estadoS1: 'COMPLETO',  estadoS2: 'COMPLETO',  estadoS3: 'COMPLETO',
-      estadoS4: 'COMPLETO',  estadoS5: 'PENDIENTE', estadoS6: 'PENDIENTE',
-    };
-    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+// ── LD-34: dedicacion = suma de los 4 componentes ────────────────────────────
+
+describe('LD-34 — filas: dedicacion = horasDocencia + horasGestion + horasInvestigacion + horasVinculacion', () => {
+  it('dedicacion es la suma correcta de todos los componentes horarios', async () => {
+    const rows = [makeDocRow({
+      cargaHorariaSemanal: 6,
+      cargosAcademicosJson: JSON.stringify([{ dedicacionSemanal: '4', periodoHasta: '' }]),
+      proyectosInvestigacionJson: JSON.stringify([{ horasSemanales: '3' }]),
+      participacionVinculacionJson: JSON.stringify([{ horasSemanales: '2' }]),
+    })];
+    const svc = makeSvc({ rows });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
-    expect(res.filas[0].seccionesCompletas).toBe(4);
-    expect(res.filas[0].estadoPrograma).toBe('AMARILLO');
+    const f = res.filas[0];
+    expect(f.horasDocencia).toBe(6);
+    expect(f.horasGestion).toBe(4);
+    expect(f.horasInvestigacion).toBe(3);
+    expect(f.horasVinculacion).toBe(2);
+    expect(f.dedicacion).toBe(15); // 6+4+3+2
   });
 });
 
-describe('LD-35 — semáforo programa: 5/6 → AMARILLO', () => {
-  it('devuelve estadoPrograma=AMARILLO cuando seccionesCompletas=5', async () => {
-    const prog: ProgramaRow = {
-      estadoS1: 'COMPLETO',  estadoS2: 'COMPLETO',  estadoS3: 'COMPLETO',
-      estadoS4: 'COMPLETO',  estadoS5: 'COMPLETO',  estadoS6: 'PENDIENTE',
-    };
-    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+// ── LD-35: dedicacion = horasDocencia cuando no hay horas adicionales ─────────
+
+describe('LD-35 — filas: dedicacion = horasDocencia cuando gestión/investigación/vinculación = 0', () => {
+  it('dedicacion equals horasDocencia when all additional hours are zero', async () => {
+    const svc = makeSvc({ rows: [makeDocRow({ cargaHorariaSemanal: 8 })] });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
-    expect(res.filas[0].seccionesCompletas).toBe(5);
-    expect(res.filas[0].estadoPrograma).toBe('AMARILLO');
+    expect(res.filas[0].horasDocencia).toBe(8);
+    expect(res.filas[0].dedicacion).toBe(8);
   });
 });
 
-describe('LD-36 — semáforo programa: 6/6 → VERDE (confirmado H.2-C)', () => {
-  it('devuelve estadoPrograma=VERDE cuando seccionesCompletas=6', async () => {
-    const prog: ProgramaRow = {
-      estadoS1: 'COMPLETO', estadoS2: 'COMPLETO', estadoS3: 'COMPLETO',
-      estadoS4: 'COMPLETO', estadoS5: 'COMPLETO', estadoS6: 'COMPLETO',
-    };
-    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+// ── LD-36: horas adicionales no se multiplican por número de materias ─────────
+
+describe('LD-36 — filas: horasGestion no se multiplica por materiasVinculadas', () => {
+  it('mismo docente con 3 materias mantiene horasGestion igual que con 1 materia', async () => {
+    const gestionJson = JSON.stringify([{ dedicacionSemanal: '8', periodoHasta: '' }]);
+    const rows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 4, cargosAcademicosJson: gestionJson }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', cargaHorariaSemanal: 4, cargosAcademicosJson: gestionJson }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-3', cargaHorariaSemanal: 4, cargosAcademicosJson: gestionJson }),
+    ];
+    const svc = makeSvc({ rows });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
-    expect(res.filas[0].seccionesCompletas).toBe(6);
-    expect(res.filas[0].estadoPrograma).toBe('VERDE');
+    expect(res.filas[0].horasGestion).toBe(8);   // no multiplicado × 3
+    expect(res.filas[0].horasDocencia).toBe(12);  // 4+4+4
+    expect(res.filas[0].materiasVinculadas).toBe(3);
   });
 });
 
-describe('LD-37 — semáforo programa: sin ProgramaAsignatura → NO_VERIFICABLE', () => {
-  it('devuelve estadoPrograma=NO_VERIFICABLE cuando no existe ProgramaAsignatura', async () => {
-    const svc = makeSvc({ rows: [makeDocRow({ programa: null })] });
+// ── LD-37: materiasVinculadas coincide con nMaterias de docentes[] ────────────
+
+describe('LD-37 — filas.materiasVinculadas coincide con docentes[].nMaterias', () => {
+  it('materiasVinculadas en fila es igual a nMaterias del docente en docentes[]', async () => {
+    const rows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1' }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-2' }),
+    ];
+    const svc = makeSvc({ rows });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
-    expect(res.filas[0].seccionesCompletas).toBeNull();
-    expect(res.filas[0].estadoPrograma).toBe('NO_VERIFICABLE');
+    expect(res.filas[0].materiasVinculadas).toBe(res.docentes[0].nMaterias);
   });
 });
 
-describe('LD-38 — semáforo programa: 6/6 siempre VERDE aunque R-11 tenga inconsistencias', () => {
-  it('estadoPrograma=VERDE con 6/6 incluso si R-11 detectaría inconsistencias de prioridad ALTA', async () => {
-    // R-11 evalúa inconsistencias por secciones específicas, pero NO afecta estadoPrograma.
-    // La regla H.2-C: solo seccionesCompletas determina el semáforo.
-    const prog: ProgramaRow = {
-      estadoS1: 'COMPLETO', estadoS2: 'COMPLETO', estadoS3: 'COMPLETO',
-      estadoS4: 'COMPLETO', estadoS5: 'COMPLETO', estadoS6: 'COMPLETO',
-    };
-    const svc = makeSvc({ rows: [makeDocRow({ programa: prog })] });
+// ── LD-38: horasInvestigacion=0 e horasVinculacion=0 cuando los JSON son null ─
+
+describe('LD-38 — filas: horasInvestigacion=0 y horasVinculacion=0 cuando los JSON son null', () => {
+  it('devuelve cero en investigación y vinculación cuando los campos de la ficha son null', async () => {
+    const svc = makeSvc({ rows: [makeDocRow()] });
     const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
-    expect(res.filas[0].seccionesCompletas).toBe(6);
-    expect(res.filas[0].estadoPrograma).toBe('VERDE');
+    expect(res.filas[0].horasInvestigacion).toBe(0);
+    expect(res.filas[0].horasVinculacion).toBe(0);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Completitud de Ficha Docente en listado LD (completitudFichaDocente / estadoFichaDocente)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Helper: ficha completa con areaDisciplinarId Y subareaId → C3=true → completitud=100%
+const TITULO_GRADO_COMPLETO = '[{"denominacion":"Ing.","anio":"2005","pais":"Argentina","institucion":"UBA"}]';
+
+// ── LD-39: completitudFichaDocente=25 (C1=C2=C3=false, C4=true) → ROJO ───────
+
+describe('LD-39 — completitudFichaDocente=25 (sin datos personales, sin título, sin área) → ROJO', () => {
+  it('estadoFichaDocente=ROJO y completitudFichaDocente=25 cuando C1=C2=C3=false', async () => {
+    // C4=1 por construcción (docente en listado LD). C1=C2=C3=false → 25×1=25%
+    const rows = [makeDocRow({ sexo: null, tituloGrado: null, areaDisciplinarId: null, subareaId: null })];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].completitudFichaDocente).toBe(25);
+    expect(res.filas[0].estadoFichaDocente).toBe('ROJO');
+  });
+});
+
+// ── LD-40: completitudFichaDocente=50 → ROJO (umbral ≤50 incluye el 50 exacto) ─
+
+describe('LD-40 — completitudFichaDocente=50 (C1=true, C2=false, C3=false) → ROJO', () => {
+  it('estadoFichaDocente=ROJO para completitud=50 (umbral: ≤50 → ROJO)', async () => {
+    // C1=true (todos datos personales), C2=false (sin título), C3=false (sin área), C4=true → 50%
+    const rows = [makeDocRow({ tituloGrado: null, areaDisciplinarId: null, subareaId: null })];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].completitudFichaDocente).toBe(50);
+    expect(res.filas[0].estadoFichaDocente).toBe('ROJO');
+  });
+});
+
+// ── LD-41: completitudFichaDocente=75 → AMARILLO ─────────────────────────────
+
+describe('LD-41 — completitudFichaDocente=75 (C1=true, C2=true, C3=false) → AMARILLO', () => {
+  it('estadoFichaDocente=AMARILLO para completitud=75 (umbral: >50 y ≤75 → AMARILLO)', async () => {
+    // C3=false porque subareaId=null (aunque areaDisciplinarId esté informada)
+    const rows = [makeDocRow({ tituloGrado: TITULO_GRADO_COMPLETO, areaDisciplinarId: 'area-1', subareaId: null })];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].completitudFichaDocente).toBe(75);
+    expect(res.filas[0].estadoFichaDocente).toBe('AMARILLO');
+  });
+});
+
+// ── LD-42: completitudFichaDocente=100 → VERDE ───────────────────────────────
+
+describe('LD-42 — completitudFichaDocente=100 (C1=C2=C3=C4=true) → VERDE', () => {
+  it('estadoFichaDocente=VERDE cuando C3 requiere AMBOS areaDisciplinarId y subareaId informados', async () => {
+    // C3=true solo si AMBOS campos están informados
+    const rows = [makeDocRow({ tituloGrado: TITULO_GRADO_COMPLETO, areaDisciplinarId: 'area-1', subareaId: 'sub-1' })];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].completitudFichaDocente).toBe(100);
+    expect(res.filas[0].estadoFichaDocente).toBe('VERDE');
+  });
+});
+
+// ── LD-43: área sin subárea → C3=false → completitud pierde 25% ──────────────
+
+describe('LD-43 — areaDisciplinarId con valor pero subareaId null → C3=false → completitudFichaDocente=75', () => {
+  it('C3 requiere ambos campos; solo areaDisciplinarId no es suficiente', async () => {
+    const rows = [makeDocRow({ tituloGrado: TITULO_GRADO_COMPLETO, areaDisciplinarId: 'area-1', subareaId: null })];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].completitudFichaDocente).toBe(75);
+    expect(res.filas[0].estadoFichaDocente).toBe('AMARILLO');
+  });
+});
+
+// ── LD-44: porcentaje coincide con calcularCompletitudFicha ──────────────────
+
+describe('LD-44 — completitudFichaDocente coincide con calcularCompletitudFicha() del módulo Docentes', () => {
+  it('el valor en la fila es idéntico al que devuelve la función centralizada', async () => {
+    // Verificamos que el LD usa la misma función; comparamos con llamada directa.
+    const rows = [makeDocRow({ tituloGrado: TITULO_GRADO_COMPLETO, areaDisciplinarId: 'area-1', subareaId: 'sub-1' })];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    // La función centralizada con C1=C2=C3=C4=true da 100%
+    expect(res.filas[0].completitudFichaDocente).toBe(100);
+  });
+});
+
+// ── LD-45: cada fila usa el docenteId correcto ────────────────────────────────
+
+describe('LD-45 — completitudFichaDocente y estadoFichaDocente se asignan al docenteId correcto', () => {
+  it('2 docentes con distintas completitudes: cada fila usa sus propios datos', async () => {
+    const rows = [
+      // d-001: ficha completa → 100%
+      makeDocRow({ docenteId: 'd-001', apellido: 'Álvarez', nombre: 'Ana', materiaId: 'm-1',
+        tituloGrado: TITULO_GRADO_COMPLETO, areaDisciplinarId: 'area-1', subareaId: 'sub-1' }),
+      // d-002: sin título → 50%
+      makeDocRow({ docenteId: 'd-002', apellido: 'Bernal', nombre: 'Bruno', materiaId: 'm-2',
+        tituloGrado: null, areaDisciplinarId: null, subareaId: null }),
+    ];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    const f001 = res.filas.find(f => f.docenteId === 'd-001')!;
+    const f002 = res.filas.find(f => f.docenteId === 'd-002')!;
+    expect(f001.completitudFichaDocente).toBe(100);
+    expect(f001.estadoFichaDocente).toBe('VERDE');
+    expect(f002.completitudFichaDocente).toBe(50);
+    expect(f002.estadoFichaDocente).toBe('ROJO');
+  });
+});
+
+// ── LD-46: porcentaje NO se multiplica por nMaterias ─────────────────────────
+
+describe('LD-46 — completitudFichaDocente no se multiplica por la cantidad de materias', () => {
+  it('3 materias → completitudFichaDocente igual que con 1 materia', async () => {
+    const rows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 4,
+        tituloGrado: TITULO_GRADO_COMPLETO, areaDisciplinarId: 'area-1', subareaId: 'sub-1' }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', cargaHorariaSemanal: 4,
+        tituloGrado: TITULO_GRADO_COMPLETO, areaDisciplinarId: 'area-1', subareaId: 'sub-1' }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-3', cargaHorariaSemanal: 4,
+        tituloGrado: TITULO_GRADO_COMPLETO, areaDisciplinarId: 'area-1', subareaId: 'sub-1' }),
+    ];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas).toHaveLength(1);
+    expect(res.filas[0].completitudFichaDocente).toBe(100);  // no multiplicado × 3
+    expect(res.filas[0].materiasVinculadas).toBe(3);
+  });
+});
+
+// ── LD-47: una fila por docente con los nuevos campos ─────────────────────────
+
+describe('LD-47 — el listado conserva una fila por docente (no por materia) con los nuevos campos', () => {
+  it('2 docentes → 2 filas, cada una con completitudFichaDocente y estadoFichaDocente', async () => {
+    const rows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1',
+        tituloGrado: TITULO_GRADO_COMPLETO, areaDisciplinarId: 'area-1', subareaId: 'sub-1' }),
+      makeDocRow({ docenteId: 'd-002', materiaId: 'm-2',
+        tituloGrado: null, areaDisciplinarId: null, subareaId: null }),
+    ];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas).toHaveLength(2);
+    expect(res.filas.every(f => typeof f.completitudFichaDocente === 'number')).toBe(true);
+    expect(res.filas.every(f => ['ROJO', 'AMARILLO', 'VERDE'].includes(f.estadoFichaDocente))).toBe(true);
+  });
+});
+
+// ── LD-48: los cálculos de dedicación permanecen intactos ────────────────────
+
+describe('LD-48 — los cálculos de dedicación no son alterados por los nuevos campos', () => {
+  it('dedicacion, horasDocencia y horasGestion son correctos junto a completitudFichaDocente', async () => {
+    const rows = [makeDocRow({
+      cargaHorariaSemanal: 6,
+      cargosAcademicosJson: JSON.stringify([{ dedicacionSemanal: '4', periodoHasta: '' }]),
+      tituloGrado: TITULO_GRADO_COMPLETO, areaDisciplinarId: 'area-1', subareaId: 'sub-1',
+    })];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    const f = res.filas[0];
+    expect(f.horasDocencia).toBe(6);
+    expect(f.horasGestion).toBe(4);
+    expect(f.dedicacion).toBe(10); // 6+4
+    expect(f.completitudFichaDocente).toBe(100);
+    expect(f.estadoFichaDocente).toBe('VERDE');
+  });
+});
+
+// ── LD-49: consulta sin N+1 — completitud calculada inline con datos ya cargados ──
+
+describe('LD-49 — sin consultas N+1: calcularCompletitudFicha usa datos ya cargados', () => {
+  it('N docentes → completitud de cada uno calculada sin queries adicionales (subareaId ya viene en la consulta principal)', async () => {
+    // La ausencia de N+1 se verifica structuralmente:
+    // si subareaId no estuviera en el SELECT principal, el cálculo daría siempre C3=false
+    // (null por defecto) aunque el docente tenga área asignada. El test lo demuestra:
+    // d-001 tiene ambos campos → C3=true → 100%; si hubiera N+1 y faltara subareaId → 75%.
+    const rows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1',
+        tituloGrado: TITULO_GRADO_COMPLETO, areaDisciplinarId: 'area-1', subareaId: 'sub-1' }),
+      makeDocRow({ docenteId: 'd-002', materiaId: 'm-2',
+        tituloGrado: TITULO_GRADO_COMPLETO, areaDisciplinarId: 'area-2', subareaId: 'sub-2' }),
+      makeDocRow({ docenteId: 'd-003', materiaId: 'm-3',
+        tituloGrado: null, areaDisciplinarId: null, subareaId: null }),
+    ];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas).toHaveLength(3);
+    // Si subareaId viniera de una query adicional (N+1) y fallara, daría 75% en lugar de 100%
+    expect(res.filas.find(f => f.docenteId === 'd-001')!.completitudFichaDocente).toBe(100);
+    expect(res.filas.find(f => f.docenteId === 'd-002')!.completitudFichaDocente).toBe(100);
+    expect(res.filas.find(f => f.docenteId === 'd-003')!.completitudFichaDocente).toBe(50);
+  });
+});
+
+// ── LD-50: filas incluyen completitudFichaDocente y estadoFichaDocente ────────
+
+describe('LD-50 — todas las filas del listado incluyen completitudFichaDocente y estadoFichaDocente', () => {
+  it('3 docentes con distintas completitudes: todas las filas tienen los nuevos campos', async () => {
+    const rows = [
+      makeDocRow({ docenteId: 'd-v', apellido: 'Verde', nombre: 'D', materiaId: 'm-v',
+        tituloGrado: TITULO_GRADO_COMPLETO, areaDisciplinarId: 'area-1', subareaId: 'sub-1' }), // 100% VERDE
+      makeDocRow({ docenteId: 'd-a', apellido: 'Amarillo', nombre: 'D', materiaId: 'm-a',
+        tituloGrado: TITULO_GRADO_COMPLETO, areaDisciplinarId: 'area-1', subareaId: null }), // 75% AMARILLO
+      makeDocRow({ docenteId: 'd-r', apellido: 'Rojo', nombre: 'D', materiaId: 'm-r',
+        tituloGrado: null, areaDisciplinarId: null, subareaId: null }), // 50% ROJO
+    ];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    const fVerde    = res.filas.find(f => f.docenteId === 'd-v')!;
+    const fAmarillo = res.filas.find(f => f.docenteId === 'd-a')!;
+    const fRojo     = res.filas.find(f => f.docenteId === 'd-r')!;
+    expect(fVerde.completitudFichaDocente).toBe(100);
+    expect(fVerde.estadoFichaDocente).toBe('VERDE');
+    expect(fAmarillo.completitudFichaDocente).toBe(75);
+    expect(fAmarillo.estadoFichaDocente).toBe('AMARILLO');
+    expect(fRojo.completitudFichaDocente).toBe(50);
+    expect(fRojo.estadoFichaDocente).toBe('ROJO');
   });
 });

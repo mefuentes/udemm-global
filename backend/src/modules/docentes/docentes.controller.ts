@@ -56,6 +56,12 @@ export class DocentesController {
     return this.docentesService.obtenerDocentePorUsuarioId(usuarioId);
   }
 
+  @Get('mi-ficha/completitud')
+  @Roles('DOCENTE')
+  async obtenerCompletitudPropia(@Req() req: any) {
+    return this.docentesService.obtenerCompletitudPropiaFicha(req.user.id);
+  }
+
   @Patch('mi-ficha')
   @Roles('DOCENTE')
   async actualizarMiFicha(@Req() req: any, @Body() actualizarDocenteDto: ActualizarDocenteDto) {
@@ -73,6 +79,12 @@ export class DocentesController {
       req.user.id,
       vigencia as any,
     );
+  }
+
+  @Get(':id/completitud')
+  @Roles('ADMINISTRADOR_SISTEMA', 'DECANO', 'RECTORADO', 'DIRECTOR_CARRERA', 'SECRETARIA_ACADEMICA')
+  async obtenerCompletitud(@Param('id') id: string) {
+    return this.docentesService.obtenerCompletitudFicha(id);
   }
 
   @Get(':id/cargos-institucionales')

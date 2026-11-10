@@ -1359,13 +1359,17 @@ function semaforoColor(semaforo: string | undefined): string {
   return C_LIGHT;
 }
 
-// Offsets de columnas del listado Docente–Asignatura (H.2-B).
+// Offsets de columnas del listado Docente–Dedicación (H.4 consolidado por docente).
 const LD_COL = {
-  docente:    { x:   2, w: 140 },
-  asignatura: { x: 145, w: 128 },
-  horas:      { x: 276, w:  36 },
-  prog:       { x: 315, w:  42 },
-  estado:     { x: 360, w: CONTENT_W - 360 },
+  docente:    { x:   2, w: 155 },
+  materias:   { x: 160, w:  28 },
+  dedicacion: { x: 191, w:  48 },
+  docencia:   { x: 242, w:  40 },
+  gestion:    { x: 283, w:  40 },
+  invest:     { x: 324, w:  40 },
+  vinc:       { x: 365, w:  40 },
+  ficha:      { x: 407, w:  30 },
+  estado:     { x: 438, w: CONTENT_W - 438 },
 } as const;
 
 function renderListadoHeader(doc: PDFKit.PDFDocument, y: number): void {
@@ -1373,14 +1377,23 @@ function renderListadoHeader(doc: PDFKit.PDFDocument, y: number): void {
   // Primera línea
   doc.fillColor(C_MID).font('Helvetica-Bold').fontSize(6.5)
     .text('DOCENTE',      MARGIN + LD_COL.docente.x,    y + 4,  { lineBreak: false, width: LD_COL.docente.w })
-    .text('ASIGNATURA',   MARGIN + LD_COL.asignatura.x, y + 4,  { lineBreak: false, width: LD_COL.asignatura.w })
-    .text('H/SEM',        MARGIN + LD_COL.horas.x,      y + 4,  { lineBreak: false, width: LD_COL.horas.w })
-    .text('PROG. DE',     MARGIN + LD_COL.prog.x,       y + 4,  { lineBreak: false, width: LD_COL.prog.w })
-    .text('ESTADO DEL',   MARGIN + LD_COL.estado.x,     y + 4,  { lineBreak: false, width: LD_COL.estado.w });
-  // Segunda línea (solo columnas con 2 líneas)
+    .text('MAT.',         MARGIN + LD_COL.materias.x,   y + 4,  { lineBreak: false, width: LD_COL.materias.w })
+    .text('DEDIC.',       MARGIN + LD_COL.dedicacion.x, y + 4,  { lineBreak: false, width: LD_COL.dedicacion.w })
+    .text('DOCENCIA',     MARGIN + LD_COL.docencia.x,   y + 4,  { lineBreak: false, width: LD_COL.docencia.w })
+    .text('GESTIÓN',      MARGIN + LD_COL.gestion.x,    y + 4,  { lineBreak: false, width: LD_COL.gestion.w })
+    .text('INVEST.',      MARGIN + LD_COL.invest.x,     y + 4,  { lineBreak: false, width: LD_COL.invest.w })
+    .text('VINC.',        MARGIN + LD_COL.vinc.x,       y + 4,  { lineBreak: false, width: LD_COL.vinc.w })
+    .text('FICHA',        MARGIN + LD_COL.ficha.x,      y + 4,  { lineBreak: false, width: LD_COL.ficha.w })
+    .text('ESTADO',       MARGIN + LD_COL.estado.x,     y + 4,  { lineBreak: false, width: LD_COL.estado.w });
+  // Segunda línea (subtítulos)
   doc.fillColor(C_MID).font('Helvetica-Bold').fontSize(6.5)
-    .text('ASIG.',        MARGIN + LD_COL.prog.x,       y + 12, { lineBreak: false, width: LD_COL.prog.w })
-    .text('PROGRAMA',     MARGIN + LD_COL.estado.x,     y + 12, { lineBreak: false, width: LD_COL.estado.w });
+    .text('TOTAL',        MARGIN + LD_COL.dedicacion.x, y + 12, { lineBreak: false, width: LD_COL.dedicacion.w })
+    .text('(4.1)',        MARGIN + LD_COL.docencia.x,   y + 12, { lineBreak: false, width: LD_COL.docencia.w })
+    .text('(5.1)',        MARGIN + LD_COL.gestion.x,    y + 12, { lineBreak: false, width: LD_COL.gestion.w })
+    .text('(7.2)',        MARGIN + LD_COL.invest.x,     y + 12, { lineBreak: false, width: LD_COL.invest.w })
+    .text('(7.3)',        MARGIN + LD_COL.vinc.x,       y + 12, { lineBreak: false, width: LD_COL.vinc.w })
+    .text('%',            MARGIN + LD_COL.ficha.x,      y + 12, { lineBreak: false, width: LD_COL.ficha.w })
+    .text('FICHA',        MARGIN + LD_COL.estado.x,     y + 12, { lineBreak: false, width: LD_COL.estado.w });
   doc.y = y + 24;
 }
 
@@ -1404,10 +1417,13 @@ function renderListadoDocentes(doc: PDFKit.PDFDocument, snapshot: Record<string,
     const oldDocentes = (ld['docentes'] ?? []) as Record<string, unknown>[];
     filas = oldDocentes.map(d => ({
       nombreDocente: String(d['nombre'] ?? ''),
-      nombreMateria: `(${d['nMaterias'] ?? '?'} mat.)`,
-      horasCarreraConocidas: d['horasCarreraConocidas'] ?? 0,
+      materiasVinculadas: d['nMaterias'] ?? 0,
+      horasDocencia: d['horasCarreraConocidas'] ?? 0,
       tieneHorasIncompletas: d['tieneHorasIncompletas'] ?? false,
-      seccionesCompletas: null as number | null,
+      horasGestion: 0,
+      horasInvestigacion: 0,
+      horasVinculacion: 0,
+      dedicacion: d['horasCarreraConocidas'] ?? 0,
       alertas: d['alertas'] ?? {},
     }));
   }
@@ -1458,25 +1474,33 @@ function renderListadoDocentes(doc: PDFKit.PDFDocument, snapshot: Record<string,
       lastHeaderPage = currentPage;
     }
     const y = doc.y;
-    const alertas      = (f['alertas'] ?? {}) as Record<string, boolean>;
-    const horas        = typeof f['horasCarreraConocidas'] === 'number' ? f['horasCarreraConocidas'] : '?';
-    const incompletas  = f['tieneHorasIncompletas'] === true ? '+?' : '';
-    const secCompletas = typeof f['seccionesCompletas'] === 'number' ? f['seccionesCompletas'] : null;
-    const progLabel    = secCompletas !== null ? `${secCompletas}/6` : '—';
+    const incompletas   = f['tieneHorasIncompletas'] === true ? '+?' : '';
+    const hDoc  = typeof f['horasDocencia']     === 'number' ? f['horasDocencia']     : '?';
+    const hGes  = typeof f['horasGestion']       === 'number' ? f['horasGestion']       : '?';
+    const hInv  = typeof f['horasInvestigacion'] === 'number' ? f['horasInvestigacion'] : '?';
+    const hVin  = typeof f['horasVinculacion']   === 'number' ? f['horasVinculacion']   : '?';
+    const hDed  = typeof f['dedicacion']         === 'number' ? f['dedicacion']         : '?';
+    const nMat  = typeof f['materiasVinculadas'] === 'number' ? String(f['materiasVinculadas']) : '?';
     doc.fillColor(C_DARK).font('Helvetica').fontSize(6.5)
       .text(String(f['nombreDocente'] ?? ''), MARGIN + LD_COL.docente.x,    y, { lineBreak: false, width: LD_COL.docente.w });
     doc.fillColor(C_MID).font('Helvetica').fontSize(6.5)
-      .text(String(f['nombreMateria'] ?? ''), MARGIN + LD_COL.asignatura.x, y, { lineBreak: false, width: LD_COL.asignatura.w });
+      .text(nMat,                              MARGIN + LD_COL.materias.x,   y, { lineBreak: false, width: LD_COL.materias.w });
+    doc.fillColor(C_PRIMARY).font('Helvetica-Bold').fontSize(6.5)
+      .text(`${hDed}h`,                        MARGIN + LD_COL.dedicacion.x, y, { lineBreak: false, width: LD_COL.dedicacion.w });
     doc.fillColor(f['tieneHorasIncompletas'] ? C_MEDIA : C_MID).font('Helvetica').fontSize(6.5)
-      .text(`${horas}h${incompletas}`, MARGIN + LD_COL.horas.x, y, { lineBreak: false, width: LD_COL.horas.w });
-    const progColor = secCompletas === null ? C_MID : secCompletas >= 6 ? C_OK : secCompletas >= 4 ? C_MEDIA : C_ALTA;
-    doc.fillColor(progColor).font('Helvetica-Bold').fontSize(6.5)
-      .text(progLabel, MARGIN + LD_COL.prog.x, y, { lineBreak: false, width: LD_COL.prog.w });
-    const estadoProg = typeof f['estadoPrograma'] === 'string' ? f['estadoPrograma'] : 'NO_VERIFICABLE';
-    const estadoPdfColor = estadoProg === 'VERDE' ? C_OK : estadoProg === 'AMARILLO' ? C_MEDIA : estadoProg === 'ROJO' ? C_ALTA : C_MID;
-    const estadoPdfLabel = estadoProg === 'VERDE' ? 'VERDE' : estadoProg === 'AMARILLO' ? 'AMARILLO' : estadoProg === 'ROJO' ? 'ROJO' : 'SIN PROGRAMA';
-    doc.fillColor(estadoPdfColor).font('Helvetica-Bold').fontSize(6.5)
-      .text(estadoPdfLabel, MARGIN + LD_COL.estado.x, y, { lineBreak: false, width: LD_COL.estado.w });
+      .text(`${hDoc}h${incompletas}`,           MARGIN + LD_COL.docencia.x,  y, { lineBreak: false, width: LD_COL.docencia.w });
+    doc.fillColor(C_MID).font('Helvetica').fontSize(6.5)
+      .text(`${hGes}h`,                         MARGIN + LD_COL.gestion.x,   y, { lineBreak: false, width: LD_COL.gestion.w })
+      .text(`${hInv}h`,                         MARGIN + LD_COL.invest.x,    y, { lineBreak: false, width: LD_COL.invest.w })
+      .text(`${hVin}h`,                         MARGIN + LD_COL.vinc.x,      y, { lineBreak: false, width: LD_COL.vinc.w });
+    // Completitud y estado de ficha docente
+    const pct    = typeof f['completitudFichaDocente'] === 'number' ? `${f['completitudFichaDocente']}%` : '—';
+    const estado = typeof f['estadoFichaDocente'] === 'string'      ? String(f['estadoFichaDocente'])    : '—';
+    const estadoCFColor = estado === 'VERDE' ? '#059669' : estado === 'AMARILLO' ? '#d97706' : '#dc2626';
+    doc.fillColor(C_MID).font('Helvetica').fontSize(6.5)
+      .text(pct,    MARGIN + LD_COL.ficha.x,  y, { lineBreak: false, width: LD_COL.ficha.w });
+    doc.fillColor(estadoCFColor).font('Helvetica-Bold').fontSize(6.5)
+      .text(estado, MARGIN + LD_COL.estado.x, y, { lineBreak: false, width: LD_COL.estado.w });
     doc.y = Math.max(doc.y, y + 11);
   }
   doc.moveDown(0.3);

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { CrearDocenteDto } from './dto/crear-docente.dto';
 import { ActualizarDocenteDto } from './dto/actualizar-docente.dto';
+import { calcularCompletitudFicha, CompletitudFichaResult } from './completitud-ficha';
 
 @Injectable()
 export class DocentesService {
@@ -536,5 +537,41 @@ export class DocentesService {
     });
 
     return this.formatearDocenteFecha(docente);
+  }
+
+  async obtenerCompletitudFicha(docenteId: string): Promise<CompletitudFichaResult> {
+    const docente = await this.prisma.docente.findUnique({
+      where: { id: docenteId },
+      select: {
+        sexo: true,
+        fechaNacimiento: true,
+        cuit: true,
+        tipoDocumento: true,
+        tituloGrado: true,
+        areaDisciplinarId: true,
+        subareaId: true,
+        vinculaciones: { select: { estado: true } },
+      },
+    });
+    if (!docente) throw new NotFoundException('Docente no encontrado');
+    return calcularCompletitudFicha(docente);
+  }
+
+  async obtenerCompletitudPropiaFicha(usuarioId: string): Promise<CompletitudFichaResult> {
+    const docente = await this.prisma.docente.findFirst({
+      where: { usuarioId },
+      select: {
+        sexo: true,
+        fechaNacimiento: true,
+        cuit: true,
+        tipoDocumento: true,
+        tituloGrado: true,
+        areaDisciplinarId: true,
+        subareaId: true,
+        vinculaciones: { select: { estado: true } },
+      },
+    });
+    if (!docente) throw new NotFoundException('Ficha de docente no encontrada');
+    return calcularCompletitudFicha(docente);
   }
 }

@@ -15,6 +15,7 @@ import type { ResultadoIndicador } from '../indicadores/indicadores.types';
 import type { ResultadoR03 } from '../indicadores/r03.evaluador';
 import type { ResultadoR04 } from '../indicadores/r04.evaluador';
 import { normalizarDedicacionConeau, ORDEN_DEDICACION_CONEAU } from './normalizar-dedicacion';
+import { calcularCompletitudFicha } from '../../docentes/completitud-ficha';
 import { JERARQUIA_POSGRADO } from '../catalogo/tipo-posgrado.service';
 import type {
   AlertasDocente,
@@ -31,7 +32,6 @@ import type {
   FpResumenPlan,
   PosgradoTipoItem,
   DocenteAccionRequerida,
-  EstadoProgramaListado,
   FilaDocenteListado,
   FilaDocenteMateria,
   ListadoDocentesCarreraDto,
@@ -77,6 +77,12 @@ const PESO_ESTADO: Record<EstadoCalculo, number> = {
 
 function estadoMasRestrictivo(...estados: EstadoCalculo[]): EstadoCalculo {
   return estados.reduce((a, b) => (PESO_ESTADO[b] > PESO_ESTADO[a] ? b : a));
+}
+
+function determinarEstadoFichaDocente(porcentaje: number): import('./tablero-carrera.dto').EstadoFichaDocente {
+  if (porcentaje <= 50) return 'ROJO';
+  if (porcentaje <= 75) return 'AMARILLO';
+  return 'VERDE';
 }
 
 function buildSubindicador(docentes: { docenteId: string; nombre: string }[]): SubindicadorAR {
@@ -780,12 +786,6 @@ export class TablroCarreraService {
         materia: {
           select: {
             id: true, nombre: true, cargaHorariaSemanal: true,
-            programa: {
-              select: {
-                estadoS1: true, estadoS2: true, estadoS3: true,
-                estadoS4: true, estadoS5: true, estadoS6: true,
-              },
-            },
           },
         },
         docente: {
@@ -793,23 +793,32 @@ export class TablroCarreraService {
             nombre: true, apellido: true,
             sexo: true, fechaNacimiento: true, cuit: true,
             pisoDepto: true, residencia: true, tipoDocumento: true,
-            tituloGrado: true, areaDisciplinarId: true,
+            tituloGrado: true, areaDisciplinarId: true, subareaId: true,
+            cargosAcademicosJson: true,
+            tiempoDedicacionGestionSemanal: true,
+            fechaFinGestion: true,
+            funcionGestion: true,
+            proyectosInvestigacionJson: true,
+            participacionVinculacionJson: true,
           },
         },
       },
     });
 
-    type MatEntry = { materiaId: string; nombre: string; cargaHorariaSemanal: number | null; seccionesCompletas: number | null };
+    type MatEntry = { materiaId: string; nombre: string; cargaHorariaSemanal: number | null };
     type DocEntry = {
       nombre: string; apellido: string;
       sexo: string | null; fechaNacimiento: Date | null; cuit: string | null;
       pisoDepto: string | null; residencia: string | null; tipoDocumento: string;
-      tituloGrado: string | null; areaDisciplinarId: string | null;
+      tituloGrado: string | null; areaDisciplinarId: string | null; subareaId: string | null;
+      cargosAcademicosJson: string | null;
+      tiempoDedicacionGestionSemanal: string | null;
+      fechaFinGestion: string | null;
+      funcionGestion: string | null;
+      proyectosInvestigacionJson: string | null;
+      participacionVinculacionJson: string | null;
       materias: Map<string, MatEntry>;
     };
-
-    const contarSecciones = (prog: { estadoS1: string | null; estadoS2: string | null; estadoS3: string | null; estadoS4: string | null; estadoS5: string | null; estadoS6: string | null } | null): number | null =>
-      prog === null ? null : [prog.estadoS1, prog.estadoS2, prog.estadoS3, prog.estadoS4, prog.estadoS5, prog.estadoS6].filter(s => s === 'COMPLETO').length;
 
     const byDocente = new Map<string, DocEntry>();
     for (const row of rows) {
@@ -826,11 +835,17 @@ export class TablroCarreraService {
           tipoDocumento: row.docente.tipoDocumento,
           tituloGrado: row.docente.tituloGrado ?? null,
           areaDisciplinarId: row.docente.areaDisciplinarId ?? null,
+          subareaId: row.docente.subareaId ?? null,
+          cargosAcademicosJson: row.docente.cargosAcademicosJson ?? null,
+          tiempoDedicacionGestionSemanal: row.docente.tiempoDedicacionGestionSemanal ?? null,
+          fechaFinGestion: row.docente.fechaFinGestion ?? null,
+          funcionGestion: row.docente.funcionGestion ?? null,
+          proyectosInvestigacionJson: row.docente.proyectosInvestigacionJson ?? null,
+          participacionVinculacionJson: row.docente.participacionVinculacionJson ?? null,
           materias: new Map([[row.materia.id, {
             materiaId: row.materia.id,
             nombre: row.materia.nombre,
             cargaHorariaSemanal: row.materia.cargaHorariaSemanal ?? null,
-            seccionesCompletas: contarSecciones(row.materia.programa ?? null),
           }]]),
         });
       } else if (!existing.materias.has(row.materia.id)) {
@@ -838,7 +853,6 @@ export class TablroCarreraService {
           materiaId: row.materia.id,
           nombre: row.materia.nombre,
           cargaHorariaSemanal: row.materia.cargaHorariaSemanal ?? null,
-          seccionesCompletas: contarSecciones(row.materia.programa ?? null),
         });
       }
     }
@@ -931,40 +945,53 @@ export class TablroCarreraService {
       })
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
 
-    // ── Construcción de filas Docente–Asignatura (H.2-B/C) ──────────────────
-    const calcularSemaforoPrograma = (sec: number | null): EstadoProgramaListado =>
-      sec === null ? 'NO_VERIFICABLE' : sec === 6 ? 'VERDE' : sec >= 4 ? 'AMARILLO' : 'ROJO';
-
+    // ── Construcción de filas Docente–Dedicación (H.4 consolidado) ──────────
     const alertasByDocente = new Map<string, AlertasDocente>(
       docentes.map(d => [d.docenteId, d.alertas]),
     );
     const filas: FilaDocenteMateria[] = [];
     for (const [docenteId, d] of byDocente.entries()) {
       const materiasArr = [...d.materias.values()];
-      const horasCarreraConocidas = materiasArr.reduce((s, m) => s + (m.cargaHorariaSemanal ?? 0), 0);
+      const horasDocencia = materiasArr.reduce((s, m) => s + (m.cargaHorariaSemanal ?? 0), 0);
       const tieneHorasIncompletas = materiasArr.some(m => m.cargaHorariaSemanal === null);
       const nombreDocente = `${d.apellido.toUpperCase()}, ${d.nombre}`;
       const alertas = alertasByDocente.get(docenteId)!;
-      for (const mat of materiasArr) {
-        filas.push({
-          docenteId,
-          nombreDocente,
-          materiaId: mat.materiaId,
-          nombreMateria: mat.nombre,
-          horasCarreraConocidas,
-          tieneHorasIncompletas,
-          seccionesCompletas: mat.seccionesCompletas,
-          completitudPrograma: mat.seccionesCompletas !== null
-            ? Math.round(mat.seccionesCompletas / 6 * 100)
-            : null,
-          estadoPrograma: calcularSemaforoPrograma(mat.seccionesCompletas),
-          alertas,
-        });
-      }
+
+      const gestionDeclarada = !!(d.funcionGestion?.trim());
+      const g = d.cargosAcademicosJson?.trim()
+        ? parsearCargosAcademicosJson(d.cargosAcademicosJson, fechaEvaluacion)
+        : parsearHorasGestion(d.tiempoDedicacionGestionSemanal, d.fechaFinGestion, fechaEvaluacion, gestionDeclarada);
+      const inv = parsearProyectosInvestigacion(d.proyectosInvestigacionJson);
+      const vin = parsearParticipacionVinculacion(d.participacionVinculacionJson);
+
+      const completitudResult = calcularCompletitudFicha({
+        sexo: d.sexo,
+        fechaNacimiento: d.fechaNacimiento,
+        cuit: d.cuit,
+        tipoDocumento: d.tipoDocumento,
+        tituloGrado: d.tituloGrado,
+        areaDisciplinarId: d.areaDisciplinarId,
+        subareaId: d.subareaId,
+        // C4=1 por construcción: todos los docentes del listado tienen ≥1 vinculación APROBADA.
+        vinculaciones: [{ estado: 'APROBADA' }],
+      });
+
+      filas.push({
+        docenteId,
+        nombreDocente,
+        materiasVinculadas: materiasArr.length,
+        horasDocencia,
+        tieneHorasIncompletas,
+        horasGestion: g.horas,
+        horasInvestigacion: inv.horas,
+        horasVinculacion: vin.horas,
+        dedicacion: horasDocencia + g.horas + inv.horas + vin.horas,
+        alertas,
+        completitudFichaDocente: completitudResult.porcentaje,
+        estadoFichaDocente: determinarEstadoFichaDocente(completitudResult.porcentaje),
+      });
     }
-    filas.sort((a, b) =>
-      a.nombreDocente.localeCompare(b.nombreDocente) || a.nombreMateria.localeCompare(b.nombreMateria),
-    );
+    filas.sort((a, b) => a.nombreDocente.localeCompare(b.nombreDocente));
 
     // ── Totales para filtros ───────────────────────────────────────────────────
     const totales: TotalesListadoDocentes = {

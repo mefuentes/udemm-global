@@ -339,28 +339,41 @@ export interface TotalesListadoDocentes {
 /** Semáforo del Programa de Asignatura en el listado (H.2-C). Basado en completitud de las 6 secciones. */
 export type EstadoProgramaListado = 'VERDE' | 'AMARILLO' | 'ROJO' | 'NO_VERIFICABLE';
 
+/** Estado de Ficha Docente derivado del porcentaje de completitud. */
+export type EstadoFichaDocente = 'ROJO' | 'AMARILLO' | 'VERDE';
+
 /**
- * Una fila del listado Docente–Asignatura (H.2-B).
- * Una entrada por combinación única (docenteId, materiaId) con vinculación APROBADA y docente activo.
+ * Una fila del listado consolidado por docente (H.4).
+ * Una entrada por docenteId con dedicación horaria total (docencia + gestión + investigación + vinculación).
  */
 export interface FilaDocenteMateria {
   docenteId: string;
   /** "APELLIDO, Nombre" */
   nombreDocente: string;
-  materiaId: string;
-  nombreMateria: string;
-  /** Suma de cargaHorariaSemanal de todas las materias del docente en la carrera. */
-  horasCarreraConocidas: number;
+  /** Cantidad de materias distintas del docente en la carrera. */
+  materiasVinculadas: number;
+  /** Suma de cargaHorariaSemanal de las materias del docente en esta carrera (4.1). */
+  horasDocencia: number;
   tieneHorasIncompletas: boolean;
-  /**
-   * Número de secciones con estadoSX = 'COMPLETO' en ProgramaAsignatura (0–6).
-   * null cuando no existe ProgramaAsignatura para esta materia.
-   */
-  seccionesCompletas: number | null;
-  /** Math.round(seccionesCompletas / 6 * 100). null cuando seccionesCompletas es null. */
-  completitudPrograma: number | null;
-  estadoPrograma: EstadoProgramaListado;
+  /** Horas de gestión académica semanales (5.1). */
+  horasGestion: number;
+  /** Horas de investigación semanales (7.2). */
+  horasInvestigacion: number;
+  /** Horas de vinculación semanales (7.3). */
+  horasVinculacion: number;
+  /** horasDocencia + horasGestion + horasInvestigacion + horasVinculacion. */
+  dedicacion: number;
   alertas: AlertasDocente;
+  /**
+   * Porcentaje de completitud de la Ficha Docente (0–100, múltiplo de 25).
+   * Calculado con calcularCompletitudFicha() del módulo Docentes. No duplica la lógica.
+   */
+  completitudFichaDocente: number;
+  /**
+   * Estado semafórico derivado de completitudFichaDocente.
+   * ≤50 → ROJO; >50 y ≤75 → AMARILLO; >75 → VERDE.
+   */
+  estadoFichaDocente: EstadoFichaDocente;
 }
 
 /**
@@ -374,7 +387,7 @@ export interface ListadoDocentesCarreraDto {
   carreraId: string;
   fechaEvaluacion: string;
   docentes: FilaDocenteListado[];
-  /** Una fila por (docenteId, materiaId). Campo aditivo; docentes[] permanece para retrocompatibilidad. */
+  /** Una fila por docenteId con dedicación horaria consolidada. */
   filas: FilaDocenteMateria[];
   totales: TotalesListadoDocentes;
   distribucionSemaforos: DistribucionSemaforosDto;

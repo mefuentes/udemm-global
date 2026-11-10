@@ -226,28 +226,39 @@ export interface DistribucionSemaforosCarrera {
 /** Semáforo del Programa de Asignatura en el listado (H.2-C). Basado en completitud de las 6 secciones. */
 export type EstadoProgramaListado = 'VERDE' | 'AMARILLO' | 'ROJO' | 'NO_VERIFICABLE';
 
-/** Una fila del listado Docente–Asignatura (H.2-B). Una entrada por (docenteId, materiaId). */
+/** Estado de completitud de la ficha docente (≤50→ROJO; >50≤75→AMARILLO; >75→VERDE). */
+export type EstadoFichaDocente = 'ROJO' | 'AMARILLO' | 'VERDE';
+
+/** Una fila del listado consolidado por docente (H.4). Una entrada por docenteId. */
 export interface FilaDocenteMateria {
   docenteId: string;
   /** "APELLIDO, Nombre" */
   nombreDocente: string;
-  materiaId: string;
-  nombreMateria: string;
-  horasCarreraConocidas: number;
+  /** Cantidad de materias distintas del docente en la carrera. */
+  materiasVinculadas: number;
+  /** Suma de cargaHorariaSemanal (4.1). */
+  horasDocencia: number;
   tieneHorasIncompletas: boolean;
-  /** Secciones completas (0–6). null si no existe ProgramaAsignatura. */
-  seccionesCompletas: number | null;
-  /** Math.round(seccionesCompletas / 6 * 100). null si no hay programa. */
-  completitudPrograma: number | null;
-  estadoPrograma: EstadoProgramaListado;
+  /** Horas gestión académica semanales (5.1). */
+  horasGestion: number;
+  /** Horas investigación semanales (7.2). */
+  horasInvestigacion: number;
+  /** Horas vinculación semanales (7.3). */
+  horasVinculacion: number;
+  /** horasDocencia + horasGestion + horasInvestigacion + horasVinculacion. */
+  dedicacion: number;
   alertas: AlertasDocente;
+  /** Porcentaje de completitud de la ficha docente (0–100, múltiplo de 25). */
+  completitudFichaDocente: number;
+  /** Clasificación: ≤50→ROJO; >50≤75→AMARILLO; >75→VERDE. */
+  estadoFichaDocente: EstadoFichaDocente;
 }
 
 export interface ListadoDocentesCarreraResponse {
   carreraId: string;
   fechaEvaluacion: string;
   docentes: FilaDocenteListado[];
-  /** Una fila por (docenteId, materiaId). Presente en respuestas ≥ H.2-B. */
+  /** Una fila por docenteId con dedicación horaria consolidada. Presente en respuestas ≥ H.4. */
   filas?: FilaDocenteMateria[];
   totales: TotalesListadoDocentes;
   /** Distribución de semáforos del plantel (B-04). Presente en respuestas ≥ v2.1. */

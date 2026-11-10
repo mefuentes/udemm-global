@@ -158,11 +158,11 @@ export class ActualizarDocenteDto {
 
   @IsUUID()
   @IsOptional()
-  areaDisciplinarId?: string;
+  areaDisciplinarId?: string | null;
 
   @IsUUID()
   @IsOptional()
-  subareaId?: string;
+  subareaId?: string | null;
 
   @IsString()
   @IsOptional()

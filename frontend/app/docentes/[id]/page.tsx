@@ -33,6 +33,16 @@ interface Docente {
   };
 }
 
+interface CompletitudFicha {
+  porcentaje: number;
+  criterios: {
+    datosPersonales: boolean;
+    formacion: boolean;
+    areaDesempeno: boolean;
+    docenciaUniversitaria: boolean;
+  };
+}
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
 interface DocentePageProps {
@@ -44,6 +54,7 @@ export default function DetallDocentePage({ params }: DocentePageProps) {
   const { usuario } = useAuth();
   const { id } = params;
   const [docente, setDocente] = useState<Docente | null>(null);
+  const [completitud, setCompletitud] = useState<CompletitudFicha | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
 
@@ -64,6 +75,11 @@ export default function DetallDocentePage({ params }: DocentePageProps) {
 
       const data = await response.json();
       setDocente(data);
+
+      apiFetch(`${API_URL}/docentes/${id}/completitud`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => setCompletitud(d))
+        .catch(() => {});
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -183,6 +199,55 @@ export default function DetallDocentePage({ params }: DocentePageProps) {
               Última actualización: {new Date(docente.fechaActualizacion).toLocaleDateString('es-AR')}
             </p>
           </section>
+
+          {completitud && (() => {
+            const pct = completitud.porcentaje;
+            const radio = 28;
+            const circ = 2 * Math.PI * radio;
+            const offset = circ * (1 - pct / 100);
+            const color = pct === 100 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444';
+            const criterios = [
+              { label: 'Datos personales', ok: completitud.criterios.datosPersonales },
+              { label: 'Formación', ok: completitud.criterios.formacion },
+              { label: 'Área de desempeño', ok: completitud.criterios.areaDesempeno },
+              { label: 'Docencia universitaria', ok: completitud.criterios.docenciaUniversitaria },
+            ];
+            return (
+              <section className="rounded-xl bg-white p-5 shadow-sm border border-slate-200">
+                <h2 className="mb-3 text-sm font-semibold text-slate-700">Completitud de ficha</h2>
+                <div className="flex items-center gap-5">
+                  <div className="relative flex-shrink-0 w-16 h-16">
+                    <svg width="64" height="64" viewBox="0 0 64 64" className="-rotate-90">
+                      <circle cx="32" cy="32" r={radio} fill="none" stroke="#e2e8f0" strokeWidth="7" />
+                      <circle
+                        cx="32" cy="32" r={radio}
+                        fill="none"
+                        stroke={color}
+                        strokeWidth="7"
+                        strokeLinecap="round"
+                        strokeDasharray={circ}
+                        strokeDashoffset={offset}
+                        style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-xs font-bold tabular-nums" style={{ color }}>{pct}%</span>
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0 grid gap-1.5 sm:grid-cols-2">
+                    {criterios.map(c => (
+                      <div key={c.label} className="flex items-center gap-1.5">
+                        <span className={`flex-shrink-0 text-sm font-bold ${c.ok ? 'text-emerald-600' : 'text-red-500'}`}>
+                          {c.ok ? '✔' : '✖'}
+                        </span>
+                        <span className="text-xs text-slate-700">{c.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            );
+          })()}
 
           <section className="rounded-xl bg-white p-5 shadow-sm border border-slate-200">
             <h2 className="mb-3 text-sm font-semibold text-slate-700">Datos personales</h2>
