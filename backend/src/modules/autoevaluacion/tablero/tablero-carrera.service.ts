@@ -869,14 +869,20 @@ export class TablroCarreraService {
       };
     }
 
-    // ── Evaluadores en paralelo ────────────────────────────────────────────────
+    // ── Evaluadores + horas docentes de todas las carreras (§4.1 completa) ──────
     const args = { carreraId, usuarioId, rolNombre, fechaEvaluacion };
     const planes = await this.prisma.planEstudio.findMany({
       where: { carreraId },
       select: { id: true },
     });
 
-    const [r03result, r07result, r10result, r12result, r04Results] = await Promise.all([
+    const [todasVincs, r03result, r07result, r10result, r12result, r04Results] = await Promise.all([
+      // Segunda consulta: horas docentes de TODAS las carreras.
+      // Determina el horasDocencia real (§4.1 — Situación Actual) sin filtrar por carrera.
+      this.prisma.vinculacionCatedra.findMany({
+        where: { docenteId: { in: [...byDocente.keys()] }, estado: 'APROBADA' },
+        select: { docenteId: true, materia: { select: { id: true, cargaHorariaSemanal: true } } },
+      }),
       this.r03.evaluar(args),
       this.r07.evaluar(args),
       this.r10.evaluar(args),
@@ -885,6 +891,23 @@ export class TablroCarreraService {
         ? Promise.resolve([] as Awaited<ReturnType<typeof this.r04.evaluar>>[])
         : Promise.all(planes.map(p => this.r04.evaluar({ ...args, planEstudioId: p.id }))),
     ]);
+
+    // Construir mapa de horas docentes totales (todas las carreras) por docenteId.
+    // Se deduplica por (docenteId, materiaId) para evitar doble cómputo por múltiples vinculaciones.
+    const horasAllCarreras = new Map<string, { horas: number; incompletas: boolean }>();
+    const seenMatKey = new Set<string>();
+    for (const v of todasVincs) {
+      const k = `${v.docenteId}|${v.materia.id}`;
+      if (seenMatKey.has(k)) continue;
+      seenMatKey.add(k);
+      const e = horasAllCarreras.get(v.docenteId) ?? { horas: 0, incompletas: false };
+      if (v.materia.cargaHorariaSemanal === null) {
+        e.incompletas = true;
+      } else {
+        e.horas += v.materia.cargaHorariaSemanal;
+      }
+      horasAllCarreras.set(v.docenteId, e);
+    }
 
     // ── Sets de alertas por docenteId ──────────────────────────────────────────
     const topeSet      = new Set((r03result.valor?.enAlerta ?? []).map(d => d.docenteId));
@@ -952,8 +975,10 @@ export class TablroCarreraService {
     const filas: FilaDocenteMateria[] = [];
     for (const [docenteId, d] of byDocente.entries()) {
       const materiasArr = [...d.materias.values()];
-      const horasDocencia = materiasArr.reduce((s, m) => s + (m.cargaHorariaSemanal ?? 0), 0);
-      const tieneHorasIncompletas = materiasArr.some(m => m.cargaHorariaSemanal === null);
+      // horasDocencia: suma de §4.1 en TODAS las carreras del docente (no solo la carrera seleccionada).
+      // tieneHorasIncompletas: verdadero si alguna materia del docente (en cualquier carrera) no tiene horas.
+      const { horas: horasDocencia, incompletas: tieneHorasIncompletas } =
+        horasAllCarreras.get(docenteId) ?? { horas: 0, incompletas: false };
       const nombreDocente = `${d.apellido.toUpperCase()}, ${d.nombre}`;
       const alertas = alertasByDocente.get(docenteId)!;
 

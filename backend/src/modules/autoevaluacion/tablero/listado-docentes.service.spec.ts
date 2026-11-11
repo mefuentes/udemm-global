@@ -160,17 +160,27 @@ function makeR12Mock(incompletos: { docenteId: string; nombre: string }[] = []) 
   };
 }
 
-function makePrisma(rows: ReturnType<typeof makeDocRow>[], planes = [{ id: 'plan-1' }]) {
+function makePrisma(
+  rows: ReturnType<typeof makeDocRow>[],
+  planes = [{ id: 'plan-1' }],
+  allCarreraRows?: ReturnType<typeof makeDocRow>[],
+) {
+  // Primera llamada (carrera seleccionada) → rows; llamadas siguientes (todas las carreras) → allCarreraRows ?? rows.
+  const allRows = allCarreraRows ?? rows;
   return {
     carrera: { findUnique: jest.fn().mockResolvedValue({ id: CAR_ID }) },
     planEstudio: { findMany: jest.fn().mockResolvedValue(planes) },
-    vinculacionCatedra: { findMany: jest.fn().mockResolvedValue(rows) },
+    vinculacionCatedra: {
+      findMany: jest.fn().mockResolvedValueOnce(rows).mockResolvedValue(allRows),
+    },
     materia: { count: jest.fn().mockResolvedValue(0) },
   };
 }
 
 function makeSvc(overrides: {
   rows?: ReturnType<typeof makeDocRow>[];
+  /** Filas devueltas por la segunda consulta (todas las carreras). Por defecto = rows. */
+  allCarreraRows?: ReturnType<typeof makeDocRow>[];
   planes?: { id: string }[];
   r03?: ReturnType<typeof makeR03Mock>;
   r07?: ReturnType<typeof makeR07Mock>;
@@ -180,13 +190,13 @@ function makeSvc(overrides: {
   scopeValue?: boolean;
 } = {}) {
   const {
-    rows = [], planes = [{ id: 'plan-1' }],
+    rows = [], allCarreraRows = undefined, planes = [{ id: 'plan-1' }],
     r03 = makeR03Mock(), r07 = makeR07Mock(),
     r04 = makeR04Mock(), r10 = makeR10Mock(), r12 = makeR12Mock(),
     scopeValue = true,
   } = overrides;
 
-  const prisma = makePrisma(rows, planes);
+  const prisma = makePrisma(rows, planes, allCarreraRows);
   const scope  = { tieneScopeCarrera: jest.fn().mockResolvedValue(scopeValue) };
 
   return new TablroCarreraService(
@@ -1095,5 +1105,169 @@ describe('LD-50 — todas las filas del listado incluyen completitudFichaDocente
     expect(fAmarillo.estadoFichaDocente).toBe('AMARILLO');
     expect(fRojo.completitudFichaDocente).toBe(50);
     expect(fRojo.estadoFichaDocente).toBe('ROJO');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Horas docentes de TODAS las carreras (§4.1 — Situación Actual)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── LD-51: docente con materias en otra carrera → horasDocencia incluye ambas ─
+
+describe('LD-51 — horasDocencia incluye materias de TODAS las carreras del docente', () => {
+  it('docente con 6h en carrera A y 12h en carrera B → horasDocencia=18', async () => {
+    // Primera consulta (carrera seleccionada): solo materia m-1 de carrera A
+    const rows = [makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 })];
+    // Segunda consulta (todas las carreras): m-1 de carrera A + m-2 de carrera B
+    const allCarreraRows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', cargaHorariaSemanal: 12 }),
+    ];
+    const svc = makeSvc({ rows, allCarreraRows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].horasDocencia).toBe(18);
+  });
+});
+
+// ── LD-52: carrera seleccionada determina qué docentes aparecen (no las horas) ─
+
+describe('LD-52 — la carrera seleccionada determina los docentes listados, no limita sus horas', () => {
+  it('mismo docente en dos carreras: aparece una sola vez con horas de ambas carreras', async () => {
+    const rows = [makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 })];
+    const allCarreraRows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-3', cargaHorariaSemanal: 6 }),  // otra carrera
+    ];
+    const svc = makeSvc({ rows, allCarreraRows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas).toHaveLength(1);
+    expect(res.filas[0].horasDocencia).toBe(12);  // 6+6
+  });
+});
+
+// ── LD-53: deduplicación — mismo materiaId en dos vinculaciones → cuenta una vez ─
+
+describe('LD-53 — deduplicación: misma materia en dos vinculaciones no duplica las horas', () => {
+  it('dos vinculaciones con mismo materiaId → horasDocencia cuenta la materia una sola vez', async () => {
+    const rows = [makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 })];
+    // Segunda consulta devuelve dos filas con el mismo materiaId
+    const allCarreraRows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 }),  // duplicado
+    ];
+    const svc = makeSvc({ rows, allCarreraRows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].horasDocencia).toBe(6);  // no 12
+  });
+});
+
+// ── LD-54: materiasVinculadas no cambia (solo la carrera seleccionada) ─────────
+
+describe('LD-54 — materiasVinculadas sigue contando solo las materias de la carrera seleccionada', () => {
+  it('docente con 1 materia en la carrera y 2 en otras → materiasVinculadas=1', async () => {
+    const rows = [makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 })];
+    const allCarreraRows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', cargaHorariaSemanal: 6 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-3', cargaHorariaSemanal: 6 }),
+    ];
+    const svc = makeSvc({ rows, allCarreraRows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].materiasVinculadas).toBe(1);
+    expect(res.filas[0].horasDocencia).toBe(18);
+  });
+});
+
+// ── LD-55: FilaDocenteListado.horasCarreraConocidas sigue siendo solo la carrera ─
+
+describe('LD-55 — horasCarreraConocidas en FilaDocenteListado permanece filtrado por carrera', () => {
+  it('horasCarreraConocidas = solo la carrera seleccionada, independientemente de las otras', async () => {
+    const rows = [makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 })];
+    const allCarreraRows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', cargaHorariaSemanal: 12 }),
+    ];
+    const svc = makeSvc({ rows, allCarreraRows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    const docente = res.docentes.find(d => d.docenteId === 'd-001')!;
+    expect(docente.horasCarreraConocidas).toBe(6);   // solo la carrera
+    expect(res.filas[0].horasDocencia).toBe(18);      // todas las carreras
+  });
+});
+
+// ── LD-56: dedicacion = horasDocencia(total) + gestión + inv + vin ────────────
+
+describe('LD-56 — dedicacion es la suma de los 4 componentes con horasDocencia de todas las carreras', () => {
+  it('dedicacion = horasDocencia(all) + horasGestion + horasInvestigacion + horasVinculacion', async () => {
+    const rows = [makeDocRow({
+      docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6,
+      cargosAcademicosJson: JSON.stringify([{ dedicacionSemanal: '4', periodoHasta: '' }]),
+    })];
+    const allCarreraRows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', cargaHorariaSemanal: 12 }),
+    ];
+    const svc = makeSvc({ rows, allCarreraRows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    const f = res.filas[0];
+    // horasDocencia=18 (all careers), horasGestion=4, horasInvestigacion=0, horasVinculacion=0
+    expect(f.horasDocencia).toBe(18);
+    expect(f.dedicacion).toBe(18 + f.horasGestion + f.horasInvestigacion + f.horasVinculacion);
+  });
+});
+
+// ── LD-57: tieneHorasIncompletas true si materia en otra carrera no tiene horas ─
+
+describe('LD-57 — tieneHorasIncompletas true cuando alguna materia de otra carrera tiene horas null', () => {
+  it('materia sin cargaHorariaSemanal en carrera B → tieneHorasIncompletas=true en la fila', async () => {
+    const rows = [makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 })];
+    const allCarreraRows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', cargaHorariaSemanal: null }),  // sin horas
+    ];
+    const svc = makeSvc({ rows, allCarreraRows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].tieneHorasIncompletas).toBe(true);
+    expect(res.filas[0].horasDocencia).toBe(6);  // solo cuenta las horas conocidas
+  });
+});
+
+// ── LD-58: sin materias en otras carreras → horasDocencia = mismas que antes ───
+
+describe('LD-58 — docente con materias solo en la carrera seleccionada: sin cambio de comportamiento', () => {
+  it('horasDocencia = suma de la carrera seleccionada cuando no hay materias en otras carreras', async () => {
+    // Sin allCarreraRows: segunda consulta devuelve las mismas rows que la primera
+    const rows = [
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 4 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', cargaHorariaSemanal: 6 }),
+    ];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].horasDocencia).toBe(10);  // 4+6, mismo resultado que antes
+  });
+});
+
+// ── LD-59: dos docentes con distintas distribuciones cross-carrera ────────────
+
+describe('LD-59 — dos docentes con distinta distribución cross-carrera: cada uno con sus propias horas', () => {
+  it('d-001 con 18h en 2 carreras, d-002 con 6h solo en la carrera seleccionada', async () => {
+    const rows = [
+      makeDocRow({ docenteId: 'd-001', apellido: 'Acosta', nombre: 'Nora', materiaId: 'm-1', cargaHorariaSemanal: 6 }),
+      makeDocRow({ docenteId: 'd-002', apellido: 'Bernal', nombre: 'Juan', materiaId: 'm-3', cargaHorariaSemanal: 6 }),
+    ];
+    const allCarreraRows = [
+      // d-001: materia en carrera seleccionada + 2 materias en otras carreras
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-2', cargaHorariaSemanal: 6 }),
+      makeDocRow({ docenteId: 'd-001', materiaId: 'm-4', cargaHorariaSemanal: 6 }),
+      // d-002: solo la carrera seleccionada
+      makeDocRow({ docenteId: 'd-002', materiaId: 'm-3', cargaHorariaSemanal: 6 }),
+    ];
+    const svc = makeSvc({ rows, allCarreraRows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    const f001 = res.filas.find(f => f.docenteId === 'd-001')!;
+    const f002 = res.filas.find(f => f.docenteId === 'd-002')!;
+    expect(f001.horasDocencia).toBe(18);  // 6+6+6
+    expect(f002.horasDocencia).toBe(6);   // solo la carrera
   });
 });
