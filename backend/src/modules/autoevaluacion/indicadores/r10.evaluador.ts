@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConsultasAcademicasService } from '../consultas-academicas/consultas-academicas.service';
 import { EstadoCalculo } from '../types/estado-calculo.types';
-import { parsearHorasGestion, parsearCargosAcademicosJson } from './r03.evaluador';
+import { parsearHorasGestion, parsearCargosAcademicosJson, parsearOtrasDedicaciones } from './r03.evaluador';
+export { parsearOtrasDedicaciones } from './r03.evaluador';
 import type {
   ContextoEvaluacion,
   IndicadorEvaluador,
@@ -26,28 +27,6 @@ interface ResultadoParserJson {
 }
 
 const REGEX_HORAS = /^\d+(\.\d+)?$/;
-
-/**
- * Parsea otrasDedicacionesJson (sección 5.2).
- * Estructura: [{horasSeman: string}]. Si un ítem existe sin horasSeman numérico → indeterminado.
- */
-export function parsearOtrasDedicaciones(json: string | null | undefined): ResultadoParserJson {
-  if (!json?.trim()) return { horas: 0, indeterminado: false };
-  let items: Array<{ horasSeman?: unknown }>;
-  try { items = JSON.parse(json); } catch { return { horas: 0, indeterminado: false }; }
-  if (!Array.isArray(items) || items.length === 0) return { horas: 0, indeterminado: false };
-  let horas = 0;
-  let indeterminado = false;
-  for (const item of items) {
-    const raw = String(item?.horasSeman ?? '').trim();
-    if (REGEX_HORAS.test(raw)) {
-      horas += parseFloat(raw);
-    } else {
-      indeterminado = true;
-    }
-  }
-  return { horas, indeterminado };
-}
 
 /**
  * Parsea proyectosInvestigacionJson (sección 7.2).

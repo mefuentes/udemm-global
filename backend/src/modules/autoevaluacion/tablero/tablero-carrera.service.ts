@@ -798,6 +798,7 @@ export class TablroCarreraService {
             tiempoDedicacionGestionSemanal: true,
             fechaFinGestion: true,
             funcionGestion: true,
+            otrasDedicacionesJson: true,
             proyectosInvestigacionJson: true,
             participacionVinculacionJson: true,
           },
@@ -815,6 +816,7 @@ export class TablroCarreraService {
       tiempoDedicacionGestionSemanal: string | null;
       fechaFinGestion: string | null;
       funcionGestion: string | null;
+      otrasDedicacionesJson: string | null;
       proyectosInvestigacionJson: string | null;
       participacionVinculacionJson: string | null;
       materias: Map<string, MatEntry>;
@@ -840,6 +842,7 @@ export class TablroCarreraService {
           tiempoDedicacionGestionSemanal: row.docente.tiempoDedicacionGestionSemanal ?? null,
           fechaFinGestion: row.docente.fechaFinGestion ?? null,
           funcionGestion: row.docente.funcionGestion ?? null,
+          otrasDedicacionesJson: row.docente.otrasDedicacionesJson ?? null,
           proyectosInvestigacionJson: row.docente.proyectosInvestigacionJson ?? null,
           participacionVinculacionJson: row.docente.participacionVinculacionJson ?? null,
           materias: new Map([[row.materia.id, {
@@ -986,6 +989,7 @@ export class TablroCarreraService {
       const g = d.cargosAcademicosJson?.trim()
         ? parsearCargosAcademicosJson(d.cargosAcademicosJson, fechaEvaluacion)
         : parsearHorasGestion(d.tiempoDedicacionGestionSemanal, d.fechaFinGestion, fechaEvaluacion, gestionDeclarada);
+      const otras = parsearOtrasDedicaciones(d.otrasDedicacionesJson);
       const inv = parsearProyectosInvestigacion(d.proyectosInvestigacionJson);
       const vin = parsearParticipacionVinculacion(d.participacionVinculacionJson);
 
@@ -1007,10 +1011,10 @@ export class TablroCarreraService {
         materiasVinculadas: materiasArr.length,
         horasDocencia,
         tieneHorasIncompletas,
-        horasGestion: g.horas,
+        horasGestion: g.horas + otras.horas,
         horasInvestigacion: inv.horas,
         horasVinculacion: vin.horas,
-        dedicacion: horasDocencia + g.horas + inv.horas + vin.horas,
+        dedicacion: horasDocencia + g.horas + otras.horas + inv.horas + vin.horas,
         alertas,
         completitudFichaDocente: completitudResult.porcentaje,
         estadoFichaDocente: determinarEstadoFichaDocente(completitudResult.porcentaje),

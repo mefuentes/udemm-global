@@ -7,6 +7,7 @@ import {
   parsearHorasGestion,
   parsearHorasNoAcademico,
   parsearCargosAcademicosJson,
+  parsearOtrasDedicaciones,
   R03EvaluadorService,
   type ResultadoR03,
 } from './r03.evaluador';
@@ -39,6 +40,7 @@ function mkDocente(overrides: Partial<DocenteVigenteR03> = {}): DocenteVigenteR0
     funcionGestion: null,
     desempenoActualJson: null,
     cargosAcademicosJson: null,
+    otrasDedicacionesJson: null,
     ...overrides,
   };
 }
@@ -532,5 +534,138 @@ describe('R03EvaluadorService', () => {
     // cargo vencido (sep 2026 < oct 2026) → gestión=0, total=10 < 30 → no alerta, no indeterminado
     expect(v.totalEnAlerta).toBe(0);
     expect(v.totalNoDeterminables).toBe(0);
+  });
+});
+
+// ── parsearOtrasDedicaciones (sección 5.2) ────────────────────────────────────
+
+describe('parsearOtrasDedicaciones', () => {
+  it('TC-52-1: null → 0h, no indeterminado', () => {
+    expect(parsearOtrasDedicaciones(null)).toEqual({ horas: 0, indeterminado: false });
+  });
+
+  it('TC-52-2: array vacío → 0h, no indeterminado', () => {
+    expect(parsearOtrasDedicaciones('[]')).toEqual({ horas: 0, indeterminado: false });
+  });
+
+  it('TC-52-3: un registro con horasSeman numérico → suma', () => {
+    expect(parsearOtrasDedicaciones('[{"horasSeman":"5"}]')).toEqual({ horas: 5, indeterminado: false });
+  });
+
+  it('TC-52-4: múltiples registros → suma todos', () => {
+    const json = JSON.stringify([{ horasSeman: '5' }, { horasSeman: '8' }]);
+    expect(parsearOtrasDedicaciones(json)).toEqual({ horas: 13, indeterminado: false });
+  });
+
+  it('TC-52-5: registro sin horasSeman numérico → indeterminado', () => {
+    expect(parsearOtrasDedicaciones('[{"horasSeman":"N/A"}]')).toMatchObject({ indeterminado: true });
+  });
+
+  it('TC-52-6: mix válido e inválido → suma lo válido, indeterminado=true', () => {
+    const json = JSON.stringify([{ horasSeman: '5' }, { horasSeman: 'N/A' }]);
+    expect(parsearOtrasDedicaciones(json)).toEqual({ horas: 5, indeterminado: true });
+  });
+});
+
+// ── R-03 con sección 5.2 ──────────────────────────────────────────────────────
+
+describe('R03 — sección 5.2 en el tope semanal', () => {
+  it('TC-52-R01: sin registros en 5.2 → mismo resultado que antes (sin cambio)', async () => {
+    const doc = mkDocente({ horasDocenciaConocidas: 40, otrasDedicacionesJson: null });
+    const { svc } = makeSvc(mkData({ docentes: [doc] }), mkConfig(60));
+    const r = await svc.evaluar(mkCtx());
+    expect((r.valor as ResultadoR03).totalEnAlerta).toBe(0);
+    expect((r.valor as ResultadoR03).totalNoDeterminables).toBe(0);
+  });
+
+  it('TC-52-R02: docente con un registro en 5.2 suma correctamente', async () => {
+    const doc = mkDocente({
+      horasDocenciaConocidas: 40,
+      otrasDedicacionesJson: JSON.stringify([{ horasSeman: '25' }]),
+    });
+    const { svc } = makeSvc(mkData({ docentes: [doc] }), mkConfig(60));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR03;
+    // 40 + 25 = 65 > 60 → alerta
+    expect(v.totalEnAlerta).toBe(1);
+    expect(v.enAlerta[0].componentes.usoTope).toBe(65);
+  });
+
+  it('TC-52-R03: docente con múltiples registros en 5.2 → se suman todos', async () => {
+    const doc = mkDocente({
+      horasDocenciaConocidas: 30,
+      otrasDedicacionesJson: JSON.stringify([{ horasSeman: '5' }, { horasSeman: '8' }]),
+    });
+    const { svc } = makeSvc(mkData({ docentes: [doc] }), mkConfig(40));
+    const r = await svc.evaluar(mkCtx());
+    // 30 + 13 = 43 > 40 → alerta
+    expect((r.valor as ResultadoR03).totalEnAlerta).toBe(1);
+    expect((r.valor as ResultadoR03).enAlerta[0].componentes.usoTope).toBe(43);
+  });
+
+  it('TC-52-R04: docente con 5.1 y 5.2 → no duplica horas (5.1 y 5.2 se suman una vez)', async () => {
+    // 5.1 = 20h, 5.2 = [5h, 8h] = 13h → gestión = 33h
+    const doc = mkDocente({
+      horasDocenciaConocidas: 20,
+      cargosAcademicosJson: JSON.stringify([{ dedicacionSemanal: '20', periodoHasta: '' }]),
+      otrasDedicacionesJson: JSON.stringify([{ horasSeman: '5' }, { horasSeman: '8' }]),
+    });
+    const { svc } = makeSvc(mkData({ docentes: [doc] }), mkConfig(50));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR03;
+    // 20 (docencia) + 20 (5.1) + 13 (5.2) = 53 > 50 → alerta
+    expect(v.totalEnAlerta).toBe(1);
+    expect(v.enAlerta[0].componentes.horasGestion).toBe(33); // 5.1 + 5.2
+    expect(v.enAlerta[0].componentes.usoTope).toBe(53);
+    expect(v.enAlerta[0].exceso).toBe(3);
+  });
+
+  it('TC-52-R05: docente supera tope únicamente por 5.2 → genera alerta R-03', async () => {
+    // Sin 5.2 estaría en 55h (dentro del límite 60). Con 5.2 llega a 61h → alerta.
+    const doc = mkDocente({
+      horasDocenciaConocidas: 55,
+      otrasDedicacionesJson: JSON.stringify([{ horasSeman: '6' }]),
+    });
+    const { svc } = makeSvc(mkData({ docentes: [doc] }), mkConfig(60));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR03;
+    expect(v.totalEnAlerta).toBe(1);
+    expect(v.enAlerta[0].componentes.usoTope).toBe(61);
+    expect(v.enAlerta[0].exceso).toBe(1);
+  });
+
+  it('TC-52-R06: docente permanece dentro del límite con 5.2 → no genera alerta', async () => {
+    const doc = mkDocente({
+      horasDocenciaConocidas: 40,
+      otrasDedicacionesJson: JSON.stringify([{ horasSeman: '5' }]),
+    });
+    const { svc } = makeSvc(mkData({ docentes: [doc] }), mkConfig(60));
+    const r = await svc.evaluar(mkCtx());
+    expect((r.valor as ResultadoR03).totalEnAlerta).toBe(0);
+  });
+
+  it('TC-52-R07: tarjeta R-03 TOPE refleja la cantidad correcta de alertas', async () => {
+    const d1 = mkDocente({ docenteId: 'd1', horasDocenciaConocidas: 40, otrasDedicacionesJson: JSON.stringify([{ horasSeman: '25' }]) });
+    const d2 = mkDocente({ docenteId: 'd2', horasDocenciaConocidas: 30 });
+    const data = mkData({ docentes: [d1, d2] });
+    const { svc } = makeSvc(data, mkConfig(60));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR03;
+    // d1: 40+25=65 > 60 → alerta; d2: 30 < 60 → ok
+    expect(v.totalEnAlerta).toBe(1);
+    expect(v.totalDocentes).toBe(2);
+    expect(v.enAlerta[0].docenteId).toBe('d1');
+  });
+
+  it('TC-52-R08: 5.2 con valor indeterminado y suma parcial conocida < tope → noDeterminable', async () => {
+    const doc = mkDocente({
+      horasDocenciaConocidas: 20,
+      otrasDedicacionesJson: JSON.stringify([{ horasSeman: 'N/A' }]),
+    });
+    const { svc } = makeSvc(mkData({ docentes: [doc] }), mkConfig(60));
+    const r = await svc.evaluar(mkCtx());
+    const v = r.valor as ResultadoR03;
+    expect(v.totalEnAlerta).toBe(0);
+    expect(v.totalNoDeterminables).toBe(1);
   });
 });

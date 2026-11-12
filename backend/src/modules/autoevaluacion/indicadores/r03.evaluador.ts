@@ -151,6 +151,29 @@ export function parsearCargosAcademicosJson(
   return { horas, indeterminado };
 }
 
+/**
+ * Parsea otrasDedicacionesJson (sección 5.2 — Otras dedicaciones universitarias).
+ * Estructura: [{horasSeman: string}]. Si un ítem existe sin horasSeman numérico → indeterminado.
+ */
+export function parsearOtrasDedicaciones(json: string | null | undefined): ResultadoParseoGestion {
+  if (!json?.trim()) return { horas: 0, indeterminado: false };
+  let items: Array<{ horasSeman?: unknown }>;
+  try { items = JSON.parse(json); } catch { return { horas: 0, indeterminado: false }; }
+  if (!Array.isArray(items) || items.length === 0) return { horas: 0, indeterminado: false };
+  let horas = 0;
+  let indeterminado = false;
+  const REGEX_HORAS_52 = /^\d+(\.\d+)?$/;
+  for (const item of items) {
+    const raw = String(item?.horasSeman ?? '').trim();
+    if (REGEX_HORAS_52.test(raw)) {
+      horas += parseFloat(raw);
+    } else {
+      indeterminado = true;
+    }
+  }
+  return { horas, indeterminado };
+}
+
 export interface ResultadoParseoNoAcademico {
   horas: number;
   tieneIndeterminados: boolean;
@@ -318,8 +341,9 @@ export class R03EvaluadorService implements IndicadorEvaluador<ResultadoR03> {
         const g = d.cargosAcademicosJson?.trim()
           ? parsearCargosAcademicosJson(d.cargosAcademicosJson, contexto.fechaEvaluacion)
           : parsearHorasGestion(d.tiempoDedicacionGestionSemanal, d.fechaFinGestion, contexto.fechaEvaluacion, gestionDeclarada);
+        const otras = parsearOtrasDedicaciones(d.otrasDedicacionesJson);
         const na = parsearHorasNoAcademico(d.desempenoActualJson);
-        const sumaParcial = d.horasDocenciaConocidas + g.horas + na.horas;
+        const sumaParcial = d.horasDocenciaConocidas + g.horas + otras.horas + na.horas;
         noDeterminables.push({
           docenteId: d.docenteId,
           nombre,
@@ -336,10 +360,11 @@ export class R03EvaluadorService implements IndicadorEvaluador<ResultadoR03> {
       const g = d.cargosAcademicosJson?.trim()
         ? parsearCargosAcademicosJson(d.cargosAcademicosJson, contexto.fechaEvaluacion)
         : parsearHorasGestion(d.tiempoDedicacionGestionSemanal, d.fechaFinGestion, contexto.fechaEvaluacion, gestionDeclarada);
+      const otras = parsearOtrasDedicaciones(d.otrasDedicacionesJson);
       const na = parsearHorasNoAcademico(d.desempenoActualJson);
       const tieneIndeterminados =
-        d.tieneMateriaSinHoras || g.indeterminado || na.tieneIndeterminados;
-      const sumaParcial = d.horasDocenciaConocidas + g.horas + na.horas;
+        d.tieneMateriaSinHoras || g.indeterminado || otras.indeterminado || na.tieneIndeterminados;
+      const sumaParcial = d.horasDocenciaConocidas + g.horas + otras.horas + na.horas;
 
       if (sumaParcial > limite) {
         enAlerta.push({
@@ -347,7 +372,7 @@ export class R03EvaluadorService implements IndicadorEvaluador<ResultadoR03> {
           nombre,
           componentes: {
             horasDocencia: d.horasDocenciaConocidas,
-            horasGestion: g.horas,
+            horasGestion: g.horas + otras.horas,
             horasNoAcademico: na.horas,
             usoTope: sumaParcial,
           },

@@ -304,26 +304,30 @@ export interface DocenteVigenteR03 {
    * Cuando no es null/vacío, tiene precedencia sobre tiempoDedicacionGestionSemanal.
    */
   cargosAcademicosJson: string | null;
+  /**
+   * Sección 5.2 — Otras dedicaciones universitarias.
+   * JSON: [{horasSeman: string}]. Incluido aquí porque R-03 incorpora 5.2 en su tope semanal.
+   */
+  otrasDedicacionesJson: string | null;
 }
 
 /**
  * Datos de un docente activo para evaluar R-10 (FSD §8.1: Dedicación total).
  *
- * Extiende DocenteVigenteR03 con los componentes que conforman la dedicación total:
- *   DEDICACIÓN TOTAL = docencia(4.1) + gestión(5.1) + otras(5.2) + investigación(7.2) + vinculación(7.3)
+ * Extiende DocenteVigenteR03 con los componentes de investigación y vinculación.
+ * otrasDedicacionesJson (5.2) ya está en DocenteVigenteR03 — heredado aquí sin redefinir.
+ *
+ * DEDICACIÓN TOTAL = docencia(4.1) + gestión(5.1) + otras(5.2) + investigación(7.2) + vinculación(7.3)
  *
  * Nota: desempenoActualJson NO forma parte de la dedicación total (es parte de la
- * "carga para el tope" de R-03, que incluye 4.1 + 5.1 + 6.1). R-10 usa 5.2 + 7.2 + 7.3.
+ * "carga para el tope" de R-03, que incluye 4.1 + 5.1 + 5.2 + 6.1). R-10 usa 5.2 + 7.2 + 7.3.
  *
- * otrasDedicacionesJson: JSON de sección 5.2; ítems {horasSeman: string}.
  * proyectosInvestigacionJson: JSON de sección 7.2; ítems {titulo, horasSemanales: string, ...}.
  *   Item en array = actividad declarada; horasSemanales vacío → indeterminado (FSD §3).
  * participacionVinculacionJson: JSON de sección 7.3; ítems {actividad, horasSemanales: string, ...}.
  *   horasSemanales vacío → indeterminado; horasSemanales = "0" → 0h determinados.
  */
 export interface DocenteVigenteR10 extends DocenteVigenteR03 {
-  /** Sección 5.2: otras dedicaciones universitarias. JSON: [{horasSeman: string}] */
-  otrasDedicacionesJson: string | null;
   /** Sección 7.2: proyectos de investigación. JSON: [{titulo, horasSemanales: string, ...}] */
   proyectosInvestigacionJson: string | null;
   /** Sección 7.3: participación en vinculación/extensión. JSON: [{actividad, horasSemanales: string, ...}] */

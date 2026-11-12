@@ -42,6 +42,7 @@ function makeDocRow(overrides: Partial<{
   tiempoDedicacionGestionSemanal: string | null;
   fechaFinGestion: string | null;
   funcionGestion: string | null;
+  otrasDedicacionesJson: string | null;
   proyectosInvestigacionJson: string | null;
   participacionVinculacionJson: string | null;
 }> = {}) {
@@ -65,6 +66,7 @@ function makeDocRow(overrides: Partial<{
     tiempoDedicacionGestionSemanal = null,
     fechaFinGestion = null,
     funcionGestion = null,
+    otrasDedicacionesJson = null,
     proyectosInvestigacionJson = null,
     participacionVinculacionJson = null,
   } = overrides;
@@ -76,7 +78,7 @@ function makeDocRow(overrides: Partial<{
       nombre, apellido, sexo, fechaNacimiento, cuit, pisoDepto, residencia,
       tipoDocumento, tituloGrado, areaDisciplinarId, subareaId,
       cargosAcademicosJson, tiempoDedicacionGestionSemanal, fechaFinGestion,
-      funcionGestion, proyectosInvestigacionJson, participacionVinculacionJson,
+      funcionGestion, otrasDedicacionesJson, proyectosInvestigacionJson, participacionVinculacionJson,
     },
   };
 }
@@ -1269,5 +1271,126 @@ describe('LD-59 — dos docentes con distinta distribución cross-carrera: cada 
     const f002 = res.filas.find(f => f.docenteId === 'd-002')!;
     expect(f001.horasDocencia).toBe(18);  // 6+6+6
     expect(f002.horasDocencia).toBe(6);   // solo la carrera
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Gestión Académica: sección 5.1 + sección 5.2 (Otras dedicaciones universitarias)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── LD-60: solo 5.1 → horasGestion = horas de 5.1 ────────────────────────────
+
+describe('LD-60 — docente con registros únicamente en sección 5.1: horasGestion = horas 5.1', () => {
+  it('cargosAcademicosJson con 20h y sin otrasDedicacionesJson → horasGestion=20', async () => {
+    const rows = [makeDocRow({
+      cargosAcademicosJson: JSON.stringify([{ dedicacionSemanal: '20', periodoHasta: '' }]),
+      otrasDedicacionesJson: null,
+    })];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].horasGestion).toBe(20);
+  });
+});
+
+// ── LD-61: solo 5.2 → horasGestion = suma de los registros de 5.2 ─────────────
+
+describe('LD-61 — docente con registros únicamente en sección 5.2: horasGestion = suma 5.2', () => {
+  it('sin 5.1, con 5.2 de 5h → horasGestion=5', async () => {
+    const rows = [makeDocRow({
+      cargosAcademicosJson: null,
+      tiempoDedicacionGestionSemanal: null,
+      otrasDedicacionesJson: JSON.stringify([{ horasSeman: '5' }]),
+    })];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].horasGestion).toBe(5);
+  });
+});
+
+// ── LD-62: 5.1 + múltiples 5.2 → GEST = 5.1 + suma(5.2) ─────────────────────
+
+describe('LD-62 — docente con 5.1 y múltiples registros en 5.2: GEST = 5.1 + SUMA(5.2)', () => {
+  it('5.1=20h, 5.2=[5h,8h] → horasGestion=33 y dedicacion incluye los 33', async () => {
+    const rows = [makeDocRow({
+      cargaHorariaSemanal: 6,
+      cargosAcademicosJson: JSON.stringify([{ dedicacionSemanal: '20', periodoHasta: '' }]),
+      otrasDedicacionesJson: JSON.stringify([{ horasSeman: '5' }, { horasSeman: '8' }]),
+    })];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    const f = res.filas[0];
+    expect(f.horasGestion).toBe(33);  // 20 + 5 + 8
+    expect(f.dedicacion).toBe(6 + 33 + f.horasInvestigacion + f.horasVinculacion);
+  });
+});
+
+// ── LD-63: sin registros en ninguna sección → horasGestion = 0 ───────────────
+
+describe('LD-63 — docente sin registros en 5.1 ni en 5.2: horasGestion = 0', () => {
+  it('cargosAcademicosJson=null, otrasDedicacionesJson=null → horasGestion=0', async () => {
+    const rows = [makeDocRow({
+      cargosAcademicosJson: null,
+      tiempoDedicacionGestionSemanal: null,
+      otrasDedicacionesJson: null,
+    })];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].horasGestion).toBe(0);
+  });
+});
+
+// ── LD-64: 5.2 independiente de la carrera seleccionada ───────────────────────
+
+describe('LD-64 — suma de 5.2 es independiente de la carrera seleccionada', () => {
+  it('otrasDedicacionesJson vive en el docente (no en la vinculacion); siempre se suma completo', async () => {
+    // Docente con 1 materia en la carrera seleccionada y sección 5.2 con 13h
+    const rows = [makeDocRow({
+      docenteId: 'd-001', materiaId: 'm-1', cargaHorariaSemanal: 6,
+      otrasDedicacionesJson: JSON.stringify([{ horasSeman: '5' }, { horasSeman: '8' }]),
+    })];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    // Las 13h de 5.2 se suman independientemente de qué carrera está seleccionada
+    expect(res.filas[0].horasGestion).toBe(13);
+    expect(res.filas[0].horasDocencia).toBe(6);  // docencia no afectada
+  });
+});
+
+// ── LD-65: sin duplicación de horas de 5.2 ────────────────────────────────────
+
+describe('LD-65 — ausencia de duplicación: múltiples registros de 5.2 se suman una sola vez', () => {
+  it('tres registros en 5.2 con 3h cada uno → horasGestion=9 (no 18 ni más)', async () => {
+    const rows = [makeDocRow({
+      cargosAcademicosJson: null,
+      otrasDedicacionesJson: JSON.stringify([
+        { horasSeman: '3' },
+        { horasSeman: '3' },
+        { horasSeman: '3' },
+      ]),
+    })];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    expect(res.filas[0].horasGestion).toBe(9);
+  });
+});
+
+// ── LD-66: docencia, investigación y vinculación no cambian al agregar 5.2 ─────
+
+describe('LD-66 — conservación de docencia, investigación y vinculación al sumar 5.2', () => {
+  it('horasDocencia, horasInvestigacion y horasVinculacion no son alterados por 5.2', async () => {
+    const rows = [makeDocRow({
+      cargaHorariaSemanal: 10,
+      proyectosInvestigacionJson: JSON.stringify([{ horasSemanales: '8' }]),
+      participacionVinculacionJson: JSON.stringify([{ horasSemanales: '6' }]),
+      otrasDedicacionesJson: JSON.stringify([{ horasSeman: '5' }, { horasSeman: '8' }]),
+    })];
+    const svc = makeSvc({ rows });
+    const res = await svc.consultarListadoDocentes(CAR_ID, USER_ID, ROL);
+    const f = res.filas[0];
+    expect(f.horasDocencia).toBe(10);
+    expect(f.horasInvestigacion).toBe(8);
+    expect(f.horasVinculacion).toBe(6);
+    expect(f.horasGestion).toBe(13);  // 5+8 (solo 5.2, sin 5.1)
+    expect(f.dedicacion).toBe(10 + 13 + 8 + 6);
   });
 });

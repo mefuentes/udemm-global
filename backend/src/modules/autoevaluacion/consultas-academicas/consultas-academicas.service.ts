@@ -820,6 +820,7 @@ export class ConsultasAcademicasService {
             funcionGestion: true,
             desempenoActualJson: true,
             cargosAcademicosJson: true,
+            otrasDedicacionesJson: true,
           },
         },
       },
@@ -835,6 +836,7 @@ export class ConsultasAcademicasService {
       funcionGestion: string | null;
       desempenoActualJson: string | null;
       cargosAcademicosJson: string | null;
+      otrasDedicacionesJson: string | null;
     }>();
 
     for (const v of rows) {
@@ -849,6 +851,7 @@ export class ConsultasAcademicasService {
           funcionGestion: v.docente.funcionGestion ?? null,
           desempenoActualJson: v.docente.desempenoActualJson ?? null,
           cargosAcademicosJson: v.docente.cargosAcademicosJson ?? null,
+          otrasDedicacionesJson: v.docente.otrasDedicacionesJson ?? null,
         });
       }
       const entry = porDocente.get(v.docenteId)!;
