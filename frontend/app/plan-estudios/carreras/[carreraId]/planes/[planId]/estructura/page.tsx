@@ -27,7 +27,6 @@ const BLOQUES_CONOCIMIENTO = [
   { codigo: 'TB',  label: 'TB - Tecnologías Básicas' },
   { codigo: 'TA',  label: 'TA - Tecnologías Aplicadas' },
   { codigo: 'CTC', label: 'CTC - Cs. y Tecn. Complementarias' },
-  { codigo: 'EL',  label: 'EL - Electivas' },
 ];
 
 const TIPOS_ASIGNATURA   = ['OBLIGATORIA', 'ELECTIVA', 'OPTATIVA', 'PPS', 'PI'];
