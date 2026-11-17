@@ -3,6 +3,7 @@ import { ConfigPlanService } from '../config/config-plan.service';
 import { ConsultasAcademicasService } from '../consultas-academicas/consultas-academicas.service';
 import type { BloqueNormalizado } from '../consultas-academicas/consultas-academicas.types';
 import { EstadoCalculo } from '../types/estado-calculo.types';
+import { seleccionarElectivaMinCarga } from './electiva.utils';
 import type {
   ContextoEvaluacion,
   DatoFaltante,
@@ -191,6 +192,20 @@ export class R09EvaluadorService implements IndicadorEvaluador<ResultadoR09> {
       };
     }
 
+    // ── Selección de electiva (§6: una sola, la de menor carga horaria total) ──
+    const noElectivas = materias.filter(m => m.tipoAsignatura.toUpperCase() !== 'ELECTIVA');
+    const todasElectivas = materias.filter(m => m.tipoAsignatura.toUpperCase() === 'ELECTIVA');
+
+    const seleccionElectiva = seleccionarElectivaMinCarga(todasElectivas, {
+      getCarga:  e => e.cargaHorariaTotal,
+      getCodigo: e => e.codigo,
+      getId:     e => e.id,
+    });
+
+    const electivaSeleccionada = seleccionElectiva.tipo === 'seleccionada' ? [seleccionElectiva.electiva] : [];
+    const materiasAComputar = [...noElectivas, ...electivaSeleccionada];
+    const hayElectivaIndeterminada = seleccionElectiva.tipo === 'indeterminada';
+
     // ── Acumulación ──────────────────────────────────────────────────────────
 
     const materiasSinHoras: MateriaResumenR09[] = [];
@@ -202,11 +217,15 @@ export class R09EvaluadorService implements IndicadorEvaluador<ResultadoR09> {
     const bloqueIncierto: Record<string, boolean> = { CB: false, TB: false, TA: false, CTC: false };
 
     let sumaTotal = 0;
-    let totalIncierto = false;
+    let totalIncierto = hayElectivaIndeterminada;
     // true cuando alguna materia con bloqueNormalizado=null tiene cargaHorariaTotal > 0
     let hayBloqueConHorasIndeterminadas = false;
 
-    for (const m of materias) {
+    if (hayElectivaIndeterminada) {
+      for (const b of BLOQUES_CONOCIDOS) bloqueIncierto[b as string] = true;
+    }
+
+    for (const m of materiasAComputar) {
       const sinHoras = m.cargaHorariaTotal === null;
       const sinBloque = m.bloqueNormalizado === null;
 
@@ -258,9 +277,11 @@ export class R09EvaluadorService implements IndicadorEvaluador<ResultadoR09> {
     // ── Estado de cálculo ────────────────────────────────────────────────────
 
     let estadoCalculo: EstadoCalculo;
-    if (materiasSinHoras.length === materias.length) {
+    const totalAEvaluar = materiasAComputar.length + (hayElectivaIndeterminada ? 1 : 0);
+    const efectivamenteSinDatos = materiasSinHoras.length + (hayElectivaIndeterminada ? 1 : 0);
+    if (totalAEvaluar > 0 && efectivamenteSinDatos === totalAEvaluar) {
       estadoCalculo = EstadoCalculo.NO_DETERMINABLE;
-    } else if (materiasSinHoras.length > 0 || hayBloqueConHorasIndeterminadas) {
+    } else if (materiasSinHoras.length > 0 || hayBloqueConHorasIndeterminadas || hayElectivaIndeterminada) {
       estadoCalculo = EstadoCalculo.PARCIAL;
     } else {
       estadoCalculo = EstadoCalculo.CALCULADO;
@@ -285,6 +306,15 @@ export class R09EvaluadorService implements IndicadorEvaluador<ResultadoR09> {
         descripcion:
           `Existen materias con horas cargadas y bloque curricular ausente o desconocido. ` +
           `Las sumas por bloque no pueden determinarse con exactitud.`,
+      });
+    }
+    if (hayElectivaIndeterminada) {
+      datosFaltantes.push({
+        campo: 'cargaHorariaTotal',
+        entidad: 'Materia',
+        descripcion:
+          'El plan tiene varias materias ELECTIVAS y al menos una carece de cargaHorariaTotal. ' +
+          'No es posible determinar cuál electiva computar; las horas del plan pueden estar subestimadas.',
       });
     }
 

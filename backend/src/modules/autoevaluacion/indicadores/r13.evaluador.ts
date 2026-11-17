@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConsultasAcademicasService } from '../consultas-academicas/consultas-academicas.service';
 import { EstadoCalculo } from '../types/estado-calculo.types';
+import { seleccionarElectivaMinCarga } from './electiva.utils';
 import type {
   ContextoEvaluacion,
   DatoFaltante,
@@ -157,7 +158,7 @@ export class R13EvaluadorService implements IndicadorEvaluador<ResultadoR13> {
     const tienePPS = porTipo.PPS > 0;
     const tienePI  = porTipo.PI  > 0;
 
-    // ── Sumar horas FP vía D07 fallback (§6: alumno cursa UNA electiva — contribuye la de menor FP) ─
+    // ── Sumar horas FP vía D07 fallback (§6: alumno cursa UNA electiva — la de menor carga horaria) ─
     let totalHorasFormacionPractica = 0;
     let conDatosFP = 0;
     let sinDatosFP = 0;
@@ -177,14 +178,19 @@ export class R13EvaluadorService implements IndicadorEvaluador<ResultadoR13> {
     }
 
     if (electivas.length > 0) {
-      const fpElectivas: number[] = [];
-      for (const e of electivas) {
-        const fp = fpEfectiva(e);
-        if (fp !== null) { fpElectivas.push(fp); conDatosFP++; }
+      const seleccion = seleccionarElectivaMinCarga(electivas, {
+        getCarga:  e => e.cargaHorariaTotal,
+        getCodigo: e => e.materiaCodigo,
+        getId:     e => e.materiaId,
+      });
+
+      if (seleccion.tipo === 'seleccionada') {
+        const fp = fpEfectiva(seleccion.electiva);
+        if (fp !== null) { totalHorasFormacionPractica += fp; conDatosFP++; }
         else sinDatosFP++;
-      }
-      if (fpElectivas.length > 0) {
-        totalHorasFormacionPractica += Math.min(...fpElectivas);
+      } else if (seleccion.tipo === 'indeterminada') {
+        // No es posible determinar cuál electiva computar → una contribución queda pendiente.
+        sinDatosFP++;
       }
     }
 

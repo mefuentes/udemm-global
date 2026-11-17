@@ -777,4 +777,101 @@ describe('R09EvaluadorService — E.2 universo de materias vigentes (ACTIVO)', (
     expect(res.valor?.horasPorBloque?.CB).toBe(64);
     expect(res.valor?.horasTotal).toBe(64);
   });
+
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// 14. SELECCIÓN DE ELECTIVA (§6)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('R09EvaluadorService — selección de electiva (§6)', () => {
+
+  it('sin electivas → comportamiento sin cambios en horasTotal', async () => {
+    const materias = [
+      makeMateria({ bloqueConocimiento: 'CB', cargaHorariaTotal: 100 }),
+      makeMateria({ bloqueConocimiento: 'TB', cargaHorariaTotal: 80 }),
+    ];
+    const ev = makeEv(makeConsultas(materias), makeConfigPlan());
+    const res = await ev.evaluar(makeCtx());
+    expect(res.valor?.horasTotal).toBe(180);
+    expect(res.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+  });
+
+  it('una sola electiva → se incluye normalmente en el cómputo', async () => {
+    const materias = [
+      makeMateria({ bloqueConocimiento: 'CB', cargaHorariaTotal: 100 }),
+      makeMateria({ bloqueConocimiento: 'TB', cargaHorariaTotal: 80, tipoAsignatura: 'ELECTIVA' }),
+    ];
+    const ev = makeEv(makeConsultas(materias), makeConfigPlan());
+    const res = await ev.evaluar(makeCtx());
+    expect(res.valor?.horasTotal).toBe(180);
+    expect(res.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+  });
+
+  it('dos electivas → solo la de menor cargaHorariaTotal se acumula', async () => {
+    // CB=100; ELECTIVA_min=carga32; ELECTIVA_max=carga64 → horasTotal=132
+    const materias = [
+      makeMateria({ bloqueConocimiento: 'CB', cargaHorariaTotal: 100 }),
+      makeMateria({ bloqueConocimiento: 'TB', cargaHorariaTotal: 32, tipoAsignatura: 'ELECTIVA' }),
+      makeMateria({ bloqueConocimiento: 'TB', cargaHorariaTotal: 64, tipoAsignatura: 'ELECTIVA' }),
+    ];
+    const ev = makeEv(makeConsultas(materias), makeConfigPlan());
+    const res = await ev.evaluar(makeCtx());
+    expect(res.valor?.horasTotal).toBe(132);
+    expect(res.estadoCalculo).toBe(EstadoCalculo.CALCULADO);
+  });
+
+  it('electiva seleccionada aporta sus horas al bloque correcto', async () => {
+    // ELECTIVA_min=carga32 en bloque TA; ELECTIVA_max=carga64 en TA → solo 32 en TA
+    const materias = [
+      makeMateria({ bloqueConocimiento: 'CB', cargaHorariaTotal: 100 }),
+      makeMateria({ bloqueConocimiento: 'TA', cargaHorariaTotal: 32, tipoAsignatura: 'ELECTIVA' }),
+      makeMateria({ bloqueConocimiento: 'TA', cargaHorariaTotal: 64, tipoAsignatura: 'ELECTIVA' }),
+    ];
+    const ev = makeEv(makeConsultas(materias), makeConfigPlan());
+    const res = await ev.evaluar(makeCtx());
+    expect(res.valor?.horasPorBloque?.TA).toBe(32);
+    expect(res.valor?.horasPorBloque?.CB).toBe(100);
+  });
+
+  it('totalMaterias sigue siendo materias.length (inventario del plan, no las computables)', async () => {
+    const materias = [
+      makeMateria({ bloqueConocimiento: 'CB', cargaHorariaTotal: 100 }),
+      makeMateria({ bloqueConocimiento: 'TA', cargaHorariaTotal: 32, tipoAsignatura: 'ELECTIVA' }),
+      makeMateria({ bloqueConocimiento: 'TA', cargaHorariaTotal: 64, tipoAsignatura: 'ELECTIVA' }),
+    ];
+    const ev = makeEv(makeConsultas(materias), makeConfigPlan());
+    const res = await ev.evaluar(makeCtx());
+    expect(res.valor?.totalMaterias).toBe(3);
+  });
+
+  it('electiva indeterminada (null cargaHorariaTotal) → PARCIAL, bloques inciertos, datosFaltante', async () => {
+    // e1=null carga, e2=64 → indeterminada → totalIncierto=true → todos los bloques null
+    const materias = [
+      makeMateria({ bloqueConocimiento: 'CB', cargaHorariaTotal: 100 }),
+      makeMateria({ bloqueConocimiento: 'TB', cargaHorariaTotal: null, tipoAsignatura: 'ELECTIVA' }),
+      makeMateria({ bloqueConocimiento: 'TB', cargaHorariaTotal: 64,   tipoAsignatura: 'ELECTIVA' }),
+    ];
+    const ev = makeEv(makeConsultas(materias), makeConfigPlan());
+    const res = await ev.evaluar(makeCtx());
+    expect(res.estadoCalculo).toBe(EstadoCalculo.PARCIAL);
+    expect(res.valor?.horasTotal).toBeNull();
+    expect(res.valor?.horasPorBloque?.CB).toBeNull();
+    expect(res.valor?.horasPorBloque?.TB).toBeNull();
+    expect(res.datosFaltantes.some(d => d.campo === 'cargaHorariaTotal')).toBe(true);
+  });
+
+  it('electiva descartada no distorsiona IPL-02/05: solo la min-carga afecta el bloque', async () => {
+    // Con la nueva regla solo la menor (32h) aporta a TA; la de 64h queda descartada
+    const materias = [
+      makeMateria({ bloqueConocimiento: 'CB', cargaHorariaTotal: 200 }),
+      makeMateria({ bloqueConocimiento: 'TA', cargaHorariaTotal: 32, tipoAsignatura: 'ELECTIVA' }),
+      makeMateria({ bloqueConocimiento: 'TA', cargaHorariaTotal: 64, tipoAsignatura: 'ELECTIVA' }),
+    ];
+    const ev = makeEv(makeConsultas(materias), makeConfigPlan(makeUmbrales({ horasMinTA: 50 })));
+    const res = await ev.evaluar(makeCtx());
+    expect(res.valor?.evaluaciones.TA.horasReales).toBe(32);
+    expect(res.valor?.evaluaciones.TA.cumple).toBe(false);
+  });
+
 });

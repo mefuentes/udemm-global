@@ -420,28 +420,28 @@ describe('R13EvaluadorService — tipoAsignatura es el único criterio para PPS/
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// F.1 — electiva con menor FP (§6: el alumno cursa UNA electiva)
+// F.1 — electiva con menor cargaHorariaTotal (§6: el alumno cursa UNA electiva)
 // ════════════════════════════════════════════════════════════════════════════
 
-describe('R13EvaluadorService — F.1 electiva con menor FP (§6)', () => {
+describe('R13EvaluadorService — F.1 electiva con menor cargaHorariaTotal (§6)', () => {
 
-  it('dos electivas → totalHorasFormacionPractica usa sólo la de menor FP', async () => {
-    // OBLIGATORIA=0, ELECTIVA_A=32h, ELECTIVA_B=64h → debe usar 32h (mínimo)
+  it('dos electivas → usa la FP de la de menor cargaHorariaTotal', async () => {
+    // e1=carga32,FP10 (menor carga, seleccionada); e2=carga64,FP40 → solo e1
     const materias = [
-      makeMateriaD07('m1', 'Álgebra',      'OBLIGATORIA',  0),
-      makeMateriaD07('m2', 'Electiva A',   'ELECTIVA',    32),
-      makeMateriaD07('m3', 'Electiva B',   'ELECTIVA',    64),
+      makeMateriaD07('m1', 'Álgebra',    'OBLIGATORIA',  0),
+      makeMateria('e1', 'Electiva A', 'COD-E1', 'ELECTIVA', 32, 10, null),
+      makeMateria('e2', 'Electiva B', 'COD-E2', 'ELECTIVA', 64, 40, null),
     ];
     const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
-    expect(res.valor?.totalHorasFormacionPractica).toBe(32);
+    expect(res.valor?.totalHorasFormacionPractica).toBe(10);
   });
 
-  it('tres electivas → usa sólo el mínimo, no la suma', async () => {
-    // ELECTIVA: 20h, 40h, 60h → min = 20h
+  it('tres electivas → usa sólo la de menor carga, no la suma', async () => {
+    // e1=carga32,FP20 (seleccionada); e2=carga48,FP40; e3=carga64,FP60
     const materias = [
-      makeMateriaD07('e1', 'Electiva 1', 'ELECTIVA', 20),
-      makeMateriaD07('e2', 'Electiva 2', 'ELECTIVA', 40),
-      makeMateriaD07('e3', 'Electiva 3', 'ELECTIVA', 60),
+      makeMateria('e1', 'Electiva 1', 'COD-E1', 'ELECTIVA', 32, 20, null),
+      makeMateria('e2', 'Electiva 2', 'COD-E2', 'ELECTIVA', 48, 40, null),
+      makeMateria('e3', 'Electiva 3', 'COD-E3', 'ELECTIVA', 64, 60, null),
     ];
     const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
     expect(res.valor?.totalHorasFormacionPractica).toBe(20);
@@ -449,8 +449,8 @@ describe('R13EvaluadorService — F.1 electiva con menor FP (§6)', () => {
 
   it('una sola electiva → usa su FP directamente', async () => {
     const materias = [
-      makeMateriaD07('m1', 'PPS I',     'PPS',       100),
-      makeMateriaD07('e1', 'Electiva',  'ELECTIVA',   50),
+      makeMateriaD07('m1', 'PPS I',    'PPS',      100),
+      makeMateriaD07('e1', 'Electiva', 'ELECTIVA',  50),
     ];
     const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
     expect(res.valor?.totalHorasFormacionPractica).toBe(150);
@@ -466,29 +466,30 @@ describe('R13EvaluadorService — F.1 electiva con menor FP (§6)', () => {
     expect(res.valor?.totalHorasFormacionPractica).toBe(380);
   });
 
-  it('electivas con FP iguales → usa ese valor (mínimo de iguales)', async () => {
+  it('electivas con carga igual → desempate por código ascendente, usa FP de la seleccionada', async () => {
+    // Ambas carga=64; COD-E1 < COD-E2 → selecciona e1 (hsFP=48)
     const materias = [
-      makeMateriaD07('e1', 'Electiva A', 'ELECTIVA', 48),
-      makeMateriaD07('e2', 'Electiva B', 'ELECTIVA', 48),
+      makeMateria('e1', 'Electiva A', 'COD-E1', 'ELECTIVA', 64, 48, null),
+      makeMateria('e2', 'Electiva B', 'COD-E2', 'ELECTIVA', 64, 72, null),
     ];
     const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
     expect(res.valor?.totalHorasFormacionPractica).toBe(48);
   });
 
-  it('electiva con null FP → va a sinDatosFP; min se calcula de las que tienen dato', async () => {
-    // ELECTIVA_A=32h (dato), ELECTIVA_B=null (sin dato)
-    // Total: usa 32h; sinDatosFP=1 por electiva sin dato
+  it('electiva de menor carga tiene hsFP → conDatosFP=1; electiva descartada sin hsFP no cuenta', async () => {
+    // e1=carga32(seleccionada),hsFP=32; e2=carga64(descartada),hsFP=null
     const materias = [
-      makeMateriaD07('e1', 'Electiva A', 'ELECTIVA', 32),
+      makeMateria('e1', 'Electiva A', 'COD-E1', 'ELECTIVA', 32, 32, null),
       makeMateria('e2', 'Electiva B', 'COD-E2', 'ELECTIVA', 64, null, null),
     ];
     const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
     expect(res.valor?.totalHorasFormacionPractica).toBe(32);
-    expect(res.valor?.sinDatosFP).toBe(1);
+    expect(res.valor?.sinDatosFP).toBe(0);
     expect(res.valor?.conDatosFP).toBe(1);
   });
 
-  it('todas las electivas con null FP → no hay contribución de electiva al total', async () => {
+  it('todas las electivas con null hsFP, carga conocida → solo la seleccionada cuenta como sinDatosFP', async () => {
+    // COD-E1 < COD-E2 → selecciona e1 (hsFP=null) → sinDatosFP=1 (no 2)
     const materias = [
       makeMateriaD07('m1', 'PPS I',     'PPS',       100),
       makeMateria('e1', 'Electiva A', 'COD-E1', 'ELECTIVA', 64, null, null),
@@ -496,14 +497,12 @@ describe('R13EvaluadorService — F.1 electiva con menor FP (§6)', () => {
     ];
     const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
     expect(res.valor?.totalHorasFormacionPractica).toBe(100);
-    expect(res.valor?.sinDatosFP).toBe(2);
+    expect(res.valor?.sinDatosFP).toBe(1);
   });
 
-  it('regresión 806h → 774h: dos electivas, diferencia 32h (§6 selecciona la menor)', async () => {
-    // Escenario calibrado: non-elec=764h (6×OBL 100h + PPS 100h + PI 64h),
-    // ELECTIVA_A=10h (min), ELECTIVA_B=32h
-    // Suma antigua (todas electivas): 764 + 10 + 32 = 806h
-    // Suma nueva   (sólo menor FP):   764 + 10      = 774h
+  it('regresión: dos electivas con distinta carga → usa la de menor carga', async () => {
+    // non-elec=764h (6×OBL 100h + PPS 100h + PI 64h),
+    // e1=carga32,FP10 (menor carga, seleccionada); e2=carga64,FP32
     const materias = [
       makeMateriaD07('ob1', 'Matemática',   'OBLIGATORIA', 100),
       makeMateriaD07('ob2', 'Física',       'OBLIGATORIA', 100),
@@ -513,8 +512,8 @@ describe('R13EvaluadorService — F.1 electiva con menor FP (§6)', () => {
       makeMateriaD07('ob6', 'Sistemas',     'OBLIGATORIA', 100),
       makeMateriaD07('p1',  'PPS I',        'PPS',         100),
       makeMateriaD07('pi1', 'PI',           'PI',           64),
-      makeMateriaD07('e1',  'Electiva A',   'ELECTIVA',    10),
-      makeMateriaD07('e2',  'Electiva B',   'ELECTIVA',    32),
+      makeMateria('e1', 'Electiva A', 'COD-E1', 'ELECTIVA', 32, 10, null),
+      makeMateria('e2', 'Electiva B', 'COD-E2', 'ELECTIVA', 64, 32, null),
     ];
     const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
     expect(res.valor?.totalHorasFormacionPractica).toBe(774);
@@ -522,12 +521,24 @@ describe('R13EvaluadorService — F.1 electiva con menor FP (§6)', () => {
 
   it('porTipo sigue contando TODAS las electivas (distribución por tipo no cambia)', async () => {
     const materias = [
-      makeMateriaD07('e1', 'Electiva A', 'ELECTIVA', 24),
-      makeMateriaD07('e2', 'Electiva B', 'ELECTIVA', 56),
+      makeMateria('e1', 'Electiva A', 'COD-E1', 'ELECTIVA', 32, 24, null),
+      makeMateria('e2', 'Electiva B', 'COD-E2', 'ELECTIVA', 64, 56, null),
     ];
     const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
     expect(res.valor?.porTipo.ELECTIVA).toBe(2);
-    expect(res.valor?.totalHorasFormacionPractica).toBe(24); // usa el mínimo
+    expect(res.valor?.totalHorasFormacionPractica).toBe(24); // usa la de menor carga
+  });
+
+  it('electiva indeterminada (null cargaHorariaTotal) → sinDatosFP suma 1, sin contribución a FP', async () => {
+    // e1 con cargaHorariaTotal=null → no se puede comparar cargas → indeterminada
+    const materias = [
+      makeMateriaD07('m1', 'PPS I', 'PPS', 100),
+      makeMateria('e1', 'Electiva A', 'COD-E1', 'ELECTIVA', null, 32, null),
+      makeMateria('e2', 'Electiva B', 'COD-E2', 'ELECTIVA',   64, 16, null),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalHorasFormacionPractica).toBe(100);
+    expect(res.valor?.sinDatosFP).toBe(1);
   });
 
 });

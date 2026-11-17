@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConsultasAcademicasService } from '../consultas-academicas/consultas-academicas.service';
 import { EstadoCalculo } from '../types/estado-calculo.types';
+import { seleccionarElectivaMinCarga } from './electiva.utils';
 import type {
   ContextoEvaluacion,
   DatoFaltante,
@@ -137,12 +138,37 @@ export class R14EvaluadorService implements IndicadorEvaluador<ResultadoR14> {
 
     if (materiasProgramas.length === 0) return noAplica;
 
+    // ── Selección de electiva (§6: una sola, la de menor carga horaria total) ──
+    const noElectivas = materiasProgramas.filter(
+      m => m.tipoAsignatura.toUpperCase() !== 'ELECTIVA',
+    );
+    const todasElectivas = materiasProgramas.filter(
+      m => m.tipoAsignatura.toUpperCase() === 'ELECTIVA',
+    );
+
+    const seleccionElectiva = seleccionarElectivaMinCarga(todasElectivas, {
+      getCarga:  e => e.cargaHorariaTotal,
+      getCodigo: e => e.materiaCodigo,
+      getId:     e => e.materiaId,
+    });
+
+    const electivaSeleccionada =
+      seleccionElectiva.tipo === 'seleccionada' ? [seleccionElectiva.electiva] : [];
+    const electivaIndeterminada = seleccionElectiva.tipo === 'indeterminada';
+
+    // Materias a evaluar: todas las no-electivas + la electiva seleccionada (si la hay).
+    const materiasAEvaluar = [...noElectivas, ...electivaSeleccionada];
+
+    // totalMaterias: materias computables (no-electivas + 1 slot para electiva cuando existe).
+    const totalMaterias =
+      noElectivas.length + (seleccionElectiva.tipo !== 'ninguna' ? 1 : 0);
+
     const enAlerta: MateriaAlertaR14[] = [];
     let totalEvaluadas = 0;
-    let totalSinDatos = 0;
+    let totalSinDatos = electivaIndeterminada ? 1 : 0;
     let hayParseError = false;
 
-    for (const mp of materiasProgramas) {
+    for (const mp of materiasAEvaluar) {
       // Fuente primaria: hsFormacionPractica (campo D07); fallback: formacionPracticaJson
       let horasFormacion: number | null;
       if (mp.hsFormacionPractica !== null) {
@@ -233,7 +259,7 @@ export class R14EvaluadorService implements IndicadorEvaluador<ResultadoR14> {
       estadoCalculo,
       valor: {
         planEstudioId: contexto.planEstudioId,
-        totalMaterias: materiasProgramas.length,
+        totalMaterias,
         totalEvaluadas,
         totalSinDatos,
         totalConAlerta: enAlerta.length,

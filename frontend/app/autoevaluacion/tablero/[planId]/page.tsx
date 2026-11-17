@@ -424,7 +424,7 @@ function TarjetaR13({ r13 }: { r13: ResultadoR13 }) {
 function FilaAlertaR14({ a }: { a: MateriaAlertaR14 }) {
   return (
     <tr className="hover:bg-slate-50/60">
-      <td className="px-3 py-1.5 text-xs text-slate-700">{a.materiaNombre}</td>
+      <td className="px-3 py-1.5 text-xs text-slate-700">{a.nombre}</td>
       <td className="px-3 py-1.5 text-right tabular-nums text-xs text-slate-600">{a.horasFormacionPractica} h</td>
       <td className="px-3 py-1.5 text-right tabular-nums text-xs text-slate-600">{a.horasTotal} h</td>
       <td className="px-3 py-1.5 text-right tabular-nums text-xs text-red-600 font-semibold">+{a.exceso} h</td>

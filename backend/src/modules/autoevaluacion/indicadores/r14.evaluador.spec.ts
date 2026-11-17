@@ -312,3 +312,99 @@ describe('R14EvaluadorService — E.2 universo de materias vigentes (ACTIVO)', (
     expect(res.valor?.totalMaterias).toBe(1);
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// F.1 — selección de electiva (§6)
+// ════════════════════════════════════════════════════════════════════════════
+
+function makeElectivaD07(
+  id: string,
+  cargaHorariaTotal: number | null,
+  hsFormacionPractica: number,
+): MateriaProgramaAut {
+  return {
+    materiaId: id,
+    materiaNombre: `Electiva ${id}`,
+    materiaCodigo: `COD-${id}`,
+    tipoAsignatura: 'ELECTIVA',
+    cargaHorariaTotal,
+    tienePrograma: true,
+    estadoPrograma: 'APROBADO',
+    secciones: null,
+    seccionesCompletas: 6,
+    fechaAprobacion: null,
+    anioVigencia: null,
+    formacionPracticaJson: null,
+    hsSincronicas: null, hsAsincronicas: null, hsPresenciales: null,
+    hsFormacionPractica,
+  };
+}
+
+describe('R14EvaluadorService — F.1 selección de electiva (§6)', () => {
+
+  it('sin electivas → comportamiento sin cambios', async () => {
+    const materias = [makeMateriaD07('m1', 'PPS I', 64, 80)];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalConAlerta).toBe(1);
+    expect(res.valor?.totalMaterias).toBe(1);
+  });
+
+  it('una sola electiva → se evalúa normalmente', async () => {
+    const materias = [
+      makeMateriaD07('m1', 'Álgebra', 64, 0),
+      makeElectivaD07('e1', 64, 80),  // FP=80 > carga=64 → alerta
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalConAlerta).toBe(1);
+    expect(res.valor?.enAlerta[0].materiaId).toBe('e1');
+    expect(res.valor?.totalMaterias).toBe(2);
+  });
+
+  it('varias electivas → solo la de menor carga se evalúa', async () => {
+    // e1=carga32,FP20 (seleccionada, sin alerta); e2=carga64,FP80 (descartada)
+    const materias = [
+      makeMateriaD07('m1', 'Álgebra', 64, 0),
+      makeElectivaD07('e1', 32, 20),
+      makeElectivaD07('e2', 64, 80),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalConAlerta).toBe(0);
+    expect(res.valor?.totalMaterias).toBe(2);
+    expect(res.valor?.totalEvaluadas).toBe(2);
+  });
+
+  it('electiva descartada con FP>carga no genera alerta', async () => {
+    // e1=carga32,FP10 (seleccionada); e2=carga64,FP90 (descartada, FP>carga pero no evaluada)
+    const materias = [
+      makeElectivaD07('e1', 32, 10),
+      makeElectivaD07('e2', 64, 90),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalConAlerta).toBe(0);
+    expect(res.valor?.enAlerta).toHaveLength(0);
+  });
+
+  it('totalMaterias = no-electivas + 1 cuando hay electivas', async () => {
+    const materias = [
+      makeMateriaD07('m1', 'Álgebra', 64, 0),
+      makeMateriaD07('m2', 'Física',  64, 0),
+      makeElectivaD07('e1', 32, 10),
+      makeElectivaD07('e2', 48, 20),
+      makeElectivaD07('e3', 64, 30),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalMaterias).toBe(3);
+  });
+
+  it('electiva indeterminada (null cargaHorariaTotal) → totalSinDatos >= 1 y estado PARCIAL', async () => {
+    const materias = [
+      makeMateriaD07('m1', 'Álgebra', 64, 0),
+      makeElectivaD07('e1', null, 20),
+      makeElectivaD07('e2', 64,  10),
+    ];
+    const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
+    expect(res.valor?.totalSinDatos).toBeGreaterThanOrEqual(1);
+    expect(res.estadoCalculo).toBe(EstadoCalculo.PARCIAL);
+  });
+
+});

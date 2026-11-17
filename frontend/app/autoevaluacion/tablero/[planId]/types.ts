@@ -127,8 +127,8 @@ export interface ResultadoR13 {
 
 export interface MateriaAlertaR14 {
   materiaId: string;
-  materiaNombre: string;
-  materiaCodigo: string;
+  nombre: string;
+  codigo: string;
   horasFormacionPractica: number;
   horasTotal: number;
   exceso: number;
