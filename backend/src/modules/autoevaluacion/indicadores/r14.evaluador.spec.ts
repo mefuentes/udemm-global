@@ -360,51 +360,50 @@ describe('R14EvaluadorService — F.1 selección de electiva (§6)', () => {
     expect(res.valor?.totalMaterias).toBe(2);
   });
 
-  it('varias electivas → solo la de menor carga se evalúa', async () => {
-    // e1=carga32,FP20 (seleccionada, sin alerta); e2=carga64,FP80 (descartada)
+  it('varias electivas → todas se evalúan', async () => {
+    // e1=carga64,FP0 (sin alerta); e2=carga64,FP80 (FP>carga → alerta)
     const materias = [
       makeMateriaD07('m1', 'Álgebra', 64, 0),
-      makeElectivaD07('e1', 32, 20),
+      makeElectivaD07('e1', 64, 0),
       makeElectivaD07('e2', 64, 80),
     ];
     const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
-    expect(res.valor?.totalConAlerta).toBe(0);
-    expect(res.valor?.totalMaterias).toBe(2);
-    expect(res.valor?.totalEvaluadas).toBe(2);
+    expect(res.valor?.totalConAlerta).toBe(1);
+    expect(res.valor?.enAlerta[0].materiaId).toBe('e2');
+    expect(res.valor?.totalMaterias).toBe(3);
+    expect(res.valor?.totalEvaluadas).toBe(3);
   });
 
-  it('electiva descartada con FP>carga no genera alerta', async () => {
-    // e1=carga32,FP10 (seleccionada); e2=carga64,FP90 (descartada, FP>carga pero no evaluada)
+  it('varias electivas con exceso FP → todas generan alerta', async () => {
+    // e1=carga64,FP80 (alerta); e2=carga64,FP90 (alerta)
     const materias = [
-      makeElectivaD07('e1', 32, 10),
+      makeElectivaD07('e1', 64, 80),
       makeElectivaD07('e2', 64, 90),
     ];
     const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
-    expect(res.valor?.totalConAlerta).toBe(0);
-    expect(res.valor?.enAlerta).toHaveLength(0);
+    expect(res.valor?.totalConAlerta).toBe(2);
+    expect(res.valor?.enAlerta).toHaveLength(2);
   });
 
-  it('totalMaterias = no-electivas + 1 cuando hay electivas', async () => {
+  it('totalMaterias refleja todas las materias incluidas todas las electivas', async () => {
     const materias = [
       makeMateriaD07('m1', 'Álgebra', 64, 0),
       makeMateriaD07('m2', 'Física',  64, 0),
-      makeElectivaD07('e1', 32, 10),
+      makeElectivaD07('e1', 64, 10),
       makeElectivaD07('e2', 48, 20),
-      makeElectivaD07('e3', 64, 30),
+      makeElectivaD07('e3', 32, 30),
     ];
     const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
-    expect(res.valor?.totalMaterias).toBe(3);
+    expect(res.valor?.totalMaterias).toBe(5);
   });
 
-  it('electiva indeterminada (null cargaHorariaTotal) → totalSinDatos >= 1 y estado PARCIAL', async () => {
-    const materias = [
-      makeMateriaD07('m1', 'Álgebra', 64, 0),
-      makeElectivaD07('e1', null, 20),
-      makeElectivaD07('e2', 64,  10),
-    ];
+  it('nombre y código de electiva en alerta son correctos', async () => {
+    const materias = [makeElectivaD07('e1', 64, 80)];
     const res = await makeService(makeConsultas(materias)).evaluar(makeContexto());
-    expect(res.valor?.totalSinDatos).toBeGreaterThanOrEqual(1);
-    expect(res.estadoCalculo).toBe(EstadoCalculo.PARCIAL);
+    expect(res.valor?.totalConAlerta).toBe(1);
+    const alerta = res.valor?.enAlerta[0]!;
+    expect(alerta.nombre).toBe('Electiva e1');
+    expect(alerta.codigo).toBe('COD-e1');
   });
 
 });

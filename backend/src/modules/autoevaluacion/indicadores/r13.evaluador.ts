@@ -158,7 +158,7 @@ export class R13EvaluadorService implements IndicadorEvaluador<ResultadoR13> {
     const tienePPS = porTipo.PPS > 0;
     const tienePI  = porTipo.PI  > 0;
 
-    // ── Sumar horas FP vía D07 fallback (§6: alumno cursa UNA electiva — la de menor carga horaria) ─
+    // ── Sumar horas FP vía D07 fallback (§6: alumno cursa UNA electiva — la de menor FP) ─────────
     let totalHorasFormacionPractica = 0;
     let conDatosFP = 0;
     let sinDatosFP = 0;
@@ -179,7 +179,7 @@ export class R13EvaluadorService implements IndicadorEvaluador<ResultadoR13> {
 
     if (electivas.length > 0) {
       const seleccion = seleccionarElectivaMinCarga(electivas, {
-        getCarga:  e => e.cargaHorariaTotal,
+        getCarga:  e => fpEfectiva(e),
         getCodigo: e => e.materiaCodigo,
         getId:     e => e.materiaId,
       });
