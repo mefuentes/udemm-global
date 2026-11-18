@@ -36,6 +36,8 @@ interface MateriaResumen {
   cargaHorariaTotal?: number | null;
   creditos?: number | null;
   regimenCursado?: string | null;
+  // Cátedras
+  cantidadCatedras?: number;
 }
 
 interface ProgramaResumen {
@@ -656,6 +658,7 @@ export default function ProgramasAsignaturaPage() {
                         <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-28">Completitud</th>
                         <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-36">Estado</th>
                         <th className="text-left px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-40">Avance</th>
+                        <th className="text-center px-4 py-3 font-semibold text-slate-500 uppercase tracking-wide w-32">Cant. de Cátedras</th>
                         <th className="px-4 py-3 w-44 text-right font-semibold text-slate-500 uppercase tracking-wide">Acciones</th>
                       </tr>
                     </thead>
@@ -789,6 +792,13 @@ function FilaPrograma({
             {avancePct}%
           </span>
         </div>
+      </td>
+
+      {/* Cant. de Cátedras */}
+      <td className="px-4 py-3 text-center">
+        <span className="text-xs font-semibold text-slate-700 tabular-nums">
+          {materia.cantidadCatedras ?? 0}
+        </span>
       </td>
 
       {/* Acciones */}

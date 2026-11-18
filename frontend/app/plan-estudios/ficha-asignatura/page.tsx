@@ -198,6 +198,11 @@ interface FichaCompleta {
   };
   correlativas: CorrelativaItem[];
   esCorrelativaDe: EsCorrelativaDeItem[];
+  catedras: {
+    catedraId: string;
+    nombre: string;
+    docentes: { id: string; nombre: string; apellido: string }[];
+  }[];
   fechaCreacion: string;
   fechaActualizacion: string;
 }
@@ -1169,6 +1174,20 @@ function FichaView({ materiaId, permisos, permisosPrograma, puedeEditarPrograma 
               )}
             </div>
 
+            {/* CÁTEDRAS */}
+            <SeccionHeader label="Cátedras" />
+            <div className="px-5 py-4">
+              {!ficha.catedras || ficha.catedras.length === 0 ? (
+                <p className="text-xs text-slate-400 italic py-1">Sin cátedras asignadas</p>
+              ) : (
+                <div className="space-y-2">
+                  {ficha.catedras.map(cat => (
+                    <CatedraItem key={cat.catedraId} catedra={cat} />
+                  ))}
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 
@@ -1224,6 +1243,45 @@ function CampoEditable({ label, valor, editar, input }: {
     <div className="flex items-start px-5 py-3 gap-4">
       <span className="w-44 text-xs font-medium text-slate-500 flex-shrink-0 pt-2">{label}</span>
       {editar ? <div className="flex-1 min-w-0">{input}</div> : <span className="text-sm text-slate-800 pt-0.5">{valor || '—'}</span>}
+    </div>
+  );
+}
+
+function CatedraItem({ catedra }: {
+  catedra: { catedraId: string; nombre: string; docentes: { id: string; nombre: string; apellido: string }[] };
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-lg border border-slate-200 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-50 transition-colors text-left"
+      >
+        <span className="text-xs font-semibold text-slate-700 flex-1">{catedra.nombre}</span>
+        <span className="text-[11px] text-slate-400">
+          {catedra.docentes.length} docente{catedra.docentes.length !== 1 ? 's' : ''}
+        </span>
+        <svg
+          className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${open ? '' : 'rotate-180'}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="border-t border-slate-100 px-3 py-2 space-y-1">
+          {catedra.docentes.length === 0 ? (
+            <p className="text-[11px] text-slate-400 italic">Sin docentes asignados</p>
+          ) : (
+            catedra.docentes.map(d => (
+              <div key={d.id} className="flex items-center gap-2 py-0.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-slate-300 flex-shrink-0" />
+                <span className="text-xs text-slate-600">{d.apellido}, {d.nombre}</span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

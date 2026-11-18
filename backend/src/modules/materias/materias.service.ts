@@ -67,15 +67,16 @@ export class MateriasService {
   // ── Listado ──────────────────────────────────────────────────────────────
 
   async obtenerTodas(planEstudioId?: string) {
-    return this.prisma.materia.findMany({
+    const materias = await this.prisma.materia.findMany({
       where: {
         ...(planEstudioId ? { planEstudioId } : {}),
         estado: 'ACTIVO'
       },
       include: {
         vinculaciones: {
-          where: { estado: 'APROBADA' },
+          where: { estado: 'APROBADA', docente: { activo: true } },
           select: {
+            catedraId: true,
             docente: {
               select: { id: true, nombre: true, apellido: true }
             }
@@ -84,6 +85,11 @@ export class MateriasService {
       },
       orderBy: [{ anio: 'asc' }, { cuatrimestre: 'asc' }, { nombre: 'asc' }]
     });
+
+    return materias.map(m => ({
+      ...m,
+      cantidadCatedras: new Set(m.vinculaciones.map(v => v.catedraId)).size,
+    }));
   }
 
   // ── Ficha completa ───────────────────────────────────────────────────────
@@ -120,11 +126,39 @@ export class MateriasService {
               }
             }
           }
-        }
+        },
+        vinculaciones: {
+          where: { estado: 'APROBADA', docente: { activo: true } },
+          select: {
+            catedraId: true,
+            catedra: { select: { id: true, nombre: true } },
+            docente: { select: { id: true, nombre: true, apellido: true } },
+          },
+          orderBy: [{ catedra: { nombre: 'asc' } }, { docente: { apellido: 'asc' } }],
+        },
       }
     });
     if (!ficha) throw new NotFoundException(`Materia ${id} no encontrada`);
-    return ficha;
+
+    const catedrasMap = new Map<string, {
+      catedraId: string;
+      nombre: string;
+      docentes: { id: string; nombre: string; apellido: string }[];
+    }>();
+    for (const v of ficha.vinculaciones) {
+      if (!catedrasMap.has(v.catedraId)) {
+        catedrasMap.set(v.catedraId, { catedraId: v.catedraId, nombre: v.catedra.nombre, docentes: [] });
+      }
+      const grupo = catedrasMap.get(v.catedraId)!;
+      if (!grupo.docentes.some(d => d.id === v.docente.id)) {
+        grupo.docentes.push({ id: v.docente.id, nombre: v.docente.nombre, apellido: v.docente.apellido });
+      }
+    }
+
+    return {
+      ...ficha,
+      catedras: Array.from(catedrasMap.values()),
+    };
   }
 
   // ── CRUD básico ──────────────────────────────────────────────────────────
