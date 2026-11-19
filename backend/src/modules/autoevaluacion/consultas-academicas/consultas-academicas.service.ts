@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ScopeService } from '../../scopes/scope.service';
+import { horasSemanalesVigentes } from '../../../common/utils/horas-semanales.utils';
 import type {
   BloqueNormalizado,
   CargosParaR04,
@@ -810,7 +811,7 @@ export class ConsultasAcademicasService {
       },
       select: {
         docenteId: true,
-        horasSemana: true,
+        materia: { select: { cargaHorariaSemanal: true } },
         docente: {
           select: {
             nombre: true,
@@ -855,8 +856,8 @@ export class ConsultasAcademicasService {
         });
       }
       const entry = porDocente.get(v.docenteId)!;
-      const horas = v.horasSemana;
-      if (horas === null || horas === undefined) {
+      const horas = horasSemanalesVigentes({ cargaHorariaSemanal: v.materia?.cargaHorariaSemanal });
+      if (horas === null) {
         entry.tieneMateriaSinHoras = true;
       } else {
         entry.horasDocenciaConocidas += horas;
@@ -924,7 +925,7 @@ export class ConsultasAcademicasService {
       },
       select: {
         docenteId: true,
-        horasSemana: true,
+        materia: { select: { cargaHorariaSemanal: true } },
         docente: {
           select: {
             nombre: true,
@@ -975,8 +976,8 @@ export class ConsultasAcademicasService {
         });
       }
       const entry = porDocente.get(v.docenteId)!;
-      const horas = v.horasSemana;
-      if (horas === null || horas === undefined) {
+      const horas = horasSemanalesVigentes({ cargaHorariaSemanal: v.materia?.cargaHorariaSemanal });
+      if (horas === null) {
         entry.tieneMateriaSinHoras = true;
       } else {
         entry.horasDocenciaConocidas += horas;

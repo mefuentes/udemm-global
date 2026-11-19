@@ -2,6 +2,10 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ScopeService } from '../../scopes/scope.service';
 import { extraerAlertas } from '../alertas/alertas.extractor';
+import {
+  horasSemanalesVigentes,
+  horasSemanalesHistoricas,
+} from '../../../common/utils/horas-semanales.utils';
 import type { AmbitoAnalisis } from '../analisis/analisis.dto';
 import type { AlertaBandeja } from '../alertas/alertas.dto';
 import type { EstadoCalculo } from '../types/estado-calculo.types';
@@ -53,7 +57,7 @@ export class FichaDocenteService {
         },
         vinculaciones: {
           include: {
-            materia:     { select: { id: true, nombre: true } },
+            materia:     { select: { id: true, nombre: true, cargaHorariaSemanal: true } },
             carrera:     { select: { id: true, nombre: true } },
             planEstudio: { select: { id: true, nombre: true } },
             facultad:    { select: { id: true, nombre: true } },
@@ -146,7 +150,7 @@ export class FichaDocenteService {
         vinculaciones: {
           where: { carreraId, estado: 'APROBADA' },
           include: {
-            materia:     { select: { id: true, nombre: true } },
+            materia:     { select: { id: true, nombre: true, cargaHorariaSemanal: true } },
             carrera:     { select: { id: true, nombre: true } },
             planEstudio: { select: { id: true, nombre: true } },
             facultad:    { select: { id: true, nombre: true } },
@@ -273,26 +277,27 @@ export class FichaDocenteService {
       esResponsableCatedra: boolean | null;
       horasSemana: number | null;
       anioInicio: number | null;
-      materia:     { id: string; nombre: string };
+      materia:     { id: string; nombre: string; cargaHorariaSemanal: number | null };
       carrera:     { id: string; nombre: string };
       planEstudio: { id: string; nombre: string };
       facultad:    { id: string; nombre: string };
     }>,
   ): VinculacionParsed[] {
     return vinculaciones.map(v => ({
-      id:                  v.id,
-      materiaId:           v.materia.id,
-      materiaNombre:       v.materia.nombre,
-      carreraId:           v.carrera.id,
-      carreraNombre:       v.carrera.nombre,
-      planEstudioId:       v.planEstudio.id,
-      planEstudioNombre:   v.planEstudio.nombre,
-      facultadId:          v.facultad.id,
-      facultadNombre:      v.facultad.nombre,
-      estado:              v.estado,
+      id:                   v.id,
+      materiaId:            v.materia.id,
+      materiaNombre:        v.materia.nombre,
+      carreraId:            v.carrera.id,
+      carreraNombre:        v.carrera.nombre,
+      planEstudioId:        v.planEstudio.id,
+      planEstudioNombre:    v.planEstudio.nombre,
+      facultadId:           v.facultad.id,
+      facultadNombre:       v.facultad.nombre,
+      estado:               v.estado,
       esResponsableCatedra: v.esResponsableCatedra,
-      horasSemana:         v.horasSemana,
-      anioInicio:          v.anioInicio,
+      horasSemana:          horasSemanalesVigentes(v.materia),
+      horasSemanaHistoricas: horasSemanalesHistoricas(v),
+      anioInicio:           v.anioInicio,
     }));
   }
 

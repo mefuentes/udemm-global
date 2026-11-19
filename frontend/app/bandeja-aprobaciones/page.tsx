@@ -20,6 +20,7 @@ interface Vinculacion {
   fechaAprobacion?: string;
   motivoRechazo?: string;
   horasSemana?: number | null;
+  horasSemanaHistoricas?: number | null;
   anioInicio?: number | null;
   facultad:    { nombre: string };
   carrera:     { nombre: string };
@@ -566,7 +567,7 @@ export default function BandejaAprobacionesPage() {
                           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
                             <span>{v.carrera.nombre} · {v.planEstudio.nombre}</span>
                             <span>{v.catedra.nombre} · {v.cargo.nombre}</span>
-                            {v.horasSemana != null && <span>{v.horasSemana} h/sem</span>}
+                            {v.horasSemanaHistoricas != null && <span>{v.horasSemanaHistoricas} h/sem</span>}
                             {v.anioInicio   != null && <span>Año {v.anioInicio}</span>}
                           </div>
                           <p className="text-[10px] text-slate-400 mt-1.5">{formatFecha(v.fechaCreacion)}</p>
@@ -1174,7 +1175,7 @@ export default function BandejaAprobacionesPage() {
                         <span className="block max-w-[78px] truncate">{v.cargo.nombre}</span>
                       </td>
                       <td className="px-3 py-3 hidden lg:table-cell">
-                        <span className="text-slate-700 dark:text-slate-200 font-medium text-xs">{v.horasSemana != null ? `${v.horasSemana} h/sem` : <span className="text-slate-400 italic">—</span>}</span>
+                        <span className="text-slate-700 dark:text-slate-200 font-medium text-xs">{v.horasSemanaHistoricas != null ? `${v.horasSemanaHistoricas} h/sem` : <span className="text-slate-400 italic">—</span>}</span>
                         <span className="block text-[10px] text-slate-400">{v.anioInicio ?? '—'}</span>
                       </td>
                       <td className="px-3 py-3"><BadgeEstado estado={v.estado} /></td>

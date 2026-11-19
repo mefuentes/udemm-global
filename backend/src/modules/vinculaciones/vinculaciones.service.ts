@@ -9,6 +9,10 @@ import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { ScopeService } from '../scopes/scope.service';
+import {
+  horasSemanalesVigentes,
+  horasSemanalesHistoricas,
+} from '../../common/utils/horas-semanales.utils';
 import { CrearVinculacionDto } from './dto/crear-vinculacion.dto';
 import { DesvincularVinculacionDto } from './dto/desvincular-vinculacion.dto';
 import { FiltrarVinculacionesDto } from './dto/filtrar-vinculaciones.dto';
@@ -25,7 +29,7 @@ const INCLUDE_COMPLETO = {
   facultad:            { select: { id: true, nombre: true } },
   carrera:             { select: { id: true, nombre: true } },
   planEstudio:         { select: { id: true, nombre: true, codigo: true } },
-  materia:             { select: { id: true, nombre: true, codigo: true } },
+  materia:             { select: { id: true, nombre: true, codigo: true, cargaHorariaSemanal: true } },
   docente:             { select: { id: true, nombre: true, apellido: true } },
   catedra:             { select: { id: true, nombre: true } },
   cargo:               { select: { id: true, nombre: true } },
@@ -43,6 +47,16 @@ export class VinculacionesService {
     private readonly scope: ScopeService,
   ) {}
 
+  // ── Mapper H/SEM ────────────────────────────────────────────────────────────
+
+  private _mapearVinculacion(vc: any): any {
+    return {
+      ...vc,
+      horasSemana:           horasSemanalesVigentes({ cargaHorariaSemanal: vc.materia?.cargaHorariaSemanal }),
+      horasSemanaHistoricas: horasSemanalesHistoricas({ horasSemana: vc.horasSemana }),
+    };
+  }
+
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   private async getDocenteByUsuarioId(usuarioId: string) {
@@ -50,31 +64,28 @@ export class VinculacionesService {
   }
 
   /**
-   * Verifica que no exista otra vinculación APROBADA con esResponsableCatedra=true
-   * para la misma (materiaId, catedraId), excluyendo la vinculación indicada.
+   * Verifica que no exista otra vinculación con esResponsableCatedra=true para la misma
+   * materia en los estados indicados, excluyendo opcionalmente la vinculación actual.
+   * Regla: una materia solo puede tener un Responsable de Cátedra activo.
    * Si existe, lanza ConflictException (409).
-   * Segunda línea de defensa: el índice parcial único en PostgreSQL.
    */
-  private async verificarConflictoResponsable(
+  private async verificarUnicoResponsablePorMateria(
     materiaId: string,
-    catedraId: string,
-    excludeId: string,
+    estados: string[],
+    excludeId?: string,
   ): Promise<void> {
+    const where: any = {
+      materiaId,
+      esResponsableCatedra: true,
+      estado: { in: estados },
+    };
+    if (excludeId) where.id = { not: excludeId };
     const existente = await this.prisma.vinculacionCatedra.findFirst({
-      where: {
-        materiaId,
-        catedraId,
-        esResponsableCatedra: true,
-        estado: 'APROBADA',
-        id: { not: excludeId },
-      },
+      where,
       select: { id: true },
     });
     if (existente) {
-      throw new ConflictException(
-        'Ya existe un responsable de cátedra aprobado para esta materia y cátedra. ' +
-        'Debe quitarse la designación anterior antes de designar un nuevo responsable.',
-      );
+      throw new ConflictException('Ya existe un Responsable de Cátedra asociado a esta materia.');
     }
   }
 
@@ -147,7 +158,7 @@ export class VinculacionesService {
         }),
       ]);
       return {
-        data,
+        data: data.map(vc => this._mapearVinculacion(vc)),
         total,
         pagina,
         limite,
@@ -156,11 +167,12 @@ export class VinculacionesService {
     }
 
     // Modo legado: array plano para consumidores que no envían page
-    return this.prisma.vinculacionCatedra.findMany({
+    const rows = await this.prisma.vinculacionCatedra.findMany({
       where,
       include:  INCLUDE_COMPLETO,
       orderBy:  { fechaCreacion: 'desc' },
     });
+    return rows.map(vc => this._mapearVinculacion(vc));
   }
 
   // ── Detalle ────────────────────────────────────────────────────────────────
@@ -179,7 +191,7 @@ export class VinculacionesService {
       }
     }
 
-    return vc;
+    return this._mapearVinculacion(vc);
   }
 
   // ── Crear ──────────────────────────────────────────────────────────────────
@@ -227,7 +239,11 @@ export class VinculacionesService {
       );
     }
 
-    return this.prisma.vinculacionCatedra.create({
+    if (dto.esResponsableCatedra === true) {
+      await this.verificarUnicoResponsablePorMateria(dto.materiaId, ['APROBADA', 'PENDIENTE_DE_APROBACION']);
+    }
+
+    const created = await this.prisma.vinculacionCatedra.create({
       data: {
         facultadId:           dto.facultadId,
         carreraId:            dto.carreraId,
@@ -249,6 +265,7 @@ export class VinculacionesService {
       },
       include: INCLUDE_COMPLETO,
     });
+    return this._mapearVinculacion(created);
   }
 
   // ── Aprobar ────────────────────────────────────────────────────────────────
@@ -280,16 +297,14 @@ export class VinculacionesService {
       throw new BadRequestException(`No se puede aprobar una vinculación en estado "${vc.estado}"`);
     }
 
-    // Si la vinculación fue creada con esResponsableCatedra=true, verificar que no haya
-    // ya un responsable APROBADO para la misma (materiaId, catedraId) antes de aprobar.
     if (vc.esResponsableCatedra === true) {
-      await this.verificarConflictoResponsable(vc.materiaId, vc.catedraId, id);
+      await this.verificarUnicoResponsablePorMateria(vc.materiaId, ['APROBADA']);
     }
 
     const fechaAprobacion = new Date();
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const result = await this.prisma.$transaction(async (tx) => {
         const actualizada = await tx.vinculacionCatedra.update({
           where: { id },
           data: { estado: 'APROBADA', aprobadorId: usuarioId, fechaAprobacion },
@@ -321,6 +336,7 @@ export class VinculacionesService {
 
         return actualizada;
       });
+      return this._mapearVinculacion(result);
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         throw new ConflictException(
@@ -362,7 +378,7 @@ export class VinculacionesService {
 
     const fechaRechazo = new Date();
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const actualizada = await tx.vinculacionCatedra.update({
         where: { id },
         data: {
@@ -398,6 +414,7 @@ export class VinculacionesService {
 
       return actualizada;
     });
+    return this._mapearVinculacion(result);
   }
 
   // ── Asociar cargo institucional ───────────────────────────────────────────
@@ -459,7 +476,7 @@ export class VinculacionesService {
       motivo:              dto.motivoDesvinculacion,
     });
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const actualizada = await tx.vinculacionCatedra.update({
         where: { id },
         data: {
@@ -484,6 +501,7 @@ export class VinculacionesService {
 
       return actualizada;
     });
+    return this._mapearVinculacion(result);
   }
 
   // ── Actualizar responsabilidad de cátedra ──────────────────────────────────
@@ -522,11 +540,12 @@ export class VinculacionesService {
     const valorNuevo = esResponsableCatedra ?? null;
 
     if (vc.estado === 'PENDIENTE_DE_APROBACION') {
-      return this.prisma.vinculacionCatedra.update({
+      const updated = await this.prisma.vinculacionCatedra.update({
         where: { id },
         data: { esResponsableCatedra: valorNuevo },
         include: INCLUDE_COMPLETO,
       });
+      return this._mapearVinculacion(updated);
     }
 
     if (vc.estado === 'APROBADA') {
@@ -540,19 +559,18 @@ export class VinculacionesService {
         if (!tieneScope) throw new ForbiddenException();
       }
       if (valorNuevo === true) {
-        await this.verificarConflictoResponsable(vc.materiaId, vc.catedraId, id);
+        await this.verificarUnicoResponsablePorMateria(vc.materiaId, ['APROBADA'], id);
       }
       try {
-        return await this.prisma.vinculacionCatedra.update({
+        const updated = await this.prisma.vinculacionCatedra.update({
           where: { id },
           data: { esResponsableCatedra: valorNuevo },
           include: INCLUDE_COMPLETO,
         });
+        return this._mapearVinculacion(updated);
       } catch (e) {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-          throw new ConflictException(
-            'Ya existe un responsable de cátedra aprobado para esta materia y cátedra.',
-          );
+          throw new ConflictException('Ya existe un Responsable de Cátedra asociado a esta materia.');
         }
         throw e;
       }

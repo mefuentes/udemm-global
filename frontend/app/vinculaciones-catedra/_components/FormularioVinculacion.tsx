@@ -90,6 +90,10 @@ export function FormularioVinculacion({ onGuardado, onCerrar }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [anioError, setAnioError] = useState<string | null>(null);
 
+  // VINC-RESP-01: check preventivo de responsable existente por materia
+  const [responsableExistente, setResponsableExistente] = useState(false);
+  const [checkingResponsable, setCheckingResponsable] = useState(false);
+
   // horasSemana: se lee automáticamente de la materia seleccionada
   const [horasSemana, setHorasSemana] = useState<number | null | undefined>(undefined);
 
@@ -171,6 +175,31 @@ export function FormularioVinculacion({ onGuardado, onCerrar }: Props) {
     const hs = materia.cargaHorariaSemanal;
     setHorasSemana(typeof hs === 'number' ? hs : null);
   }, [form.materiaId, materias]);
+
+  // VINC-RESP-01: check preventivo — ¿ya existe Responsable para esta materia?
+  useEffect(() => {
+    if (!form.materiaId) {
+      setResponsableExistente(false);
+      return;
+    }
+    let cancelado = false;
+    setCheckingResponsable(true);
+    get<any[]>(`/vinculaciones-catedra?materiaId=${form.materiaId}`)
+      .then(lista => {
+        if (cancelado) return;
+        const hayResponsable = (Array.isArray(lista) ? lista : []).some(
+          v => v.esResponsableCatedra === true &&
+               (v.estado === 'APROBADA' || v.estado === 'PENDIENTE_DE_APROBACION'),
+        );
+        setResponsableExistente(hayResponsable);
+        if (hayResponsable) {
+          setEsResponsableCatedra(prev => prev === true ? null : prev);
+        }
+      })
+      .catch(() => { if (!cancelado) setResponsableExistente(false); })
+      .finally(() => { if (!cancelado) setCheckingResponsable(false); });
+    return () => { cancelado = true; };
+  }, [form.materiaId]);
 
   function set(field: keyof FormState, value: string) {
     setForm(prev => {
@@ -431,32 +460,48 @@ export function FormularioVinculacion({ onGuardado, onCerrar }: Props) {
             <div className="flex gap-2">
               {([
                 { valor: null,  label: 'Sin clasificar', title: 'No se define aún — se puede cambiar más adelante' },
-                { valor: true,  label: 'Responsable',    title: 'Propuesta: será Responsable de Cátedra al aprobarse' },
+                { valor: true,  label: 'Responsable',    title: responsableExistente ? 'Ya existe un Responsable de Cátedra asociado a esta materia' : 'Propuesta: será Responsable de Cátedra al aprobarse' },
                 { valor: false, label: 'No responsable', title: 'No es Responsable de Cátedra' },
               ] as { valor: boolean | null; label: string; title: string }[]).map(({ valor, label, title }) => {
                 const activo = esResponsableCatedra === valor;
+                const bloqueado = valor === true && (responsableExistente || checkingResponsable);
                 const color =
-                  valor === true  ? (activo ? 'bg-[#0f4c81] border-[#0f4c81] text-white' : 'border-slate-200 text-slate-600 hover:border-[#0f4c81]/40 hover:bg-blue-50') :
-                  valor === false ? (activo ? 'bg-slate-700 border-slate-700 text-white'  : 'border-slate-200 text-slate-600 hover:border-slate-400 hover:bg-slate-50') :
-                                   (activo ? 'bg-slate-200 border-slate-300 text-slate-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50');
+                  bloqueado
+                    ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
+                    : valor === true  ? (activo ? 'bg-[#0f4c81] border-[#0f4c81] text-white' : 'border-slate-200 text-slate-600 hover:border-[#0f4c81]/40 hover:bg-blue-50') :
+                      valor === false ? (activo ? 'bg-slate-700 border-slate-700 text-white'  : 'border-slate-200 text-slate-600 hover:border-slate-400 hover:bg-slate-50') :
+                                       (activo ? 'bg-slate-200 border-slate-300 text-slate-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50');
                 return (
                   <button
                     key={String(valor)}
                     type="button"
                     title={title}
-                    onClick={() => setEsResponsableCatedra(valor)}
+                    disabled={bloqueado}
+                    onClick={() => !bloqueado && setEsResponsableCatedra(valor)}
                     className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${color}`}
                   >
-                    {label}
+                    {valor === true && checkingResponsable ? (
+                      <span className="flex items-center justify-center gap-1.5"><IcSpinner />{label}</span>
+                    ) : label}
                   </button>
                 );
               })}
             </div>
-            <p className="text-[10px] text-slate-400 mt-1.5 italic">
-              {esResponsableCatedra === true  && 'Propuesta de responsabilidad — se confirma como efectiva al aprobar la vinculación.'}
-              {esResponsableCatedra === false && 'Vinculación sin responsabilidad de cátedra.'}
-              {esResponsableCatedra === null  && 'Sin clasificar — se puede establecer más adelante desde el detalle de la vinculación.'}
-            </p>
+            {responsableExistente && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2 flex items-start gap-1.5">
+                <svg className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                Ya existe un Responsable de Cátedra asociado a esta materia.
+              </p>
+            )}
+            {!responsableExistente && (
+              <p className="text-[10px] text-slate-400 mt-1.5 italic">
+                {esResponsableCatedra === true  && 'Propuesta de responsabilidad — se confirma como efectiva al aprobar la vinculación.'}
+                {esResponsableCatedra === false && 'Vinculación sin responsabilidad de cátedra.'}
+                {esResponsableCatedra === null  && 'Sin clasificar — se puede establecer más adelante desde el detalle de la vinculación.'}
+              </p>
+            )}
           </Campo>
 
           <Separador label="Observaciones" />

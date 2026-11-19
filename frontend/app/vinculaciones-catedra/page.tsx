@@ -13,6 +13,7 @@ interface Vinculacion {
   estado: string;
   fechaCreacion: string;
   horasSemana?: number | null;
+  horasSemanaHistoricas?: number | null;
   anioInicio?: number | null;
   facultad:    { nombre: string };
   carrera:     { nombre: string };

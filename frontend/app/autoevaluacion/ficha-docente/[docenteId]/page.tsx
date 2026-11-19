@@ -30,6 +30,7 @@ interface VinculacionParsed {
   estado: string;
   esResponsableCatedra: boolean | null;
   horasSemana: number | null;
+  horasSemanaHistoricas?: number | null;
   anioInicio: number | null;
 }
 

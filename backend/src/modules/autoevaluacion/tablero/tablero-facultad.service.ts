@@ -9,6 +9,7 @@ import {
   parsearProyectosInvestigacion,
   parsearParticipacionVinculacion,
 } from '../indicadores/r10.evaluador';
+import { horasSemanalesVigentes } from '../../../common/utils/horas-semanales.utils';
 import { EstadoCalculo } from '../types/estado-calculo.types';
 import type {
   BloqueCargaAcademica,
@@ -333,16 +334,13 @@ export class TablroFacultadService {
 
     const ids = docenteIds.map((d) => d.docenteId);
 
-    const [horasPorDocente, docentes] = await Promise.all([
-      this.prisma.vinculacionCatedra.groupBy({
-        by: ['docenteId'],
-        where: {
-          facultadId,
-          estado: 'APROBADA',
-          docente: { activo: true },
-          horasSemana: { not: null },
+    const [vinculaciones, docentes] = await Promise.all([
+      this.prisma.vinculacionCatedra.findMany({
+        where: { facultadId, estado: 'APROBADA', docente: { activo: true } },
+        select: {
+          docenteId: true,
+          materia: { select: { cargaHorariaSemanal: true } },
         },
-        _sum: { horasSemana: true },
       }),
       this.prisma.docente.findMany({
         where: { id: { in: ids } },
@@ -361,18 +359,32 @@ export class TablroFacultadService {
       }),
     ]);
 
-    const horasMap = new Map(horasPorDocente.map((h) => [h.docenteId, h._sum.horasSemana ?? 0]));
+    const horasMap = new Map<string, { horas: number; tieneNull: boolean }>();
+    for (const v of vinculaciones) {
+      const e = horasMap.get(v.docenteId) ?? { horas: 0, tieneNull: false };
+      const horas = horasSemanalesVigentes({ cargaHorariaSemanal: v.materia?.cargaHorariaSemanal });
+      if (horas === null) {
+        e.tieneNull = true;
+      } else {
+        e.horas += horas;
+      }
+      horasMap.set(v.docenteId, e);
+    }
 
     const enAlerta: BloqueDedicaciones['enAlerta'] = [];
     let totalSinDatos = 0;
     let hayIndeterminados = false;
 
     for (const d of docentes) {
-      const horasDocencia = horasMap.get(d.id);
-      if (horasDocencia === undefined) {
+      const entry = horasMap.get(d.id);
+      if (!entry || (entry.tieneNull && entry.horas === 0)) {
         totalSinDatos++;
         continue;
       }
+
+      if (entry.tieneNull) hayIndeterminados = true;
+
+      const horasDocencia = entry.horas;
 
       const g = d.cargosAcademicosJson?.trim()
         ? parsearCargosAcademicosJson(d.cargosAcademicosJson, fechaEvaluacion)

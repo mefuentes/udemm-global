@@ -330,18 +330,17 @@ describe('VinculacionesService — aprobar con esResponsableCatedra', () => {
     await expect(svc.aprobar(VIN_ID, USUARIO_ID, 'ADMINISTRADOR_SISTEMA')).rejects.toThrow(ConflictException);
   });
 
-  it('14 — vinculación PENDIENTE con true NO es responsable efectivo (campo está, estado no aprobado)', async () => {
+  it('14 — crear con true persiste PENDIENTE y verifica responsable por materia', async () => {
     // La función R-08 ignora vinculaciones con estado != APROBADA.
-    // Este test verifica que el service de creación persiste true con estado PENDIENTE.
+    // crear() verifica el responsable y persiste PENDIENTE — no es efectivo aún.
     const prisma = makePrisma();
     const svc = makeSvc(prisma);
     await svc.crear({ ...BASE_DTO, esResponsableCatedra: true }, USUARIO_ID);
     const args = prisma.vinculacionCatedra.create.mock.calls[0][0];
-    // Estado PENDIENTE → no es responsable efectivo aunque esResponsableCatedra=true
     expect(args.data.esResponsableCatedra).toBe(true);
     expect(args.data.estado).toBe('PENDIENTE_DE_APROBACION');
-    // La creación no verifica conflicto (correctamente: no hay update de materiaId/catedraId)
-    expect(prisma.vinculacionCatedra.findFirst).toHaveBeenCalledTimes(1); // solo el check de duplicado (docente+materia+estado)
+    // findFirst: 1 para duplicado (docente+materia+estado) + 1 para responsable por materia
+    expect(prisma.vinculacionCatedra.findFirst).toHaveBeenCalledTimes(2);
   });
 
   it('15 — no existe endpoint de edición de materiaId/catedraId — no puede eludir restricción', () => {
@@ -373,7 +372,7 @@ describe('VinculacionesService — semántica responsable efectivo', () => {
     expect(efectivo('APROBADA', false)).toBe(false);
   });
 
-  it('17 — actualizarResponsabilidad en APROBADA con true verifica conflicto', async () => {
+  it('17 — actualizarResponsabilidad en APROBADA con true verifica responsable por materia', async () => {
     const findFirstMock = jest.fn().mockResolvedValue({ id: 'vin-otro' });
     const prisma = makePrisma({
       vinculacionCatedra: {
@@ -388,7 +387,10 @@ describe('VinculacionesService — semántica responsable efectivo', () => {
     ).rejects.toThrow(ConflictException);
     expect(findFirstMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ esResponsableCatedra: true, estado: 'APROBADA' }),
+        where: expect.objectContaining({
+          esResponsableCatedra: true,
+          estado: { in: ['APROBADA'] },
+        }),
       }),
     );
   });
@@ -440,5 +442,265 @@ describe('VinculacionesService — semántica responsable efectivo', () => {
     await expect(
       svc.actualizarResponsabilidad(VIN_ID, true, USUARIO_ID, 'DIRECTOR_CARRERA'),
     ).rejects.toThrow(ForbiddenException);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BLOQUE 5 — VINC-RESP-01: unicidad de responsable por materia (T1-T12)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const MAT_ID_B = 'mat-bbb-distinta';
+
+describe('VINC-RESP-01: unicidad de responsable por materia', () => {
+
+  // ── T1: materia sin responsable permite asignación ────────────────────────
+
+  it('T1: materia sin responsable existente — crear con true permite', async () => {
+    const prisma = makePrisma();
+    const svc = makeSvc(prisma);
+    const result = await svc.crear({ ...BASE_DTO, esResponsableCatedra: true }, USUARIO_ID);
+    expect(result.esResponsableCatedra).toBe(true);
+  });
+
+  // ── T2: responsable APROBADO → rechaza ────────────────────────────────────
+
+  it('T2: materia con responsable APROBADO — crear con true lanza 409', async () => {
+    const findFirstMock = jest.fn()
+      .mockResolvedValueOnce(null)                   // 1er call: check duplicado (docente+materia)
+      .mockResolvedValueOnce({ id: 'vin-resp-ya' }); // 2do call: check responsable por materia
+    const prisma = makePrisma({
+      vinculacionCatedra: {
+        findFirst:  findFirstMock,
+        findUnique: jest.fn(),
+        create:     jest.fn(),
+      },
+    });
+    const svc = makeSvc(prisma);
+    await expect(
+      svc.crear({ ...BASE_DTO, esResponsableCatedra: true }, USUARIO_ID),
+    ).rejects.toThrow(ConflictException);
+    expect(findFirstMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          materiaId: MAT_ID,
+          esResponsableCatedra: true,
+          estado: { in: ['APROBADA', 'PENDIENTE_DE_APROBACION'] },
+        }),
+      }),
+    );
+  });
+
+  // ── T3: responsable PENDIENTE → rechaza ───────────────────────────────────
+
+  it('T3: materia con responsable PENDIENTE — crear con true lanza 409', async () => {
+    const findFirstMock = jest.fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'vin-pend-ya' });
+    const prisma = makePrisma({
+      vinculacionCatedra: {
+        findFirst:  findFirstMock,
+        findUnique: jest.fn(),
+        create:     jest.fn(),
+      },
+    });
+    const svc = makeSvc(prisma);
+    await expect(
+      svc.crear({ ...BASE_DTO, esResponsableCatedra: true }, USUARIO_ID),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  // ── T4: solo RECHAZADA → permite ─────────────────────────────────────────
+
+  it('T4: materia con responsable RECHAZADO — crear con true permite', async () => {
+    // findFirst para responsable retorna null (RECHAZADA no cuenta)
+    const findFirstMock = jest.fn().mockResolvedValue(null);
+    const prisma = makePrisma({
+      vinculacionCatedra: {
+        findFirst:  findFirstMock,
+        create:     jest.fn().mockImplementation(({ data }) => Promise.resolve({ ...BASE_VIN, ...data })),
+      },
+    });
+    const svc = makeSvc(prisma);
+    const result = await svc.crear({ ...BASE_DTO, esResponsableCatedra: true }, USUARIO_ID);
+    expect(result.esResponsableCatedra).toBe(true);
+  });
+
+  // ── T5: solo DESVINCULADA → permite ──────────────────────────────────────
+
+  it('T5: materia con responsable DESVINCULADO — crear con true permite', async () => {
+    const findFirstMock = jest.fn().mockResolvedValue(null);
+    const prisma = makePrisma({
+      vinculacionCatedra: {
+        findFirst:  findFirstMock,
+        create:     jest.fn().mockImplementation(({ data }) => Promise.resolve({ ...BASE_VIN, ...data })),
+      },
+    });
+    const svc = makeSvc(prisma);
+    await expect(
+      svc.crear({ ...BASE_DTO, esResponsableCatedra: true }, USUARIO_ID),
+    ).resolves.toBeDefined();
+  });
+
+  // ── T6: false/null no afectado por la restricción ─────────────────────────
+
+  it('T6: crear con false cuando ya existe responsable — no verifica responsable', async () => {
+    const findFirstMock = jest.fn().mockResolvedValue(null);
+    const prisma = makePrisma({
+      vinculacionCatedra: {
+        findFirst:  findFirstMock,
+        create:     jest.fn().mockImplementation(({ data }) => Promise.resolve({ ...BASE_VIN, ...data })),
+      },
+    });
+    const svc = makeSvc(prisma);
+    await svc.crear({ ...BASE_DTO, esResponsableCatedra: false }, USUARIO_ID);
+    // Solo se llama una vez (duplicado), nunca la verificación de responsable
+    expect(findFirstMock).toHaveBeenCalledTimes(1);
+  });
+
+  // ── T7: aprobar sin esResponsableCatedra no verifica ─────────────────────
+
+  it('T7: aprobar vinculación con esResponsableCatedra=false — no llama verificación', async () => {
+    const vinFalse = {
+      ...BASE_VIN,
+      estado: 'PENDIENTE_DE_APROBACION',
+      esResponsableCatedra: false,
+      materia:     { nombre: 'Álgebra' }, facultad:    { nombre: 'Exactas' },
+      carrera:     { nombre: 'Ing' },     planEstudio: { nombre: 'Plan 2024' },
+      catedra:     { nombre: 'Cat A' },   cargo:       { nombre: 'Titular' },
+      modalidad:   { nombre: 'Pres' },    designacion: { nombre: 'Interino' },
+    };
+    const findFirstMock = jest.fn();
+    const updateMock = jest.fn().mockResolvedValue({ ...vinFalse, estado: 'APROBADA' });
+    const prisma = {
+      vinculacionCatedra: {
+        findUnique: jest.fn().mockResolvedValue(vinFalse),
+        findFirst:  findFirstMock,
+        update:     updateMock,
+      },
+      $transaction: jest.fn().mockImplementation(async (fn: any) => {
+        const tx = { vinculacionCatedra: { update: updateMock }, notificacion: { create: jest.fn().mockResolvedValue({}) } };
+        return fn(tx);
+      }),
+    } as any;
+    const svc = makeSvc(prisma);
+    await svc.aprobar(VIN_ID, USUARIO_ID, 'ADMINISTRADOR_SISTEMA');
+    expect(findFirstMock).not.toHaveBeenCalled();
+  });
+
+  // ── T8: actualizar a responsable cuando ya existe otro → 409 ─────────────
+
+  it('T8: actualizar no-responsable a responsable cuando existe otro APROBADO → 409', async () => {
+    const findFirstMock = jest.fn().mockResolvedValue({ id: 'vin-ya-resp' });
+    const prisma = makePrisma({
+      vinculacionCatedra: {
+        findUnique: jest.fn().mockResolvedValue({ ...BASE_VIN, estado: 'APROBADA', esResponsableCatedra: false }),
+        findFirst:  findFirstMock,
+        update:     jest.fn(),
+      },
+    });
+    const svc = makeSvc(prisma);
+    await expect(
+      svc.actualizarResponsabilidad(VIN_ID, true, USUARIO_ID, 'ADMINISTRADOR_SISTEMA'),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  // ── T9: P2002 en transacción → 409 con mensaje correcto ───────────────────
+
+  it('T9: P2002 en $transaction aprobar → ConflictException con mensaje VINC-RESP-01', async () => {
+    const vinResp = {
+      ...BASE_VIN, estado: 'PENDIENTE_DE_APROBACION', esResponsableCatedra: true,
+      materia: { nombre: 'Álgebra' }, facultad: { nombre: 'Exactas' },
+      carrera: { nombre: 'Ing' }, planEstudio: { nombre: 'Plan 2024' },
+      catedra: { nombre: 'Cat A' }, cargo: { nombre: 'Titular' },
+      modalidad: { nombre: 'Pres' }, designacion: { nombre: 'Interino' },
+    };
+    const p2002 = new (require('@prisma/client').Prisma.PrismaClientKnownRequestError)(
+      'Unique constraint failed', { code: 'P2002', clientVersion: '5' },
+    );
+    const prisma = {
+      vinculacionCatedra: {
+        findUnique: jest.fn().mockResolvedValue(vinResp),
+        findFirst:  jest.fn().mockResolvedValue(null),
+      },
+      $transaction: jest.fn().mockRejectedValue(p2002),
+    } as any;
+    const svc = makeSvc(prisma);
+    await expect(
+      svc.aprobar(VIN_ID, USUARIO_ID, 'ADMINISTRADOR_SISTEMA'),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  // ── T10: materias distintas cada una con su responsable ───────────────────
+
+  it('T10: materias distintas pueden tener cada una su responsable', async () => {
+    const findFirstMock = jest.fn().mockResolvedValue(null);
+    const prisma = makePrisma({
+      vinculacionCatedra: {
+        findFirst:  findFirstMock,
+        create:     jest.fn().mockImplementation(({ data }) => Promise.resolve({ ...BASE_VIN, ...data })),
+      },
+    });
+    const svc = makeSvc(prisma);
+    await svc.crear({ ...BASE_DTO, materiaId: MAT_ID_B, esResponsableCatedra: true }, USUARIO_ID);
+    const responsableCheck = findFirstMock.mock.calls.find(c =>
+      c[0]?.where?.materiaId === MAT_ID_B && c[0]?.where?.esResponsableCatedra === true,
+    );
+    expect(responsableCheck).toBeDefined();
+    expect(responsableCheck![0].where.materiaId).toBe(MAT_ID_B);
+  });
+
+  // ── T11: mensaje de error 409 es el requerido ─────────────────────────────
+
+  it('T11: mensaje 409 es "Ya existe un Responsable de Cátedra asociado a esta materia."', async () => {
+    const findFirstMock = jest.fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'resp-ya' });
+    const prisma = makePrisma({
+      vinculacionCatedra: {
+        findFirst:  findFirstMock,
+        findUnique: jest.fn(),
+        create:     jest.fn(),
+      },
+    });
+    const svc = makeSvc(prisma);
+    let err: any;
+    try {
+      await svc.crear({ ...BASE_DTO, esResponsableCatedra: true }, USUARIO_ID);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(ConflictException);
+    expect(err.message).toBe('Ya existe un Responsable de Cátedra asociado a esta materia.');
+  });
+
+  // ── T12: HSEM-01 no afectado ──────────────────────────────────────────────
+
+  it('T12: _mapearVinculacion preserva horasSemanaHistoricas — HSEM-01 sin regresión', async () => {
+    const findFirstMock = jest.fn().mockResolvedValue(null);
+    const prisma = makePrisma({
+      vinculacionCatedra: {
+        findFirst:  findFirstMock,
+        create: jest.fn().mockResolvedValue({
+          ...BASE_VIN,
+          horasSemana: 4,              // snapshot en DB
+          materia: {
+            id: MAT_ID, nombre: 'Álgebra', codigo: 'ALG',
+            cargaHorariaSemanal: 6,    // vigente modificado
+          },
+          facultad: { id: 'fac', nombre: 'F' }, carrera: { id: 'car', nombre: 'C' },
+          planEstudio: { id: 'pl', nombre: 'PL', codigo: null },
+          docente: { id: DOC_ID, nombre: 'Juan', apellido: 'Perez' },
+          catedra: { id: 'cat', nombre: 'Ca' }, cargo: { id: 'carg', nombre: 'Carg' },
+          modalidad: { id: 'mod', nombre: 'M' }, designacion: { id: 'des', nombre: 'D' },
+          usuarioSolicitante: null, aprobador: null, desvinculador: null,
+          esResponsableCatedra: false,
+        }),
+      },
+    });
+    const svc = makeSvc(prisma);
+    const result = await svc.crear({ ...BASE_DTO, esResponsableCatedra: false }, USUARIO_ID);
+    // HSEM-01: horasSemana=vigente, horasSemanaHistoricas=snapshot
+    expect((result as any).horasSemana).toBe(6);
+    expect((result as any).horasSemanaHistoricas).toBe(4);
   });
 });

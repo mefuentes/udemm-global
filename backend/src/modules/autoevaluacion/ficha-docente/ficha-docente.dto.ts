@@ -34,7 +34,10 @@ export interface VinculacionParsed {
   facultadNombre: string;
   estado: string;
   esResponsableCatedra: boolean | null;
+  /** Horas semanales vigentes (Materia.cargaHorariaSemanal — Plan de Estudios actual). */
   horasSemana: number | null;
+  /** Snapshot histórico al momento de la vinculación (VinculacionCatedra.horasSemana). */
+  horasSemanaHistoricas: number | null;
   anioInicio: number | null;
 }
 

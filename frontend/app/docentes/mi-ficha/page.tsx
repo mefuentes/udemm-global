@@ -355,6 +355,7 @@ interface VinculacionAprobada {
   id: string;
   estado: string;
   horasSemana: number | null;
+  horasSemanaHistoricas?: number | null;
   anioInicio: number | null;
   fechaAprobacion: string | null;
   facultad:    { nombre: string };

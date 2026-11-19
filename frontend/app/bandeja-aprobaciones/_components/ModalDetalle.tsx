@@ -8,6 +8,7 @@ interface Vinculacion {
   fechaAprobacion?: string;
   motivoRechazo?: string;
   horasSemana?: number | null;
+  horasSemanaHistoricas?: number | null;
   anioInicio?: number | null;
   facultad:    { nombre: string };
   carrera:     { nombre: string };
@@ -122,7 +123,7 @@ export function ModalDetalle({ vinculacion: v, onCerrar }: Props) {
             <Fila label="Designación" value={v.designacion.nombre} />
             <Fila
               label="H/SEM (Carga horaria semanal)"
-              value={v.horasSemana != null ? `${v.horasSemana} h/sem` : 'Sin carga horaria semanal definida'}
+              value={v.horasSemanaHistoricas != null ? `${v.horasSemanaHistoricas} h/sem` : null}
             />
             <Fila label="Año Inicio"  value={v.anioInicio?.toString() ?? '—'} />
           </Seccion>

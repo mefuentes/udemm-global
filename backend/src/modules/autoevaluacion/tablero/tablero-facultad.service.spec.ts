@@ -16,7 +16,7 @@ const PLAN_ID = 'pp000000-0000-4000-8000-000000000000';
 const MAT_ID  = 'mm000000-0000-4000-8000-000000000000';
 const CAT_ID  = 'cc000000-0000-4000-8000-000000000000';
 
-function makeVinc(docenteId: string, carreraId = CAR1_ID, cargoNombre = 'TITULAR') {
+function makeVinc(docenteId: string, carreraId = CAR1_ID, cargoNombre = 'TITULAR', cargaHorariaSemanal: number | null = null) {
   return {
     docenteId,
     carreraId,
@@ -26,6 +26,7 @@ function makeVinc(docenteId: string, carreraId = CAR1_ID, cargoNombre = 'TITULAR
     carrera: { nombre: 'Ing. en Sistemas' },
     cargo: { nombre: cargoNombre },
     docente: { nombre: 'Juan', apellido: 'Pérez' },
+    materia: { cargaHorariaSemanal },
   };
 }
 
@@ -92,12 +93,8 @@ function makeService(
     },
     vinculacionCatedra: {
       findMany: jest.fn().mockResolvedValue([
-        makeVinc(DOC1_ID),
-        makeVinc(DOC2_ID),
-      ]),
-      groupBy: jest.fn().mockResolvedValue([
-        { docenteId: DOC1_ID, _sum: { horasSemana: 25 } },
-        { docenteId: DOC2_ID, _sum: { horasSemana: 10 } },
+        makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', 25),
+        makeVinc(DOC2_ID, CAR1_ID, 'TITULAR', 10),
       ]),
     },
     docente: {
@@ -187,7 +184,6 @@ describe('TablroFacultadService — Bloque 1 composición', () => {
     const svc = makeService({
       vinculacionCatedra: {
         findMany: jest.fn().mockResolvedValue([]),
-        groupBy: jest.fn().mockResolvedValue([]),
       } as any,
     });
     const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
@@ -200,7 +196,6 @@ describe('TablroFacultadService — Bloque 1 composición', () => {
     const svc = makeService({
       vinculacionCatedra: {
         findMany: jest.fn().mockResolvedValue([makeVinc(DOC1_ID, CAR1_ID, 'TITULAR'), makeVinc(DOC2_ID, CAR1_ID, 'JTP')]),
-        groupBy: jest.fn().mockResolvedValue([]),
       } as any,
     });
     const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
@@ -303,10 +298,7 @@ describe('TablroFacultadService — Bloque 4 dedicaciones', () => {
     // Docente con 10h docencia + 12h gestión (JSON) = 22h ≥ 20h → NO alerta
     const svc = makeService({
       vinculacionCatedra: {
-        findMany: jest.fn().mockResolvedValue([makeVinc(DOC1_ID)]),
-        groupBy: jest.fn().mockResolvedValue([
-          { docenteId: DOC1_ID, _sum: { horasSemana: 10 } },
-        ]),
+        findMany: jest.fn().mockResolvedValue([makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', 10)]),
       } as any,
       docente: {
         findMany: jest.fn().mockResolvedValue([{
@@ -324,10 +316,7 @@ describe('TablroFacultadService — Bloque 4 dedicaciones', () => {
     // docencia=4, gestión=12, otras=5, inv=8, vin=4 → total=33 ≥ 20 → NO alerta
     const svc = makeService({
       vinculacionCatedra: {
-        findMany: jest.fn().mockResolvedValue([makeVinc(DOC1_ID)]),
-        groupBy: jest.fn().mockResolvedValue([
-          { docenteId: DOC1_ID, _sum: { horasSemana: 4 } },
-        ]),
+        findMany: jest.fn().mockResolvedValue([makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', 4)]),
       } as any,
       docente: {
         findMany: jest.fn().mockResolvedValue([{
@@ -375,9 +364,7 @@ describe('TablroFacultadService — Bloque 5 carga académica', () => {
 
     const svc = makeService({
       vinculacionCatedra: {
-        // Todas las llamadas a findMany devuelven los mismos 4 registros con todos los campos
         findMany: jest.fn().mockResolvedValue(vincs4),
-        groupBy: jest.fn().mockResolvedValue([{ docenteId: DOC1_ID, _sum: { horasSemana: 25 } }]),
       } as any,
       docente: {
         findMany: jest.fn().mockResolvedValue([makeDocente(DOC1_ID)]),
@@ -427,5 +414,173 @@ describe('TablroFacultadService — Bloque 6 distribucionMaterias (R-06)', () =>
     const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
     // estadoGeneralCalculo debe ser al menos PARCIAL
     expect(['PARCIAL', 'NO_DETERMINABLE']).toContain(res.estadoGeneralCalculo);
+  });
+});
+
+// ── Sección M — HSEM C.3: dedicaciones usa Materia.cargaHorariaSemanal (vigente) ─
+
+describe('TablroFacultadService — HSEM C.3: dedicaciones usa vigente', () => {
+  it('T1: usa cargaHorariaSemanal vigente (no horasSemana snapshot) para calcular dedicación', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', 25)]),
+      } as any,
+      docente: {
+        findMany: jest.fn().mockResolvedValue([makeDocente(DOC1_ID)]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.dedicaciones.totalBajaDedicacion).toBe(0);
+    expect(res.dedicaciones.enAlerta).toHaveLength(0);
+  });
+
+  it('T2: materia sin cargaHorariaSemanal (null) → docente contado en totalSinDatos', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', null)]),
+      } as any,
+      docente: {
+        findMany: jest.fn().mockResolvedValue([makeDocente(DOC1_ID)]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.dedicaciones.totalSinDatos).toBe(1);
+    expect(res.dedicaciones.enAlerta).toHaveLength(0);
+  });
+
+  it('T3: múltiples vinculaciones del mismo docente suman cargaHorariaSemanal vigente', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', 8),
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', 6),
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', 4),
+        ]),
+      } as any,
+      docente: {
+        findMany: jest.fn().mockResolvedValue([makeDocente(DOC1_ID)]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    // 8+6+4=18 < umbral 20 → en alerta
+    expect(res.dedicaciones.enAlerta).toHaveLength(1);
+    expect(res.dedicaciones.enAlerta[0].dedicacionTotal).toBe(18);
+  });
+
+  it('T4: mezcla null/vigente → estadoCalculo PARCIAL, horas conocidas se acumulan', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', 12),
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', null),
+        ]),
+      } as any,
+      docente: {
+        findMany: jest.fn().mockResolvedValue([makeDocente(DOC1_ID)]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.dedicaciones.estadoCalculo).toBe('PARCIAL');
+    expect(res.dedicaciones.enAlerta).toHaveLength(1);
+    expect(res.dedicaciones.enAlerta[0].dedicacionTotal).toBe(12);
+  });
+
+  it('T5: cargaHorariaSemanal=0 (cero explícito, no null) cuenta como dato conocido → docente en alerta', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', 0)]),
+      } as any,
+      docente: {
+        findMany: jest.fn().mockResolvedValue([makeDocente(DOC1_ID)]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    // 0h < 20h → en alerta, pero NO en totalSinDatos
+    expect(res.dedicaciones.totalSinDatos).toBe(0);
+    expect(res.dedicaciones.enAlerta).toHaveLength(1);
+    expect(res.dedicaciones.enAlerta[0].dedicacionTotal).toBe(0);
+  });
+
+  it('T6: todos los docentes con cargaHorariaSemanal conocidas → estadoCalculo CALCULADO', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', 25),
+          makeVinc(DOC2_ID, CAR1_ID, 'TITULAR', 22),
+        ]),
+      } as any,
+      docente: {
+        findMany: jest.fn().mockResolvedValue([makeDocente(DOC1_ID), makeDocente(DOC2_ID)]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.dedicaciones.estadoCalculo).toBe('CALCULADO');
+    expect(res.dedicaciones.totalBajaDedicacion).toBe(0);
+  });
+
+  it('T7: docente con todas las materias sin cargaHorariaSemanal → totalSinDatos=1, estadoCalculo PARCIAL', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', 25),
+          makeVinc(DOC2_ID, CAR1_ID, 'TITULAR', null),
+        ]),
+      } as any,
+      docente: {
+        findMany: jest.fn().mockResolvedValue([makeDocente(DOC1_ID), makeDocente(DOC2_ID)]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.dedicaciones.totalSinDatos).toBe(1);
+    expect(res.dedicaciones.estadoCalculo).toBe('PARCIAL');
+  });
+
+  it('T8: findMany es invocado con materia.cargaHorariaSemanal; groupBy no es necesario', async () => {
+    const findMany = jest.fn().mockResolvedValue([makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', 25)]);
+    const svc = makeService({
+      vinculacionCatedra: { findMany } as any,
+      docente: {
+        findMany: jest.fn().mockResolvedValue([makeDocente(DOC1_ID)]),
+      } as any,
+    });
+    await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    const dedicacionesCall = findMany.mock.calls.find(
+      (call: any[]) => call[0]?.select?.materia?.select?.cargaHorariaSemanal === true,
+    );
+    expect(dedicacionesCall).toBeDefined();
+  });
+
+  it('T9: docente con 21h vigente supera umbral default 20h → no en alerta', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', 21)]),
+      } as any,
+      docente: {
+        findMany: jest.fn().mockResolvedValue([makeDocente(DOC1_ID)]),
+      } as any,
+      autoevaluacionConfigFacultad: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.dedicaciones.umbral).toBe(20);
+    expect(res.dedicaciones.totalBajaDedicacion).toBe(0);
+  });
+
+  it('T10: valor vigente actualizado refleja en dedicación (consistencia con Tablero Carrera)', async () => {
+    // Plan de estudios actualiza carga de 10h a 30h → el tablero facultad refleja 30h (vigente)
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', 30)]),
+      } as any,
+      docente: {
+        findMany: jest.fn().mockResolvedValue([makeDocente(DOC1_ID)]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    // 30h ≥ 20h → no alerta; datos completos → CALCULADO
+    expect(res.dedicaciones.totalBajaDedicacion).toBe(0);
+    expect(res.dedicaciones.enAlerta).toHaveLength(0);
+    expect(res.dedicaciones.estadoCalculo).toBe('CALCULADO');
   });
 });
