@@ -12,14 +12,25 @@ const USER_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
 
 // ── Fábricas ──────────────────────────────────────────────────────────────────
 
-const PLAN_ID = 'pp000000-0000-4000-8000-000000000000';
-const MAT_ID  = 'mm000000-0000-4000-8000-000000000000';
-const CAT_ID  = 'cc000000-0000-4000-8000-000000000000';
+const PLAN_ID       = 'pp000000-0000-4000-8000-000000000000';
+const MAT_ID        = 'mm000000-0000-4000-8000-000000000000';
+const CAT_ID        = 'cc000000-0000-4000-8000-000000000000';
+const CARGO_TIT_ID  = 'cg-tit-0000-4000-8000-000000000000';
+const CARGO_JTP_ID  = 'cg-jtp-0000-4000-8000-000000000000';
+const CARGO_AYU_ID  = 'cg-ayu-0000-4000-8000-000000000000';
+const CARGO_X_ID    = 'cg-xxx-0000-4000-8000-000000000000';
 
-function makeVinc(docenteId: string, carreraId = CAR1_ID, cargoNombre = 'TITULAR', cargaHorariaSemanal: number | null = null) {
+function makeVinc(
+  docenteId: string,
+  carreraId = CAR1_ID,
+  cargoNombre = 'TITULAR',
+  cargaHorariaSemanal: number | null = null,
+  cargoId = `cargo-${cargoNombre}`,
+) {
   return {
     docenteId,
     carreraId,
+    cargoId,
     planEstudioId: PLAN_ID,
     materiaId: MAT_ID,
     catedraId: CAT_ID,
@@ -203,6 +214,198 @@ describe('TablroFacultadService — Bloque 1 composición', () => {
     expect(res.composicion.totalCargosP).toBe(1);
     expect(res.composicion.totalCargosA).toBe(1);
     expect(res.composicion.estadoCalculo).toBe('CALCULADO');
+  });
+});
+
+// ── B-01 — Deduplicación de cargos ────────────────────────────────────────────
+
+describe('TablroFacultadService — B-01 deduplicación de cargos', () => {
+  // T1: sin vinculaciones → NO_APLICA
+  it('T1: sin vinculaciones → NO_APLICA con ceros', async () => {
+    const svc = makeService({
+      vinculacionCatedra: { findMany: jest.fn().mockResolvedValue([]) } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.composicion.estadoCalculo).toBe('NO_APLICA');
+    expect(res.composicion.totalCargos).toBe(0);
+  });
+
+  // T2: 1 doc, 1 vinculación → totalCargos=1
+  it('T2: 1 docente, 1 vinculación → totalCargos=1', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', null, CARGO_TIT_ID),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.composicion.totalCargos).toBe(1);
+    expect(res.composicion.totalDocentes).toBe(1);
+  });
+
+  // T3: 1 doc, 2 vinculaciones mismo cargoId → se deduplica → totalCargos=1
+  it('T3: 1 docente, 2 vinculaciones mismo cargo → totalCargos=1 (dedup)', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', null, CARGO_TIT_ID),
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', null, CARGO_TIT_ID),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.composicion.totalCargos).toBe(1);
+    expect(res.composicion.totalDocentes).toBe(1);
+  });
+
+  // T4: 1 doc, 2 vinculaciones distintos cargoId → totalCargos=2
+  it('T4: 1 docente, 2 cargos distintos → totalCargos=2', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', null, CARGO_TIT_ID),
+          makeVinc(DOC1_ID, CAR1_ID, 'JTP',     null, CARGO_JTP_ID),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.composicion.totalCargos).toBe(2);
+    expect(res.composicion.totalDocentes).toBe(1);
+  });
+
+  // T5: 2 docs, mismo cargoId → totalCargos=2 (distintos docenteId)
+  it('T5: 2 docentes, mismo cargo → totalCargos=2 (no dedup por cargoId solo)', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', null, CARGO_TIT_ID),
+          makeVinc(DOC2_ID, CAR1_ID, 'TITULAR', null, CARGO_TIT_ID),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.composicion.totalCargos).toBe(2);
+    expect(res.composicion.totalDocentes).toBe(2);
+  });
+
+  // T6: 1 doc, mismo cargo en 2 carreras → totalCargos global=2 (clave incluye carreraId)
+  it('T6: 1 docente, mismo cargo en 2 carreras → totalCargosGlobal=2', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', null, CARGO_TIT_ID),
+          makeVinc(DOC1_ID, CAR2_ID, 'TITULAR', null, CARGO_TIT_ID),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.composicion.totalCargos).toBe(2);
+    expect(res.composicion.totalDocentes).toBe(1);
+  });
+
+  // T7: 1 doc, mismo cargo doble en CAR1 pero también en CAR2 → por carrera cada una tiene 1
+  it('T7: duplicado en carrera 1 y único en carrera 2 → porCarrera correcto', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', null, CARGO_TIT_ID),
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', null, CARGO_TIT_ID), // duplicado en CAR1
+          makeVinc(DOC1_ID, CAR2_ID, 'JTP',     null, CARGO_JTP_ID),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    const car1 = res.composicion.porCarrera.find((c) => c.carreraId === CAR1_ID);
+    const car2 = res.composicion.porCarrera.find((c) => c.carreraId === CAR2_ID);
+    expect(car1?.totalCargos).toBe(1);
+    expect(car2?.totalCargos).toBe(1);
+    expect(res.composicion.totalCargos).toBe(2);
+  });
+
+  // T8: cargo TITULAR → contabiliza en P
+  it('T8: cargo TITULAR → totalCargosP=1', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', null, CARGO_TIT_ID),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.composicion.totalCargosP).toBe(1);
+    expect(res.composicion.totalCargosA).toBe(0);
+    expect(res.composicion.totalCargosOtros).toBe(0);
+  });
+
+  // T9: cargo JTP → contabiliza en A
+  it('T9: cargo JTP → totalCargosA=1', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeVinc(DOC1_ID, CAR1_ID, 'JTP', null, CARGO_JTP_ID),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.composicion.totalCargosP).toBe(0);
+    expect(res.composicion.totalCargosA).toBe(1);
+    expect(res.composicion.totalCargosOtros).toBe(0);
+  });
+
+  // T10: cargo desconocido → contabiliza en Otros
+  it('T10: cargo desconocido → totalCargosOtros=1', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeVinc(DOC1_ID, CAR1_ID, 'AYUDANTE', null, CARGO_AYU_ID),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.composicion.totalCargosP).toBe(0);
+    expect(res.composicion.totalCargosA).toBe(0);
+    expect(res.composicion.totalCargosOtros).toBe(1);
+  });
+
+  // T11: totalCargos = P + A + Otros
+  it('T11: totalCargos = P + A + Otros', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', null, CARGO_TIT_ID),
+          makeVinc(DOC1_ID, CAR1_ID, 'JTP',     null, CARGO_JTP_ID),
+          makeVinc(DOC2_ID, CAR1_ID, 'AYUDANTE', null, CARGO_AYU_ID),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    const { totalCargosP, totalCargosA, totalCargosOtros, totalCargos } = res.composicion;
+    expect(totalCargos).toBe(totalCargosP + totalCargosA + totalCargosOtros);
+    expect(totalCargos).toBe(3);
+  });
+
+  // T12: porCarrera refleja docentes únicos y cargos únicos por carrera
+  it('T12: porCarrera agrupa docentes y cargos únicos por carrera', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          // CAR1: DOC1 con TIT, DOC2 con TIT, DOC1 con JTP
+          makeVinc(DOC1_ID, CAR1_ID, 'TITULAR', null, CARGO_TIT_ID),
+          makeVinc(DOC2_ID, CAR1_ID, 'TITULAR', null, CARGO_TIT_ID),
+          makeVinc(DOC1_ID, CAR1_ID, 'JTP',     null, CARGO_JTP_ID),
+          // CAR2: DOC1 con X
+          makeVinc(DOC1_ID, CAR2_ID, 'CARGO_X', null, CARGO_X_ID),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    const car1 = res.composicion.porCarrera.find((c) => c.carreraId === CAR1_ID);
+    const car2 = res.composicion.porCarrera.find((c) => c.carreraId === CAR2_ID);
+    expect(car1?.totalDocentes).toBe(2);
+    expect(car1?.totalCargos).toBe(3);  // DOC1-TIT, DOC2-TIT, DOC1-JTP
+    expect(car2?.totalDocentes).toBe(1);
+    expect(car2?.totalCargos).toBe(1);
   });
 });
 

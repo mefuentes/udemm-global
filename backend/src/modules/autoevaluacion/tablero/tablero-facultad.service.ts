@@ -150,6 +150,7 @@ export class TablroFacultadService {
       select: {
         docenteId: true,
         carreraId: true,
+        cargoId: true,
         carrera: { select: { nombre: true } },
         cargo: { select: { nombre: true } },
       },
@@ -167,32 +168,38 @@ export class TablroFacultadService {
       };
     }
 
+    // Deduplicación global: clave (carreraId, docenteId, cargoId)
     const docentesUnicos = new Set(vinculaciones.map((v) => v.docenteId));
+    const cargosGlobalVistos = new Set<string>();
     let totalCargosP = 0, totalCargosA = 0, totalCargosOtros = 0;
 
     for (const v of vinculaciones) {
+      const claveGlobal = `${v.carreraId}:${v.docenteId}:${v.cargoId}`;
+      if (cargosGlobalVistos.has(claveGlobal)) continue;
+      cargosGlobalVistos.add(claveGlobal);
+
       const cat = categorizarCargo(v.cargo.nombre);
       if (cat === 'P') totalCargosP++;
       else if (cat === 'A') totalCargosA++;
       else totalCargosOtros++;
     }
 
-    // Agrupación por carrera
-    const porCarreraMap = new Map<string, { nombre: string; docentes: Set<string>; cargos: number }>();
+    // Agrupación por carrera con deduplicación (docenteId, cargoId) dentro de cada carrera
+    const porCarreraMap = new Map<string, { nombre: string; docentes: Set<string>; cargos: Set<string> }>();
     for (const v of vinculaciones) {
       if (!porCarreraMap.has(v.carreraId)) {
-        porCarreraMap.set(v.carreraId, { nombre: v.carrera.nombre, docentes: new Set(), cargos: 0 });
+        porCarreraMap.set(v.carreraId, { nombre: v.carrera.nombre, docentes: new Set(), cargos: new Set() });
       }
       const entry = porCarreraMap.get(v.carreraId)!;
       entry.docentes.add(v.docenteId);
-      entry.cargos++;
+      entry.cargos.add(`${v.docenteId}:${v.cargoId}`);
     }
 
     const porCarrera = Array.from(porCarreraMap.entries()).map(([carreraId, e]) => ({
       carreraId,
       nombreCarrera: e.nombre,
       totalDocentes: e.docentes.size,
-      totalCargos: e.cargos,
+      totalCargos: e.cargos.size,
     }));
 
     return {
@@ -200,7 +207,7 @@ export class TablroFacultadService {
       totalCargosP,
       totalCargosA,
       totalCargosOtros,
-      totalCargos: vinculaciones.length,
+      totalCargos: totalCargosP + totalCargosA + totalCargosOtros,
       porCarrera,
       estadoCalculo: EstadoCalculo.CALCULADO,
     };
