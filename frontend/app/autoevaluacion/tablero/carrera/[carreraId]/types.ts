@@ -95,10 +95,14 @@ export interface ResultadoIP09 {
   estadoCalculo: EstadoCalculo;
 }
 
-/** FSD MOD-AUT §5, IP-10 — Consistencia del plantel docente. */
+/**
+ * FSD MOD-AUT §10, IP-10 — Consistencia del plantel docente.
+ * Promedio de C_d = max(0, 100 − 25×A_d − 10×M_d) por docente.
+ * A_d binario: R-03 + R-04 (excepción C4). M_d binario: R-07.
+ */
 export interface ResultadoIP10 {
   carreraId: string;
-  /** max(0, 100 − 25×A − 10×M). */
+  /** Consistencia promedio del plantel: round(SUM(C_d) / N). */
   puntaje: number;
   componenteA: number;
   componenteM: number;

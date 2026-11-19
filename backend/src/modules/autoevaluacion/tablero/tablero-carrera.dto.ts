@@ -193,20 +193,21 @@ export interface ResultadoIP09 {
 }
 
 /**
- * FSD MOD-AUT §5, IP-10 — Consistencia del plantel docente.
+ * FSD MOD-AUT §10, IP-10 — Consistencia del plantel docente.
  *
- * Fórmula: max(0, 100 − 25×A − 10×M).
- *   A = alertas ALTA penalizables: R-03 (tope horario) + R-04 (sin actividad curricular,
- *       excluyendo docentes sin ningún cargo con actividad en el plan — excepción C4).
- *   M = alertas MEDIA penalizables: R-07 (sobreasignados).
+ * Fórmula per-docente: C_d = max(0, 100 − 25×A_d − 10×M_d).
+ *   A_d (binario): 1 si alerta R-03 + 1 si tiene algún cargo R-04 no exceptuado por C4.
+ *   M_d (binario): 1 si alerta R-07 (sobreasignado).
+ * IP-10 = round(SUM(C_d) / N), N = docentes activos con asignación APROBADA en la carrera.
+ * Consistencia mínima posible por docente: 40 (A_d=2 + M_d=1).
  */
 export interface ResultadoIP10 {
   carreraId: string;
-  /** max(0, 100 − 25×A − 10×M). 100 cuando estadoCalculo = NO_APLICA. */
+  /** Consistencia promedio del plantel: round(SUM(C_d) / N). 100 cuando estadoCalculo = NO_APLICA. */
   puntaje: number;
-  /** Total de alertas ALTA penalizables (R-03 + R-04 no exceptuadas por C4). */
+  /** Suma agregada alertasR03 + alertasR04Penalizables. Solo contexto visual; no es el operando directo de la fórmula. */
   componenteA: number;
-  /** Total de alertas MEDIA penalizables (R-07 sobreasignados). */
+  /** Total de alertas MEDIA penalizables (R-07 sobreasignados). Solo contexto visual. */
   componenteM: number;
   alertasR03: number;
   alertasR04Penalizables: number;

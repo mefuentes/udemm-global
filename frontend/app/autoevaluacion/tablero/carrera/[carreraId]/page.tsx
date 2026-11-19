@@ -433,8 +433,8 @@ function TarjetaIP10({ ip10 }: { ip10: ResultadoIP10 }) {
           </div>
           <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
             <p className="text-[11px] text-slate-500">
-              Fórmula: <span className="font-mono">max(0, 100 − 25×A − 10×M)</span>.
-              A = alertas ALTA penalizables (R-03 + R-04). M = alertas MEDIA (R-07).
+              Promedio de <span className="font-mono">max(0, 100 − 25×A_d − 10×M_d)</span> por docente.
+              A_d: 1 si R-03 + 1 si R-04 (excluye excepción C4). M_d: 1 si R-07 sobreasignado.
             </p>
           </div>
           <div className="flex justify-end mt-2">
