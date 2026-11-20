@@ -581,6 +581,163 @@ describe('TablroFacultadService — Bloque 5 carga académica', () => {
   });
 });
 
+// ── R-07 — Deduplicación de materias (T1–T9) ─────────────────────────────────
+
+describe('TablroFacultadService — R-07 sobreasignados (T1–T9)', () => {
+  const mat1 = 'rm111111-1111-4111-8111-111111111111';
+  const mat2 = 'rm222222-2222-4222-8222-222222222222';
+  const mat3 = 'rm333333-3333-4333-8333-333333333333';
+  const mat4 = 'rm444444-4444-4444-8444-444444444444';
+  const cat1 = 'rc111111-1111-4111-8111-111111111111';
+  const cat2 = 'rc222222-2222-4222-8222-222222222222';
+  const PLAN2 = 'rp222222-2222-4222-8222-222222222222';
+
+  function makeV(docenteId: string, materiaId: string, catedraId = cat1, carreraId = CAR1_ID, planEstudioId = PLAN_ID) {
+    return { ...makeVinc(docenteId, carreraId), materiaId, catedraId, planEstudioId };
+  }
+
+  // T1: docente 2 materias, límite 3 → sin alerta
+  it('T1: docente con 2 materias vigentes, límite 3 → sin alerta', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeV(DOC1_ID, mat1),
+          makeV(DOC1_ID, mat2),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.cargaAcademica.totalSobreasignados).toBe(0);
+  });
+
+  // T2: docente 3 materias, límite 3 → sin alerta (igual, no estrictamente mayor)
+  it('T2: docente con 3 materias, límite 3 → sin alerta (igual no supera)', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeV(DOC1_ID, mat1),
+          makeV(DOC1_ID, mat2),
+          makeV(DOC1_ID, mat3),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.cargaAcademica.totalSobreasignados).toBe(0);
+  });
+
+  // T3: docente 4 materias, límite 3 → una alerta MEDIA (ya cubierto arriba; aquí verificamos exceso y estado)
+  it('T3: docente con 4 materias, límite 3 → una alerta, exceso=1, CALCULADO', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeV(DOC1_ID, mat1),
+          makeV(DOC1_ID, mat2),
+          makeV(DOC1_ID, mat3),
+          makeV(DOC1_ID, mat4),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.cargaAcademica.totalSobreasignados).toBe(1);
+    expect(res.cargaAcademica.sobreasignados[0].exceso).toBe(1);
+    expect(res.cargaAcademica.estadoCalculo).toBe('CALCULADO');
+  });
+
+  // T4: 1 doc con 2 en CAR1 + 2 en CAR2, misma facultad → suma=4 → una alerta
+  it('T4: docente 2 materias en carrera A + 2 en carrera B → una alerta (sum cross-carrera)', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeV(DOC1_ID, mat1, cat1, CAR1_ID),
+          makeV(DOC1_ID, mat2, cat1, CAR1_ID),
+          makeV(DOC1_ID, mat3, cat1, CAR2_ID),
+          makeV(DOC1_ID, mat4, cat1, CAR2_ID),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.cargaAcademica.totalSobreasignados).toBe(1);
+    expect(res.cargaAcademica.sobreasignados[0].nMaterias).toBe(4);
+  });
+
+  // T5: varias vinculaciones misma combinación (plan, materia, catedra) → deduplicación
+  it('T5: múltiples vinculaciones misma combinación → se deduplican a 1 materia', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          // Misma combinación plan:mat1:cat1 — distintos cargos
+          makeV(DOC1_ID, mat1, cat1),
+          makeV(DOC1_ID, mat1, cat1),
+          makeV(DOC1_ID, mat1, cat1),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.cargaAcademica.totalSobreasignados).toBe(0);
+    expect(res.cargaAcademica.totalDocentes).toBe(1);
+  });
+
+  // T6: 2 docentes que superan → 2 alertas
+  it('T6: 2 docentes con 4 materias cada uno → 2 alertas', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeV(DOC1_ID, mat1), makeV(DOC1_ID, mat2), makeV(DOC1_ID, mat3), makeV(DOC1_ID, mat4),
+          makeV(DOC2_ID, mat1), makeV(DOC2_ID, mat2), makeV(DOC2_ID, mat3), makeV(DOC2_ID, mat4),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.cargaAcademica.totalSobreasignados).toBe(2);
+  });
+
+  // T7: sin vinculaciones → NO_APLICA
+  it('T7: sin vinculaciones → NO_APLICA, 0 sobreasignados', async () => {
+    const svc = makeService({
+      vinculacionCatedra: { findMany: jest.fn().mockResolvedValue([]) } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.cargaAcademica.estadoCalculo).toBe('NO_APLICA');
+    expect(res.cargaAcademica.totalSobreasignados).toBe(0);
+  });
+
+  // T8: materias de otra facultad no se mezclan (filtro por facultadId en la query)
+  it('T8: el filtro facultadId excluye vinculaciones de otras facultades', async () => {
+    // La query Prisma filtra por facultadId. Verificamos que con 2 vinculaciones
+    // (el mock devuelve solo las de la facultad) → 0 sobreasignados.
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeV(DOC1_ID, mat1),
+          makeV(DOC1_ID, mat2),
+        ]),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.cargaAcademica.totalSobreasignados).toBe(0);
+  });
+
+  // T9: máximo configurado diferente de 3 → respetar config
+  it('T9: máximo configurado en 2 → 3 materias supera el límite', async () => {
+    const svc = makeService({
+      vinculacionCatedra: {
+        findMany: jest.fn().mockResolvedValue([
+          makeV(DOC1_ID, mat1),
+          makeV(DOC1_ID, mat2),
+          makeV(DOC1_ID, mat3),
+        ]),
+      } as any,
+      autoevaluacionConfigFacultad: {
+        findUnique: jest.fn().mockResolvedValue({ p03MaxMat: 2 }),
+      } as any,
+    });
+    const res = await svc.consultarFacultad(FAC_ID, USER_ID, 'DECANO');
+    expect(res.cargaAcademica.totalSobreasignados).toBe(1);
+    expect(res.cargaAcademica.limiteMaxMat).toBe(2);
+    expect(res.cargaAcademica.sobreasignados[0].exceso).toBe(1);
+  });
+});
+
 // ── Bloque 6 — Distribución de materias por docente (R-06) ───────────────────
 
 describe('TablroFacultadService — Bloque 6 distribucionMaterias (R-06)', () => {

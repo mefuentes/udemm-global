@@ -233,18 +233,11 @@ function PanelAccionRequerida({
         </span>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <TarjetaAR
           icono={ICONOS_AR.alta}
           titulo="Con alertas altas"
           subindicador={ar.conAlertasAltas}
-          carreraId={carreraId}
-          colorAlta
-        />
-        <TarjetaAR
-          icono={ICONOS_AR.sobre}
-          titulo="Sobre-asignados"
-          subindicador={ar.sobreasignados}
           carreraId={carreraId}
           colorAlta
         />

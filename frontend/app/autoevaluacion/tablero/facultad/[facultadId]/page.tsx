@@ -363,6 +363,88 @@ function BloqueCargaAcademicaComp({ carga }: { carga: BloqueCargaAcademica }) {
   );
 }
 
+// ── AR — Acción requerida (R-07: Docentes sobre-asignados) ───────────────────
+
+const IcSobre = () => (
+  <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
+  </svg>
+);
+
+function PanelARFacultad({ carga }: { carga: BloqueCargaAcademica }) {
+  const ec = carga.estadoCalculo;
+  const sinCasos = ec !== 'NO_DETERMINABLE' && carga.totalSobreasignados === 0;
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-[11px] font-bold font-mono bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200">
+          AR
+        </span>
+        <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+          Acción requerida — ¿qué hay que resolver?
+        </span>
+      </div>
+
+      <div className={`rounded-xl border shadow-sm p-4 ${sinCasos ? 'bg-white border-slate-200' : ec === 'NO_DETERMINABLE' ? 'bg-slate-50 border-slate-200' : 'bg-amber-50 border-amber-200'}`}>
+        <div className="flex items-center gap-2 mb-2">
+          <span className={sinCasos ? 'text-slate-400' : ec === 'NO_DETERMINABLE' ? 'text-slate-500' : 'text-amber-600'}>
+            <IcSobre />
+          </span>
+          <span className={`text-[11px] font-semibold ${sinCasos ? 'text-slate-500' : ec === 'NO_DETERMINABLE' ? 'text-slate-600' : 'text-amber-700'}`}>
+            Sobre-asignados
+          </span>
+          <span className={`ml-auto text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${sinCasos || ec === 'NO_DETERMINABLE' ? 'text-slate-400 border-slate-200 bg-slate-50' : 'text-amber-600 border-amber-200 bg-amber-50'}`}>
+            MEDIA
+          </span>
+        </div>
+
+        {ec === 'NO_DETERMINABLE' ? (
+          <p className="text-[11px] text-slate-500 italic">
+            No calculado — P-03 (máximo de materias) no configurado.
+          </p>
+        ) : sinCasos ? (
+          <div className="flex items-center gap-1.5 text-xs text-slate-400 italic">
+            <svg className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+            Sin casos
+          </div>
+        ) : (
+          <>
+            <p className="text-2xl font-bold tabular-nums text-amber-700">
+              {carga.totalSobreasignados}
+            </p>
+            <p className="text-[10px] text-amber-500 mb-2">
+              {carga.totalSobreasignados === 1 ? 'docente' : 'docentes'}
+            </p>
+            <div className="space-y-1">
+              {carga.sobreasignados.slice(0, 5).map(d => (
+                <Link
+                  key={d.docenteId}
+                  href={`/autoevaluacion/ficha-docente/${d.docenteId}`}
+                  className="flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-[#0f4c81] transition-colors group"
+                >
+                  <span className="w-1 h-1 rounded-full bg-slate-300 group-hover:bg-[#0f4c81] flex-shrink-0" />
+                  <span className="truncate">{d.nombre}</span>
+                  <span className="ml-auto flex-shrink-0 text-[10px] font-mono text-amber-600 whitespace-nowrap">
+                    {d.nMaterias} mat. (+{d.exceso})
+                  </span>
+                </Link>
+              ))}
+              {carga.sobreasignados.length > 5 && (
+                <p className="text-[11px] text-slate-400 pl-2.5 italic">
+                  +{carga.sobreasignados.length - 5} más
+                </p>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Bloque 6 — Distribución de materias por docente (R-06) ───────────────────
 
 function BloqueDistribucionMateriasComp({ dist }: { dist: BloqueDistribucionMaterias }) {
@@ -642,6 +724,7 @@ function TablerFacultadInner() {
       {/* Bloques */}
       {dato && (
         <div className="space-y-4">
+          <PanelARFacultad carga={dato.cargaAcademica} />
           <BloqueComposicion dato={dato} />
           <BloqueFormacionComp form={dato.formacion} />
           <BloqueInvestigacionComp inv={dato.investigacion} />
