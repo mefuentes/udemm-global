@@ -212,6 +212,8 @@ export class VinculacionesService {
 
     if (!facultad   || facultad.estado   !== 'ACTIVO') throw new BadRequestException('Facultad no válida o inactiva');
     if (!carrera    || carrera.estado    !== 'ACTIVO') throw new BadRequestException('Carrera no válida o inactiva');
+    if (carrera.facultadId !== dto.facultadId)
+      throw new BadRequestException('La facultad especificada no corresponde a la carrera seleccionada.');
     if (!planEstudio || planEstudio.estado !== 'ACTIVO') throw new BadRequestException('Plan no válido o inactivo');
     if (!materia    || materia.estado    !== 'ACTIVO') throw new BadRequestException('Asignatura no válida o inactiva');
     if (!docente    || !docente.activo)                throw new BadRequestException('Docente no válido o inactivo');

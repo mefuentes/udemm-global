@@ -67,7 +67,7 @@ const BASE_DTO = {
 // Entidades activas para validaciones en crear()
 const ENTIDADES_ACTIVAS = {
   facultad:    { id: BASE_DTO.facultadId,    estado: 'ACTIVO' },
-  carrera:     { id: CAR_ID,                 estado: 'ACTIVO' },
+  carrera:     { id: CAR_ID,                 estado: 'ACTIVO', facultadId: BASE_DTO.facultadId },
   planEstudio: { id: PLAN_ID,                estado: 'ACTIVO' },
   materia:     { id: MAT_ID,                 estado: 'ACTIVO', cargaHorariaSemanal: 4 },
   docente:     { id: DOC_ID,                 activo: true },
