@@ -420,17 +420,16 @@ function PanelARFacultad({ carga }: { carga: BloqueCargaAcademica }) {
             </p>
             <div className="space-y-1">
               {carga.sobreasignados.slice(0, 5).map(d => (
-                <Link
+                <div
                   key={d.docenteId}
-                  href={`/autoevaluacion/ficha-docente/${d.docenteId}`}
-                  className="flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-[#0f4c81] transition-colors group"
+                  className="flex items-center gap-1.5 text-[11px] text-slate-600"
                 >
-                  <span className="w-1 h-1 rounded-full bg-slate-300 group-hover:bg-[#0f4c81] flex-shrink-0" />
+                  <span className="w-1 h-1 rounded-full bg-slate-300 flex-shrink-0" />
                   <span className="truncate">{d.nombre}</span>
                   <span className="ml-auto flex-shrink-0 text-[10px] font-mono text-amber-600 whitespace-nowrap">
                     {d.nMaterias} mat. (+{d.exceso})
                   </span>
-                </Link>
+                </div>
               ))}
               {carga.sobreasignados.length > 5 && (
                 <p className="text-[11px] text-slate-400 pl-2.5 italic">
@@ -438,6 +437,9 @@ function PanelARFacultad({ carga }: { carga: BloqueCargaAcademica }) {
                 </p>
               )}
             </div>
+            <p className="mt-3 text-[11px] text-slate-500 border-t border-amber-100 pt-2">
+              <span className="font-semibold">Acción sugerida:</span> Redistribuir materias dentro del plantel.
+            </p>
           </>
         )}
       </div>
