@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   Query,
+  Req,
   UseGuards,
   UsePipes,
   ValidationPipe,
@@ -18,6 +19,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PlanesEstudioService } from './planes-estudio.service';
+import { IndicesPlanService } from './indices-plan.service';
 import { CrearPlanDto } from './dto/crear-plan.dto';
 import { ActualizarPlanDto } from './dto/actualizar-plan.dto';
 
@@ -58,7 +60,10 @@ const ROLES_EXPORTAR = [
 @UseGuards(JwtAuthGuard, RolesGuard)
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class PlanesEstudioController {
-  constructor(private readonly planesEstudioService: PlanesEstudioService) {}
+  constructor(
+    private readonly planesEstudioService: PlanesEstudioService,
+    private readonly indicesPlanService: IndicesPlanService,
+  ) {}
 
   @Get('carreras')
   @Roles(...ROLES_VER)
@@ -114,6 +119,12 @@ export class PlanesEstudioController {
       'Content-Disposition': `attachment; filename="informacion_planes_estudio_${fecha}.pdf"`,
     });
     return new StreamableFile(buffer);
+  }
+
+  @Get(':id/indicadores')
+  @Roles(...ROLES_VER)
+  obtenerIndicadores(@Param('id') id: string, @Req() req: any) {
+    return this.indicesPlanService.calcular(id, req.user.id, req.user.rol.nombre);
   }
 
   @Get(':id/estadisticas')

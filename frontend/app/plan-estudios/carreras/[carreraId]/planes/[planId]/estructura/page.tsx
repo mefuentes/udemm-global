@@ -80,6 +80,20 @@ interface CorrelativaItem {
   id: string; tipo: string;
   correlativa: { id: string; codigo: string; nombre: string }
 }
+interface CompletitudPlan {
+  ap: number | null; rc: number | null; valor: number | null;
+  totalMaterias: number; materiasSinPrograma: number; materiasConResponsable: number;
+  estadoCalculo: string;
+}
+interface ConsistenciaPlan {
+  aa: number | null; am: number | null; valor: number | null;
+  estadoCalculo: string;
+}
+interface Indicesplan {
+  planEstudioId: string;
+  completitud: CompletitudPlan;
+  consistencia: ConsistenciaPlan;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -202,9 +216,11 @@ export default function EstructuraCurricularPage() {
   const [plan,            setPlan]            = useState<PlanDetalle | null>(null);
   const [materias,        setMaterias]        = useState<Materia[]>([]);
   const [correlativasMap, setCorrelativasMap] = useState<Map<string, CorrelativaItem[]>>(new Map());
-  const [cargando,        setCargando]        = useState(true);
-  const [cargandoCorr,    setCargandoCorr]    = useState(false);
-  const [error,           setError]           = useState<string | null>(null);
+  const [cargando,            setCargando]            = useState(true);
+  const [cargandoCorr,        setCargandoCorr]        = useState(false);
+  const [error,               setError]               = useState<string | null>(null);
+  const [indicadores,         setIndicadores]         = useState<Indicesplan | null>(null);
+  const [cargandoIndicadores, setCargandoIndicadores] = useState(false);
 
   // Filtros
   const [buscar,       setBuscar]       = useState('');
@@ -245,10 +261,23 @@ export default function EstructuraCurricularPage() {
         const lista: Materia[] = materiasData ?? [];
         setMaterias(lista);
         if (lista.length > 0) cargarCorrelativas(lista);
+        cargarIndicadores();
       })
       .catch(e => setError((e as Error).message))
       .finally(() => setCargando(false));
   }, [usuario, planId]);
+
+  async function cargarIndicadores() {
+    setCargandoIndicadores(true);
+    try {
+      const data = await apiFetch(`${API_URL}/plan-estudios/${planId}/indicadores`);
+      setIndicadores(data);
+    } catch {
+      // indicadores no críticos — no bloquear la página
+    } finally {
+      setCargandoIndicadores(false);
+    }
+  }
 
   async function cargarCorrelativas(lista: Materia[]) {
     setCargandoCorr(true);
@@ -457,6 +486,68 @@ export default function EstructuraCurricularPage() {
           Volver a Planes
         </Link>
       </div>
+
+      {/* ── Indicadores del Plan ─────────────────────────────────────────── */}
+      {!cargando && !error && (
+        <div className="mb-6">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">
+            Indicadores del Plan
+          </h2>
+          {cargandoIndicadores ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[0, 1].map(i => (
+                <div key={i} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                  <div className="h-3 w-24 bg-slate-100 rounded animate-pulse mb-3" />
+                  <div className="h-8 w-16 bg-slate-100 rounded animate-pulse mb-2" />
+                  <div className="h-2 w-full bg-slate-100 rounded-full animate-pulse" />
+                </div>
+              ))}
+            </div>
+          ) : indicadores ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+              {/* Completitud */}
+              <TarjetaIndicador
+                titulo="Completitud"
+                descripcion="Avance de programas y responsables de cátedra"
+                valor={indicadores.completitud.valor}
+                estadoCalculo={indicadores.completitud.estadoCalculo}
+                color="blue"
+                detalles={[
+                  { label: 'Avance de Programas (AP)', valor: indicadores.completitud.ap },
+                  { label: 'Responsables de Cátedra (RC)', valor: indicadores.completitud.rc },
+                ]}
+                meta={[
+                  `${indicadores.completitud.totalMaterias} asignatura${indicadores.completitud.totalMaterias !== 1 ? 's' : ''}`,
+                  indicadores.completitud.materiasSinPrograma > 0
+                    ? `${indicadores.completitud.materiasSinPrograma} sin programa`
+                    : null,
+                  `${indicadores.completitud.materiasConResponsable} con responsable`,
+                ].filter(Boolean) as string[]}
+              />
+
+              {/* Consistencia */}
+              <TarjetaIndicador
+                titulo="Consistencia"
+                descripcion="Ausencia de alertas regulatorias (R-09, R-13, R-14)"
+                valor={indicadores.consistencia.valor}
+                estadoCalculo={indicadores.consistencia.estadoCalculo}
+                color="emerald"
+                detalles={[
+                  { label: 'Alertas ALTA (AA)', valor: indicadores.consistencia.aa, inverted: true },
+                  { label: 'Alertas MEDIA (AM)', valor: indicadores.consistencia.am, inverted: true },
+                ]}
+                meta={
+                  indicadores.consistencia.estadoCalculo === 'NO_DETERMINABLE'
+                    ? ['Sin acceso a indicadores de autoevaluación']
+                    : []
+                }
+              />
+
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
       {!cargando && !error && (
@@ -980,6 +1071,89 @@ function ModalMateria({ editando, form, setF, guardando, onGuardar, onCerrar }: 
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── TarjetaIndicador ──────────────────────────────────────────────────────────
+
+function TarjetaIndicador({
+  titulo, descripcion, valor, estadoCalculo, color, detalles, meta,
+}: {
+  titulo: string;
+  descripcion: string;
+  valor: number | null;
+  estadoCalculo: string;
+  color: 'blue' | 'emerald';
+  detalles: { label: string; valor: number | null; inverted?: boolean }[];
+  meta: string[];
+}) {
+  const noDeterminable = estadoCalculo === 'NO_DETERMINABLE';
+  const noAplica       = estadoCalculo === 'NO_APLICA';
+
+  const pct = valor ?? 0;
+  const colorBg    = color === 'blue'  ? 'bg-[#0f4c81]'    : 'bg-emerald-600';
+  const colorText  = color === 'blue'  ? 'text-[#0f4c81]'  : 'text-emerald-600';
+  const colorTrack = color === 'blue'  ? 'bg-[#0f4c81]/10' : 'bg-emerald-50';
+
+  function nivelLabel(v: number) {
+    if (v >= 80) return { label: 'Óptimo',        cls: 'text-emerald-600 bg-emerald-50 border-emerald-200' };
+    if (v >= 50) return { label: 'En desarrollo',  cls: 'text-amber-600  bg-amber-50  border-amber-200'  };
+    return        { label: 'Inicial',        cls: 'text-red-600    bg-red-50    border-red-200'    };
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{titulo}</p>
+        {!noDeterminable && !noAplica && valor !== null && (
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${nivelLabel(pct).cls}`}>
+            {nivelLabel(pct).label}
+          </span>
+        )}
+      </div>
+      <p className="text-[11px] text-slate-400 mb-3">{descripcion}</p>
+
+      {noDeterminable ? (
+        <p className="text-xs text-slate-400 italic">No determinable para este rol</p>
+      ) : noAplica ? (
+        <p className="text-xs text-slate-400 italic">No aplica (plan sin asignaturas)</p>
+      ) : valor === null ? (
+        <p className="text-xs text-slate-400 italic">Sin datos</p>
+      ) : (
+        <>
+          <div className="flex items-end gap-2 mb-2">
+            <p className={`text-3xl font-extrabold tabular-nums leading-none ${colorText}`}>{valor}</p>
+            <span className="text-lg font-bold text-slate-400 mb-0.5">%</span>
+          </div>
+          <div className={`w-full rounded-full h-2 ${colorTrack} mb-4`}>
+            <div
+              className={`h-2 rounded-full transition-all duration-500 ${colorBg}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <div className="space-y-1.5">
+            {detalles.map(d => (
+              <div key={d.label} className="flex items-center justify-between gap-2">
+                <span className="text-[11px] text-slate-500">{d.label}</span>
+                <span className={`text-[11px] font-semibold tabular-nums ${
+                  d.valor === null ? 'text-slate-400' :
+                  d.inverted
+                    ? (d.valor === 0 ? 'text-emerald-600' : d.valor <= 2 ? 'text-amber-600' : 'text-red-600')
+                    : colorText
+                }`}>
+                  {d.valor === null ? '—' : d.inverted ? d.valor : `${d.valor}%`}
+                </span>
+              </div>
+            ))}
+          </div>
+          {meta.length > 0 && (
+            <p className="text-[10px] text-slate-400 mt-3 border-t border-slate-100 pt-2">
+              {meta.join(' · ')}
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }
